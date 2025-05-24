@@ -7841,7 +7841,7 @@
 		(mirror y)
 		(unit 1)
 		(exclude_from_sim no)
-		(in_bom yes)
+		(in_bom no)
 		(on_board yes)
 		(dnp no)
 		(uuid "0a951e63-d825-4d5b-b0d3-9dc67bb5f320")
@@ -12682,7 +12682,7 @@
 				(hide yes)
 			)
 		)
-		(property "JLCPCB" " C75881"
+		(property "JLCPCB" "C75881"
 			(at 201.93 102.87 0)
 			(effects
 				(font
@@ -13171,7 +13171,7 @@
 		(at 60.96 31.75 0)
 		(unit 1)
 		(exclude_from_sim no)
-		(in_bom no)
+		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "c92b2a99-2750-4f59-872f-67ebdf8e998a")
@@ -13586,7 +13586,7 @@
 		(at 39.37 80.01 0)
 		(unit 1)
 		(exclude_from_sim no)
-		(in_bom yes)
+		(in_bom no)
 		(on_board yes)
 		(dnp no)
 		(uuid "d3d6d819-ecff-4ab6-8605-bc4f1cb8fff0")
