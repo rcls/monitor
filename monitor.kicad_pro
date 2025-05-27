@@ -71,6 +71,10 @@
         [
           "lib_footprint_mismatch|100000000|87950000|1dbbbda2-19e8-4423-abaa-80ad27cf1107|00000000-0000-0000-0000-000000000000",
           "Intentional"
+        ],
+        [
+          "lib_footprint_mismatch|100000000|94625000|3469d7b4-a2ec-4312-9807-9b67c870a26e|00000000-0000-0000-0000-000000000000",
+          "Intentional"
         ]
       ],
       "meta": {
