@@ -52,45 +52,16 @@
 		)
 	)
 	(attr through_hole)
-	(fp_line
+	(fp_rect
 		(start -1.77 -1.77)
-		(end -1.77 19.55)
-		(stroke
-			(width 0.05)
-			(type solid)
-		)
-		(layer "F.CrtYd")
-		(uuid "1102224b-7fc1-4155-bc53-a7b8b270ca87")
-	)
-	(fp_line
-		(start -1.77 19.55)
 		(end 1.77 19.55)
 		(stroke
 			(width 0.05)
 			(type solid)
 		)
+		(fill no)
 		(layer "F.CrtYd")
-		(uuid "948e5ae6-1121-4dc8-b806-aa65e459a5b2")
-	)
-	(fp_line
-		(start 1.77 -1.77)
-		(end -1.77 -1.77)
-		(stroke
-			(width 0.05)
-			(type solid)
-		)
-		(layer "F.CrtYd")
-		(uuid "5cec339b-8b12-452b-b7a1-029a54233f13")
-	)
-	(fp_line
-		(start 1.77 19.55)
-		(end 1.77 -1.77)
-		(stroke
-			(width 0.05)
-			(type solid)
-		)
-		(layer "F.CrtYd")
-		(uuid "e957287b-8fdd-472d-be79-e1b266dd32ee")
+		(uuid "993b8a3c-ac8a-49f6-98c7-eb76ca8516f7")
 	)
 	(fp_line
 		(start -1.27 -0.635)
