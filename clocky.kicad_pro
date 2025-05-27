@@ -48,7 +48,7 @@
         "silk_text_thickness": 0.1,
         "silk_text_upright": false,
         "zones": {
-          "min_clearance": 0.2
+          "min_clearance": 0.0
         }
       },
       "diff_pair_dimensions": [
@@ -267,7 +267,16 @@
     "equivalence_files": []
   },
   "erc": {
-    "erc_exclusions": [],
+    "erc_exclusions": [
+      [
+        "pin_to_pin|495300|1676400|e5935625-6bd4-443b-891f-961bf48adbfc|d182884c-a9bf-48e2-9986-fbd10b2a8de0|/1a152c6d-723d-49c0-9a40-41d8f1ee1a82|/1a152c6d-723d-49c0-9a40-41d8f1ee1a82|/1a152c6d-723d-49c0-9a40-41d8f1ee1a82",
+        ""
+      ],
+      [
+        "pin_to_pin|800100|1371600|e796aef0-5f15-4cbc-a3a0-f4ce783a8e16|54c919ad-b782-4ba0-ac23-1989e650e63a|/1a152c6d-723d-49c0-9a40-41d8f1ee1a82|/1a152c6d-723d-49c0-9a40-41d8f1ee1a82|/1a152c6d-723d-49c0-9a40-41d8f1ee1a82",
+        ""
+      ]
+    ],
     "meta": {
       "version": 0
     },
@@ -515,7 +524,7 @@
         "wire_width": 6
       },
       {
-        "clearance": 1.0,
+        "clearance": 0.15,
         "name": "Touch",
         "pcb_color": "rgba(0, 0, 0, 0.000)",
         "priority": 0,
