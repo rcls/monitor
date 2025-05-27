@@ -11,7 +11,7 @@ $(PROJECTS:%=%.drc): %.drc: %.rpt
 
 out/%.rpt: %.kicad_pcb
 	mkdir -p out
-	kicad-cli pcb drc $<
+	kicad-cli pcb drc --exit-code-violations -o $@ $<
 
 #%_bom.csv: %_bom_raw.csv filter_bom.py
 #	./filter_bom.py $< $@
@@ -21,7 +21,7 @@ $(PROJECTS:%=out/%_bom.csv): out/%_bom.csv: %.kicad_sch *.kicad_sch Parts.kicad_
 #	kicad-cli sch export bom --exclude-dnp --labels Comment,Designator,Footprint,'JLCPcb Part' --ref-range-delimiter='' -o $@ $<
 	kicad-cli sch export bom --preset JLCPCB --exclude-dnp --labels Comment,Designator,Footprint,'JLCPcb Part' --ref-range-delimiter='' -o $@ $<
 
-out/%_gerber.zip: %.kicad_pcb
+out/%_gerber.zip: %.kicad_pcb out/%.rpt
 	mkdir -p out
 	mkdir temp/
 	kicad-cli pcb export gerbers --use-drill-file-origin --board-plot-params -o temp $<
