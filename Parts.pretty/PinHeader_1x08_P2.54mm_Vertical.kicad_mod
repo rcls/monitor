@@ -153,12 +153,13 @@
 			)
 		)
 	)
-	(pad "1" thru_hole rect
+	(pad "1" thru_hole circle
 		(at 0 0)
 		(size 1.7 1.7)
 		(drill 1)
 		(layers "*.Cu" "*.Mask")
 		(remove_unused_layers no)
+		(thermal_bridge_angle 90)
 		(uuid "f732ed8d-3c85-4536-94c7-b0a11ad53062")
 	)
 	(pad "2" thru_hole circle
