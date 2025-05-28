@@ -7286,12 +7286,6 @@
 		(uuid "0ae7fe88-993f-494c-8a7e-ec6c3cd2b6d8")
 	)
 	(junction
-		(at 39.37 78.74)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "13a11cae-36bb-4266-ac10-955e9fde29d9")
-	)
-	(junction
 		(at 64.77 101.6)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -7332,12 +7326,6 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "363f7877-3626-41d8-99c1-3c6b71d259a1")
-	)
-	(junction
-		(at 39.37 71.12)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "377badbf-e5b6-45ea-9a62-4736c332ba0f")
 	)
 	(junction
 		(at 40.64 30.48)
@@ -7488,6 +7476,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "8f0ce71c-601d-4bd6-a293-f5ec46957098")
+	)
+	(junction
+		(at 43.18 78.74)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "94f0aed2-0618-46ee-8df6-8927504563ef")
 	)
 	(junction
 		(at 222.25 111.76)
@@ -7690,6 +7684,18 @@
 		(uuid "14e1ad71-12b0-400c-9e8a-08824d8fd249")
 	)
 	(no_connect
+		(at 80.01 109.22)
+		(uuid "19ea332a-1cbf-4bf3-b78b-cf6d471fc6f3")
+	)
+	(no_connect
+		(at 80.01 121.92)
+		(uuid "30393f51-9762-4ae8-807a-efedf76f65d7")
+	)
+	(no_connect
+		(at 49.53 157.48)
+		(uuid "335bc861-6c15-403f-8438-4d6b9e9342b4")
+	)
+	(no_connect
 		(at 80.01 147.32)
 		(uuid "43539e9b-9511-47a8-a284-e7760154a3e8")
 	)
@@ -7714,6 +7720,10 @@
 		(uuid "608d1bad-c8ce-410c-b4a7-12a8b731d130")
 	)
 	(no_connect
+		(at 80.01 137.16)
+		(uuid "644e95bc-84c4-4250-b6ba-6f99421cdcb3")
+	)
+	(no_connect
 		(at 177.8 77.47)
 		(uuid "74b03ed3-61f1-44f6-aa3b-72b26dafcb43")
 	)
@@ -7736,6 +7746,10 @@
 	(no_connect
 		(at 49.53 167.64)
 		(uuid "97c65d84-9568-4179-9e6f-4e0e216e61d5")
+	)
+	(no_connect
+		(at 49.53 170.18)
+		(uuid "a76c1d09-9b01-4c8c-b642-7d0825472545")
 	)
 	(no_connect
 		(at 269.24 74.93)
@@ -8661,7 +8675,7 @@
 	)
 	(wire
 		(pts
-			(xy 34.29 71.12) (xy 39.37 71.12)
+			(xy 36.83 71.12) (xy 43.18 71.12)
 		)
 		(stroke
 			(width 0)
@@ -9001,7 +9015,7 @@
 	)
 	(wire
 		(pts
-			(xy 34.29 78.74) (xy 39.37 78.74)
+			(xy 36.83 78.74) (xy 43.18 78.74)
 		)
 		(stroke
 			(width 0)
@@ -9811,16 +9825,6 @@
 	)
 	(wire
 		(pts
-			(xy 39.37 78.74) (xy 43.18 78.74)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "af60f721-bd37-4e65-b35b-9ceffa7d1a74")
-	)
-	(wire
-		(pts
 			(xy 158.75 137.16) (xy 158.75 142.24)
 		)
 		(stroke
@@ -10128,16 +10132,6 @@
 			(type default)
 		)
 		(uuid "c72afd7f-87bb-4ea0-8601-30ed28614e0e")
-	)
-	(wire
-		(pts
-			(xy 39.37 71.12) (xy 43.18 71.12)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "c737622e-bc17-4119-bc9a-d621202cf586")
 	)
 	(wire
 		(pts
@@ -17125,6 +17119,100 @@
 		)
 	)
 	(symbol
+		(lib_id "Diode:1N5819WS")
+		(at 43.18 74.93 270)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "72077e12-0d56-433e-b5f9-0c861f7fe1a4")
+		(property "Reference" "D5"
+			(at 41.91 77.47 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "1N5819WS"
+			(at 46.482 77.47 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Diode_SMD:D_SOD-323"
+			(at 38.735 74.93 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "https://datasheet.lcsc.com/lcsc/2204281430_Guangdong-Hottech-1N5819WS_C191023.pdf"
+			(at 43.18 74.93 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "40V 600mV@1A 1A SOD-323 Schottky Barrier Diodes, SOD-323"
+			(at 43.18 74.93 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Sim.Device" "D"
+			(at 43.18 74.93 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Sim.Pins" "1=K 2=A"
+			(at 43.18 74.93 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "JLCPCB" "C191023"
+			(at 43.18 74.93 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "2"
+			(uuid "1e0d6ecc-b281-46e1-bc22-3b65de1910a6")
+		)
+		(pin "1"
+			(uuid "cfe18a42-7da4-44a4-a819-60889d29bbe2")
+		)
+		(instances
+			(project "clocky"
+				(path "/1a152c6d-723d-49c0-9a40-41d8f1ee1a82"
+					(reference "D5")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "Device:C_Polarized")
 		(at 40.64 34.29 0)
 		(unit 1)
@@ -18725,7 +18813,8 @@
 	)
 	(symbol
 		(lib_id "Device:Polyfuse")
-		(at 34.29 74.93 0)
+		(at 36.83 74.93 0)
+		(mirror y)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom no)
@@ -18733,7 +18822,7 @@
 		(dnp no)
 		(uuid "9842d382-ef8e-4921-8c0e-4191dd320531")
 		(property "Reference" "F1"
-			(at 31.75 74.93 90)
+			(at 39.37 74.93 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -18741,7 +18830,7 @@
 			)
 		)
 		(property "Value" "116mA"
-			(at 36.83 74.93 90)
+			(at 34.29 74.93 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -18759,7 +18848,7 @@
 			)
 		)
 		(property "Datasheet" "PRG21BB150MB1RK"
-			(at 34.29 74.93 0)
+			(at 36.83 74.93 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -18768,7 +18857,7 @@
 			)
 		)
 		(property "Description" "Resettable fuse, polymeric positive temperature coefficient"
-			(at 34.29 74.93 0)
+			(at 36.83 74.93 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -18777,7 +18866,7 @@
 			)
 		)
 		(property "JLCPCB" ""
-			(at 34.29 74.93 0)
+			(at 36.83 74.93 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -20190,82 +20279,6 @@
 			(project "clocky"
 				(path "/1a152c6d-723d-49c0-9a40-41d8f1ee1a82"
 					(reference "#PWR02")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Device:R")
-		(at 39.37 74.93 180)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(uuid "c18ee3b4-fee1-4648-8764-86f2e2fc1463")
-		(property "Reference" "R5"
-			(at 39.37 70.104 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "470"
-			(at 39.37 74.93 90)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-			(at 41.148 74.93 90)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "~"
-			(at 39.37 74.93 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" "Resistor"
-			(at 39.37 74.93 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "JLCPCB" "C25117"
-			(at 39.37 74.93 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "b66e21b6-ff52-48de-bd3f-5eef6aa2c242")
-		)
-		(pin "2"
-			(uuid "597f0005-1d2f-4f2c-bdfe-3975ec496ed9")
-		)
-		(instances
-			(project "clocky"
-				(path "/1a152c6d-723d-49c0-9a40-41d8f1ee1a82"
-					(reference "R5")
 					(unit 1)
 				)
 			)
