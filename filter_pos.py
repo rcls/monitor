@@ -17,7 +17,9 @@ lines = ['Designator,Mid X,Mid Y,Layer,Rotation']
 
 prefix_rotate = [
     ('MSOP-', -90),
-    ('SOIC-', -90)]
+    ('SOIC-', -90),
+    ('SOT-23', 180),
+    ('Texas_S-PWSON', -90)]
 
 for L in csv.reader(open(IN, newline='')):
     #print(L)

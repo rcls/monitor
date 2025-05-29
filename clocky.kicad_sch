@@ -7316,12 +7316,6 @@
 		(uuid "2b4d096c-2ee1-4a1c-a956-92ab31bc6f63")
 	)
 	(junction
-		(at 92.71 38.1)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "3634a8c5-3e4e-4eb5-9a4e-333d955b88b8")
-	)
-	(junction
 		(at 50.8 30.48)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -7470,6 +7464,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "8f0ce71c-601d-4bd6-a293-f5ec46957098")
+	)
+	(junction
+		(at 248.92 40.64)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "9412e2e6-a62e-4895-ac36-e8f2b506f292")
 	)
 	(junction
 		(at 44.45 78.74)
@@ -7674,6 +7674,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "f80c3020-56ea-4511-a426-d3d9b2e08d3a")
+	)
+	(junction
+		(at 248.92 30.48)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "fc6bdb0c-4e8f-47d1-8cbc-98d76b6f9938")
 	)
 	(junction
 		(at 137.16 69.85)
@@ -7967,6 +7973,16 @@
 	)
 	(wire
 		(pts
+			(xy 248.92 40.64) (xy 261.62 40.64)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "13f85264-853d-42dd-bd95-4deb3005f59e")
+	)
+	(wire
+		(pts
 			(xy 146.05 53.34) (xy 146.05 58.42)
 		)
 		(stroke
@@ -8064,16 +8080,6 @@
 			(type default)
 		)
 		(uuid "1a2e9d8f-9acc-40df-8c87-82236f356d6a")
-	)
-	(wire
-		(pts
-			(xy 50.8 68.58) (xy 50.8 71.12)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "1b7f7ff3-0f25-430b-b689-44941a59184e")
 	)
 	(wire
 		(pts
@@ -8377,7 +8383,7 @@
 	)
 	(wire
 		(pts
-			(xy 247.65 40.64) (xy 261.62 40.64)
+			(xy 247.65 40.64) (xy 248.92 40.64)
 		)
 		(stroke
 			(width 0)
@@ -8677,6 +8683,16 @@
 	)
 	(wire
 		(pts
+			(xy 248.92 30.48) (xy 237.49 30.48)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "46a498b1-a358-41a6-8674-e30d87f276d6")
+	)
+	(wire
+		(pts
 			(xy 215.9 43.18) (xy 223.52 43.18)
 		)
 		(stroke
@@ -8884,6 +8900,16 @@
 			(type default)
 		)
 		(uuid "57c36131-5eaf-4e62-b840-9964bb45ae15")
+	)
+	(wire
+		(pts
+			(xy 248.92 30.48) (xy 248.92 31.75)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "58479679-8e74-4330-8240-eb2b196acc82")
 	)
 	(wire
 		(pts
@@ -9177,7 +9203,7 @@
 	)
 	(wire
 		(pts
-			(xy 251.46 30.48) (xy 237.49 30.48)
+			(xy 251.46 30.48) (xy 248.92 30.48)
 		)
 		(stroke
 			(width 0)
@@ -9697,16 +9723,6 @@
 	)
 	(wire
 		(pts
-			(xy 92.71 38.1) (xy 91.44 38.1)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "a793495b-3b25-4229-b2f6-5406e9030c61")
-	)
-	(wire
-		(pts
 			(xy 227.33 111.76) (xy 232.41 111.76)
 		)
 		(stroke
@@ -10014,6 +10030,16 @@
 			(type default)
 		)
 		(uuid "bba93268-3067-4eda-85ff-b5fcf953dffc")
+	)
+	(wire
+		(pts
+			(xy 248.92 39.37) (xy 248.92 40.64)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "bbe469ba-d7dc-4ffb-ada5-a264357069a6")
 	)
 	(wire
 		(pts
@@ -11106,7 +11132,7 @@
 		(uuid "02fed7c8-f275-44f9-bf3e-7b4951ceeb0e")
 	)
 	(label "PlusPad"
-		(at 204.47 154.94 90)
+		(at 209.55 154.94 90)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -11286,7 +11312,7 @@
 		(uuid "1ef2566c-be5d-48ca-876b-fbd9aec23017")
 	)
 	(label "Plus"
-		(at 88.9 129.54 180)
+		(at 88.9 134.62 180)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -11816,7 +11842,7 @@
 		(uuid "56fc8e7f-7561-49ba-80f5-62fd1be0e21e")
 	)
 	(label "Minus"
-		(at 88.9 134.62 180)
+		(at 88.9 129.54 180)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -11846,7 +11872,7 @@
 		(uuid "5b794518-1ed6-476b-ace8-8d82c221725f")
 	)
 	(label "MinusPad"
-		(at 209.55 154.94 90)
+		(at 204.47 154.94 90)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -12116,7 +12142,7 @@
 		(uuid "7eacbc93-d3e9-47a8-9d08-c64aa33b9285")
 	)
 	(label "Minus"
-		(at 209.55 129.54 270)
+		(at 204.47 129.54 270)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -12776,7 +12802,7 @@
 		(uuid "db34ca87-ef8c-4fe8-9c2f-51e1939ad439")
 	)
 	(label "Plus"
-		(at 204.47 129.54 270)
+		(at 209.55 129.54 270)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -13402,7 +13428,7 @@
 		(at 38.1 101.6 90)
 		(unit 1)
 		(exclude_from_sim no)
-		(in_bom no)
+		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "0390ea0d-f687-49ce-b35f-0726942468d7")
@@ -14586,7 +14612,7 @@
 		(at 50.8 97.79 90)
 		(unit 1)
 		(exclude_from_sim no)
-		(in_bom yes)
+		(in_bom no)
 		(on_board yes)
 		(dnp yes)
 		(uuid "1827b40c-5ec4-49d4-9d8d-24566979d9fa")
@@ -18155,7 +18181,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "AO3401A"
+		(property "Value" "SI2301A"
 			(at 114.3 39.37 90)
 			(effects
 				(font
@@ -18175,7 +18201,7 @@
 				(hide yes)
 			)
 		)
-		(property "Datasheet" "http://www.aosmd.com/pdfs/datasheet/AO3401A.pdf"
+		(property "Datasheet" ""
 			(at 109.22 27.94 0)
 			(effects
 				(font
@@ -18185,7 +18211,7 @@
 				(hide yes)
 			)
 		)
-		(property "Description" "-4.0A Id, -30V Vds, P-Channel MOSFET, SOT-23"
+		(property "Description" "P-Channel MOSFET, SOT-23"
 			(at 105.41 33.02 0)
 			(effects
 				(font
@@ -18194,7 +18220,7 @@
 				(hide yes)
 			)
 		)
-		(property "JLCPCB" "C15127"
+		(property "JLCPCB" "C10487"
 			(at 105.41 33.02 0)
 			(effects
 				(font
@@ -18513,7 +18539,7 @@
 		(mirror x)
 		(unit 1)
 		(exclude_from_sim no)
-		(in_bom yes)
+		(in_bom no)
 		(on_board yes)
 		(dnp yes)
 		(uuid "8ab367e1-1feb-4452-b399-e21a7f9471d4")
@@ -18570,6 +18596,73 @@
 			(project "clocky"
 				(path "/1a152c6d-723d-49c0-9a40-41d8f1ee1a82"
 					(reference "R19")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 248.92 35.56 180)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(dnp yes)
+		(uuid "8c39db75-a6d6-45b6-a61e-24e495a7a3b5")
+		(property "Reference" "R20"
+			(at 246.888 35.56 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "10k"
+			(at 248.92 35.56 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+			(at 250.698 35.56 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 248.92 35.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 248.92 35.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "2a55e450-b518-4b8e-a68b-b7a5322b5e89")
+		)
+		(pin "2"
+			(uuid "33b1efc4-b80b-4e19-bc5c-e0c003d9a08e")
+		)
+		(instances
+			(project "clocky"
+				(path "/1a152c6d-723d-49c0-9a40-41d8f1ee1a82"
+					(reference "R20")
 					(unit 1)
 				)
 			)
@@ -18872,7 +18965,7 @@
 		(at 80.01 41.91 180)
 		(unit 1)
 		(exclude_from_sim no)
-		(in_bom yes)
+		(in_bom no)
 		(on_board yes)
 		(dnp no)
 		(uuid "952533b2-4d05-4b38-bf4e-f078295a8a8d")
@@ -18894,7 +18987,7 @@
 				(justify left top)
 			)
 		)
-		(property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
+		(property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
 			(at 79.0448 38.1 0)
 			(effects
 				(font
@@ -18921,7 +19014,7 @@
 				(hide yes)
 			)
 		)
-		(property "JLCPCB" "C63949"
+		(property "JLCPCB" ""
 			(at 80.01 41.91 0)
 			(effects
 				(font
@@ -19773,7 +19866,7 @@
 		(at 223.52 35.56 180)
 		(unit 1)
 		(exclude_from_sim no)
-		(in_bom yes)
+		(in_bom no)
 		(on_board yes)
 		(dnp yes)
 		(uuid "b24b5b76-b19d-4d00-a956-5d209b68f305")
@@ -20058,7 +20151,7 @@
 		(mirror y)
 		(unit 1)
 		(exclude_from_sim no)
-		(in_bom yes)
+		(in_bom no)
 		(on_board yes)
 		(dnp no)
 		(uuid "b722a098-c534-4864-bc2a-f9a32f5af95d")
@@ -21685,7 +21778,7 @@
 		(at 105.41 24.13 180)
 		(unit 1)
 		(exclude_from_sim no)
-		(in_bom yes)
+		(in_bom no)
 		(on_board yes)
 		(dnp yes)
 		(uuid "f24431ff-0ba1-4a97-896a-d96fa6df1e5c")
@@ -21943,7 +22036,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Package_SON:Texas_S-PWSON-N10_ThermalVias"
+		(property "Footprint" "Package_SON:Texas_S-PWSON-N10"
 			(at 64.77 57.15 0)
 			(effects
 				(font
@@ -22030,7 +22123,7 @@
 		(on_board yes)
 		(dnp yes)
 		(uuid "f881c60d-6c70-4702-9745-28e2ed34f5ce")
-		(property "Reference" "R20"
+		(property "Reference" "R21"
 			(at 106.68 64.008 90)
 			(effects
 				(font
@@ -22091,7 +22184,7 @@
 		(instances
 			(project ""
 				(path "/1a152c6d-723d-49c0-9a40-41d8f1ee1a82"
-					(reference "R20")
+					(reference "R21")
 					(unit 1)
 				)
 			)
