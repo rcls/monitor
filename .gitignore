@@ -3,6 +3,11 @@
 *.kicad_prl
 fp-info-cache
 ~*.lck
+*.pdf
 temp/
 out/
 _autosave-*
+stm32u031/raw/
+stm32u031/src/
+stm32u031/*.svd
+target/

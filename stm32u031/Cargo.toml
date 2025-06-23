@@ -1,0 +1,19 @@
+[package]
+name = "stm32u031"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+rt = []
+critical-section = []
+
+[dependencies]
+cortex-m = "*"
+vcell = "*"
+
+[profile.release]
+codegen-units = 1
+#opt-level = 'z'
+#force-frame-pointers = 'no'
+#debug = true
+lto = true

@@ -5622,7 +5622,7 @@
 			(embedded_fonts no)
 		)
 	)
-	(text "0x90 / 0x48 address."
+	(text "0x92 / 0x49 address."
 		(exclude_from_sim no)
 		(at 155.956 133.35 0)
 		(effects
@@ -5680,7 +5680,7 @@
 		(uuid "0f76a89e-de0a-4413-af20-ea48aa2e388a")
 	)
 	(junction
-		(at 134.62 52.07)
+		(at 135.89 53.34)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "1230a5e7-d46a-4fd9-9b5a-b88902976e95")
@@ -5752,7 +5752,7 @@
 		(uuid "47c4dcef-d775-468d-8bf9-35e77653ce04")
 	)
 	(junction
-		(at 128.27 52.07)
+		(at 129.54 53.34)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "4e25367b-7b35-40d8-8360-5ef087e49bbc")
@@ -5872,7 +5872,7 @@
 		(uuid "d2468b4e-3497-479a-bbde-7413268427bc")
 	)
 	(junction
-		(at 128.27 60.96)
+		(at 129.54 62.23)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "dbdfc293-8545-44e7-9ead-7a4cd5638394")
@@ -6037,7 +6037,7 @@
 	)
 	(wire
 		(pts
-			(xy 128.27 60.96) (xy 134.62 60.96)
+			(xy 129.54 62.23) (xy 135.89 62.23)
 		)
 		(stroke
 			(width 0)
@@ -6157,7 +6157,7 @@
 	)
 	(wire
 		(pts
-			(xy 134.62 52.07) (xy 134.62 53.34)
+			(xy 135.89 53.34) (xy 135.89 54.61)
 		)
 		(stroke
 			(width 0)
@@ -6717,7 +6717,7 @@
 	)
 	(wire
 		(pts
-			(xy 128.27 52.07) (xy 134.62 52.07)
+			(xy 129.54 53.34) (xy 135.89 53.34)
 		)
 		(stroke
 			(width 0)
@@ -6807,7 +6807,7 @@
 	)
 	(wire
 		(pts
-			(xy 128.27 52.07) (xy 128.27 53.34)
+			(xy 129.54 53.34) (xy 129.54 54.61)
 		)
 		(stroke
 			(width 0)
@@ -6927,7 +6927,7 @@
 	)
 	(wire
 		(pts
-			(xy 134.62 52.07) (xy 137.16 52.07)
+			(xy 135.89 53.34) (xy 138.43 53.34)
 		)
 		(stroke
 			(width 0)
@@ -7177,7 +7177,7 @@
 	)
 	(wire
 		(pts
-			(xy 114.3 52.07) (xy 120.65 52.07)
+			(xy 115.57 53.34) (xy 121.92 53.34)
 		)
 		(stroke
 			(width 0)
@@ -7586,7 +7586,7 @@
 		(uuid "b6edc363-7416-4095-9bba-c6bc110e9c66")
 	)
 	(label "Vout"
-		(at 114.3 52.07 0)
+		(at 115.57 53.34 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -7626,7 +7626,7 @@
 		(uuid "c70e5f0d-6f5f-48cd-b7c3-f41a6176178c")
 	)
 	(label "VSense"
-		(at 137.16 52.07 180)
+		(at 138.43 53.34 180)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -11792,7 +11792,7 @@
 	)
 	(symbol
 		(lib_id "Device:R")
-		(at 128.27 57.15 0)
+		(at 129.54 58.42 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -11800,7 +11800,7 @@
 		(dnp no)
 		(uuid "7c56b176-6431-406b-8400-22a89ae21f7b")
 		(property "Reference" "R2"
-			(at 127 57.1499 90)
+			(at 128.27 58.4199 90)
 			(do_not_autoplace yes)
 			(effects
 				(font
@@ -11810,7 +11810,7 @@
 			)
 		)
 		(property "Value" "18k"
-			(at 128.27 57.1499 90)
+			(at 129.54 58.4199 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11818,7 +11818,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-			(at 126.492 57.15 90)
+			(at 127.762 58.42 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11827,7 +11827,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 128.27 57.15 0)
+			(at 129.54 58.42 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11836,7 +11836,7 @@
 			)
 		)
 		(property "Description" "Resistor"
-			(at 128.27 57.15 0)
+			(at 129.54 58.42 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11845,7 +11845,7 @@
 			)
 		)
 		(property "JLCPCB" "C25762"
-			(at 128.27 57.15 0)
+			(at 129.54 58.42 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12560,7 +12560,7 @@
 	)
 	(symbol
 		(lib_id "power:GND")
-		(at 128.27 60.96 0)
+		(at 129.54 62.23 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -12568,7 +12568,7 @@
 		(dnp no)
 		(uuid "a7b829aa-890d-4512-8fe5-13b1f992aa99")
 		(property "Reference" "#PWR053"
-			(at 128.27 67.31 0)
+			(at 129.54 68.58 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12577,7 +12577,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 128.27 64.516 0)
+			(at 129.54 65.786 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12585,7 +12585,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 128.27 60.96 0)
+			(at 129.54 62.23 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12594,7 +12594,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 128.27 60.96 0)
+			(at 129.54 62.23 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12603,7 +12603,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 128.27 60.96 0)
+			(at 129.54 62.23 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13336,7 +13336,7 @@
 	)
 	(symbol
 		(lib_id "Device:C")
-		(at 134.62 57.15 0)
+		(at 135.89 58.42 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -13344,7 +13344,7 @@
 		(dnp no)
 		(uuid "c0f7f390-ec7a-4f19-a861-8f613f1ab836")
 		(property "Reference" "C1"
-			(at 135.128 55.1179 0)
+			(at 136.398 56.3879 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13353,7 +13353,7 @@
 			)
 		)
 		(property "Value" "10u"
-			(at 135.382 59.4359 0)
+			(at 136.652 60.7059 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13362,7 +13362,7 @@
 			)
 		)
 		(property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
-			(at 135.5852 60.96 0)
+			(at 136.8552 62.23 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13371,7 +13371,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 134.62 57.15 0)
+			(at 135.89 58.42 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13380,7 +13380,7 @@
 			)
 		)
 		(property "Description" "Unpolarized capacitor"
-			(at 134.62 57.15 0)
+			(at 135.89 58.42 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13389,7 +13389,7 @@
 			)
 		)
 		(property "JLCPCB" "C15525"
-			(at 134.62 57.15 0)
+			(at 135.89 58.42 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13504,7 +13504,7 @@
 	)
 	(symbol
 		(lib_id "Device:R")
-		(at 124.46 52.07 90)
+		(at 125.73 53.34 90)
 		(mirror x)
 		(unit 1)
 		(exclude_from_sim no)
@@ -13513,7 +13513,7 @@
 		(dnp no)
 		(uuid "c92b2a99-2750-4f59-872f-67ebdf8e998a")
 		(property "Reference" "R1"
-			(at 124.4599 50.8 90)
+			(at 125.7299 52.07 90)
 			(do_not_autoplace yes)
 			(effects
 				(font
@@ -13523,7 +13523,7 @@
 			)
 		)
 		(property "Value" "100k"
-			(at 124.4599 52.07 90)
+			(at 125.7299 53.34 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13531,7 +13531,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-			(at 124.46 50.292 90)
+			(at 125.73 51.562 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13540,7 +13540,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 124.46 52.07 0)
+			(at 125.73 53.34 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13549,7 +13549,7 @@
 			)
 		)
 		(property "Description" "Resistor"
-			(at 124.46 52.07 0)
+			(at 125.73 53.34 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13558,7 +13558,7 @@
 			)
 		)
 		(property "JLCPCB" "C25741"
-			(at 124.46 52.07 0)
+			(at 125.73 53.34 0)
 			(effects
 				(font
 					(size 1.27 1.27)

@@ -1,0 +1,12 @@
+[target.'cfg(all(target_arch = "arm", target_os = "none"))']
+rustflags = [
+  # LLD (shipped with the Rust toolchain) is used as the default linker
+  #"-L", ".",
+  "-Clink-arg=-Tdevice.x",
+  "-Cforce-frame-pointers=no",
+]
+
+#[build]
+#target = "thumbv6m-none-eabi"        # Cortex-M0 and Cortex-M0+
+
+#-Z build-std -Z build-std-features="optimize_for_size"
