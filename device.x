@@ -1,6 +1,6 @@
 MEMORY
 {
-  FLASH(RX) : ORIGIN = 0x08000000, LENGTH = 8K
+  FLASH(RX) : ORIGIN = 0x08000000, LENGTH = 64K
   RAM(WX) : ORIGIN = 0x20000000, LENGTH = 12K
   /* Note that SRAM2 is also mapped at 0x10000000. */
 }
@@ -20,6 +20,8 @@ SECTIONS
      *(SORT_BY_ALIGNMENT(.rwdata*))
   } > RAM
   .bss (NOLOAD) : {
+     __bss_start = .;
      *(SORT_BY_ALIGNMENT(.bss*))
+     __bss_end = .;
   } > RAM
 }

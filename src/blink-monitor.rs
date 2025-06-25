@@ -1,9 +1,12 @@
 #![cfg_attr(not(test), no_std)]
-#![no_main]
+#![cfg_attr(not(test), no_main)]
 #![deny(warnings)]
 #![feature(format_args_nl)]
+#![feature(sync_unsafe_cell)]
+#![feature(str_from_raw_parts)]
 
 mod debug;
+mod vcell;
 
 type I2C = stm32u031::i2c1::RegisterBlock;
 
@@ -68,7 +71,7 @@ fn i2c_rx_reg16(i2c: &I2C, addr: u8, reg: u8, last: bool) -> Option<u16> {
     Some(byte1 as u16 * 256 + byte2 as u16)
 }
 
-pub fn entry() -> ! {
+pub fn main() -> ! {
     let gpioa = unsafe {&*stm32u031::GPIOA ::ptr()};
     let rcc   = unsafe {&*stm32u031::RCC   ::ptr()};
     let usart = unsafe {&*stm32u031::USART2::ptr()};
@@ -113,6 +116,8 @@ pub fn entry() -> ! {
                        .MODE11().B_0x1() // GPO.
                        .MODE12().B_0x1());
 
+    debug::init();
+
     // ADC.  PA5=AIN10=ISense, PB0=AIN18=VSense, PB1=AIN19=VRef.
     // iTemp=AIN11, TSEN, iRef=AIN12, VREFEN
     // TSCal1 (30°, 3V) @ 0x1FFF 6E68 - 0x1FFF 6E69
@@ -128,21 +133,21 @@ pub fn entry() -> ! {
     // Start the calibration.
     adc.CR.write(|w| w.ADCAL().set_bit().ADVREGEN().set_bit());
     // Wait for it.
-    dbgln!("A1");
+    sdbgln!("A1");
     while !adc.ISR.read().EOCAL().bit() {
     }
-    dbgln!("A2");
+    sdbgln!("A2");
 
     adc.CR.write(|w| w.ADVREGEN().set_bit().ADEN().set_bit());
 
     for _ in 0..1000000 {
         if adc.ISR.read().ADRDY().bit() {
-            dbgln!("ADRDY");
+            sdbgln!("ADRDY");
             break;
         }
     }
     //}
-    dbgln!("A3");
+    sdbgln!("A3");
 
     adc.SMPR.write(|w| w.SMP1().B_0x7()); // 10µs sample gate.
     //adc.cr.write(|w| w.advregen().set_bit().aden().set_bit());
@@ -218,8 +223,8 @@ pub fn entry() -> ! {
         // Read the temperature conversion.
         if let Some(temp) = i2c_rx_reg16(i2c, TMP117, 0, true) {
             let cels = (temp * 5 + 32) / 64;
-            dbgln!("T {cels}");
-            //dbgln!("T {}", cels);
+            sdbgln!("T {cels}");
+            //sdbgln!("T {}", cels);
         }
 
         // Trigger a ADC conversion.  We probably don't need all these bits?
@@ -237,16 +242,16 @@ pub fn entry() -> ! {
             let val = adc.DR.read().DATA().bits() as i32;
             match adc_idx {
                 // 132 mV/A
-                1 => dbgln!(
+                1 => sdbgln!(
                     "Isense: {} mA ({val})",
                     ((val - 2034*16) * 25000 + 32768) / 65536),
-                2 => dbgln!(
+                2 => sdbgln!(
                     "Vsense: {} mV ({val})",
                     val * (3300 * 118 / 24) / (65536 * 18 / 24)),
                 // 33/(val / 4096 / 25)
                 // 1v gets val/2.5
                 // 4096 gets 4096 / (val/2.5)
-                3 => dbgln!("3V3: {} mV ({val})", 65536 * 2500 / val ),
+                3 => sdbgln!("3V3: {} mV ({val})", 65536 * 2500 / val),
                 _ => (),
             }
             if adc_st & 8 != 0 {
@@ -285,7 +290,7 @@ pub struct VectorTable {
 #[unsafe(link_section = ".vectors")]
 pub static VTORS: VectorTable = VectorTable {
     stack     : 0x20000000 + 12 * 1024,
-    reset     : entry,
+    reset     : main,
     nmi       : hang,
     hard_fault: hang,
     reserved1 : [0; 7],
@@ -295,7 +300,3 @@ pub static VTORS: VectorTable = VectorTable {
     systick   : hang,
     interrupts: [hang; 32],
 };
-
-//const fn check_vtors() {
-//    assert_eq!(core::mem::offset_of!(VectorTable, interrupts), 64);
-//}

@@ -1,19 +1,18 @@
 cargo-features = ['per-package-target', 'different-binary-name']
-#cargo-features = ['different-binary-name']
 
 [package]
 name = 'monitor'
 version = '0.1.0'
 edition = '2024'
-default-target = 'thumbv6m-none-eabi'
 
 [dependencies]
 stm32u031 = { path = './stm32u031' }
+
+[target.'cfg(not(target_arch = "arm"))'.dependencies]
+cortex-m = '*'
+
+[target.'cfg(target_arch = "arm")'.dependencies]
 cortex-m = {version = '*', features = ['inline-asm']}
-#cortex-m-rt = '*'
-static_assertions = '*'
-#core = {version = '*', features = ['optimize_for_size']}
-#vcell = '*'
 
 [[bin]]
 name = 'monitor'
@@ -23,21 +22,18 @@ path = 'src/monitor.rs'
 #[[bin]]
 #name = 'clocky'
 #path = 'src/clocky.rs'
+
 [[bin]]
 name = 'blink-monitor'
 filename = 'blink-monitor.elf'
 path = 'src/blink-monitor.rs'
 
-[profile.dev]
-lto = true
-codegen-units = 1
-opt-level = 'z'
-debug = true
+[profile.test]
+opt-level = 1
 
 [profile.release]
 lto = true
 codegen-units = 1
-#opt-level = 2
-#opt-level = 'z'
 opt-level = 'z'
 debug = true
+panic = 'abort'
