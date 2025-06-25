@@ -4,8 +4,7 @@
 #![feature(sync_unsafe_cell)]
 #![feature(str_from_raw_parts)]
 
-use core::cell::SyncUnsafeCell;
-use crate::vcell::{VCell, VCellAccess};
+use crate::vcell::{UCell, VCell};
 use crate::noise::Noise;
 
 mod debug;
@@ -24,8 +23,7 @@ static ADC_DMA_BUF: [VCell<u16>; 3] = [const {VCell::new(0)}; 3];
 
 static TEMP: VCell<i16> = VCell::new(0);
 static ADC_DONE: VCell<bool> = VCell::new(false);
-static NOISE: SyncUnsafeCell<[Noise; 4]>
-    = SyncUnsafeCell::new([Noise::new(); 4]);
+static NOISE: UCell<[Noise; 4]> = UCell::new([Noise::new(); 4]);
 
 unsafe extern "C" {
     static mut __bss_start: u8;
@@ -109,7 +107,7 @@ fn systick_handler() {
     let vsense = vsense_counts * (3300 * 118 / 24) / (65536 * 18 / 24);
     let v3v3 = 65536 * 2500 / v3v3_counts;
 
-    let noise = unsafe { &mut *NOISE.get() };
+    let noise = unsafe {NOISE.as_mut()};
     noise[0].update(vsense as u32);
     noise[1].update(isense as u32);
     noise[2].update(v3v3 as u32);

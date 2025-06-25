@@ -1,6 +1,5 @@
 
-use crate::vcell::{UCell, VCell, VCellAccess};
-use core::cell::SyncUnsafeCell;
+use crate::vcell::{UCell, VCell};
 
 pub struct DebugS;
 pub struct DebugAMarker;
@@ -10,7 +9,7 @@ static DEBUG: UCell<DebugA> = UCell::new(DebugA::new());
 pub struct DebugA {
     w: VCell<u8>,
     r: VCell<u8>,
-    buf: [SyncUnsafeCell<u8>; 256],
+    buf: [UCell<u8>; 256],
 }
 
 pub fn debug_isr() {
@@ -26,17 +25,8 @@ impl DebugA {
     const fn new() -> DebugA {
         DebugA {
             w: VCell::new(0), r: VCell::new(0),
-            buf: [const {SyncUnsafeCell::new(0)}; 256]
+            buf: [const {UCell::new(0)}; 256]
         }
-    }
-    fn write_byte(&self, c: u8) {
-        let w = self.w.read();
-        while self.r.read().wrapping_sub(w) == 1 {
-            cortex_m::asm::wfe();
-        }
-        // The ISR won't access the array element in question.
-        unsafe {*self.buf[w as usize].get() = c as u8};
-        self.enable(w.wrapping_add(1));
     }
     fn write_str(&self, s: &str) {
         let mut w = self.w.read();
@@ -46,7 +36,7 @@ impl DebugA {
                 cortex_m::asm::wfe();
             }
             // The ISR won't access the array element in question.
-            unsafe {*self.buf[w as usize].get() = b};
+            unsafe {*self.buf[w as usize].as_mut() = b};
             w = w.wrapping_add(1);
         }
         self.enable(w);
@@ -62,24 +52,24 @@ impl DebugA {
                 . TXFEIE().set_bit());
     }
     fn isr(&mut self) {
+        // Assume no spurious wake-ups!
         let usart  = unsafe {&*stm32u031::USART2::ptr()};
-        let w = *self.w.as_mut();
-        let mut r = *self.r.as_mut();
-        while r != w {
-            if !usart.ISR.read().TXFNF().bit() {
-                *self.r.as_mut() = r;
-                usart.ICR.write(|w| w.TXFECF().set_bit());
-                return;
-            }
+        const FIFO_SIZE: usize = 8;
+        let mut r = *self.r.as_mut() as usize;
+        let w = *self.w.as_mut() as usize;
+        let mut done = 0;
+        while r != w && done < FIFO_SIZE {
             usart.TDR.write(
-                |w| unsafe{w.bits(*self.buf[r as usize].get_mut() as u32)});
-            r = r.wrapping_add(1);
+                |w| unsafe{w.bits(*self.buf[r].as_ref() as u32)});
+            r = (r + 1) & 0xff;
+            done += 1;
         }
-        *self.r.as_mut() = r;
-        // Disable the fifo-empty interrupt.
-        usart.CR1.write(
-            |w| w.FIFOEN().set_bit().TE().set_bit().UE().set_bit());
-        // No point in clearing the interrupt flag while its disabled.
+        if r == w {
+            usart.CR1.write(
+                |w| w.FIFOEN().set_bit().TE().set_bit().UE().set_bit());
+        }
+        *self.r.as_mut() = r as u8;
+        usart.ICR.write(|w| w.TXFECF().set_bit());
     }
 }
 
@@ -97,7 +87,7 @@ fn debug_str(s: &str) {
 #[inline(never)]
 fn debug_char(s: char) {
     let uart = unsafe {&*stm32u031::USART2::ptr()};
-    // This is manky and doesn't cope with UTF-8/
+    // This is manky and doesn't cope with UTF-8.
     while !uart.ISR.read().TXFNF().bit() {
     }
     uart.TDR.write(|w| unsafe { w.bits(s as u32) });
@@ -111,8 +101,10 @@ fn async_debug_str(s: &str) {
 
 #[inline(never)]
 fn async_debug_char(c: char) {
-    let debug = DEBUG.as_ref();
-    debug.write_byte(c as u8);
+    // In practice we only get called with ASCII. And async_debug_str doesn't
+    // complain if the character is not valid.
+    let cc = [c as u8];
+    async_debug_str(unsafe {str::from_utf8_unchecked(&cc)});
 }
 
 impl core::fmt::Write for DebugS {

@@ -206,6 +206,10 @@ pub fn main() -> ! {
     // Reduce drive strength.
     rcc.BDCR.write(|w| w.LSEON().set_bit().LSEDRV().B_0x0());
 
+    for r in 0..= 8 {
+        sdbgln!("Reg {r} = {v:?}", v = i2c_rx_reg16(i2c, TMP117, r, true));
+    }
+
     let mut adc_idx = 0;
     loop {
         gpioa.BSRR.write(|w| unsafe {w.bits(1 << 27 | 1 << 12)});

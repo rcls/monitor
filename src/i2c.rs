@@ -1,4 +1,4 @@
-use crate::vcell::{VCell, VCellAccess};
+use crate::vcell::VCell;
 
 use super::I2C;
 
