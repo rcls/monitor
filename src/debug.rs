@@ -1,10 +1,10 @@
 
-use crate::vcell::{UCell, VCell};
+use crate::vcell::{UCell, VCell, barrier, WFE};
 
 pub struct DebugS;
 pub struct DebugAMarker;
 
-static DEBUG: UCell<DebugA> = UCell::new(DebugA::new());
+pub static DEBUG: UCell<DebugA> = UCell::new(DebugA::new());
 
 pub struct DebugA {
     w: VCell<u8>,
@@ -16,11 +16,6 @@ pub fn debug_isr() {
     unsafe {DEBUG.as_mut()}.isr();
 }
 
-#[inline(always)]
-fn barrier() {
-    unsafe {core::arch::asm!("")}
-}
-
 impl DebugA {
     const fn new() -> DebugA {
         DebugA {
@@ -28,18 +23,19 @@ impl DebugA {
             buf: [const {UCell::new(0)}; 256]
         }
     }
-    fn write_str(&self, s: &str) {
+    fn write_bytes(&self, s: &[u8]) -> core::fmt::Result {
         let mut w = self.w.read();
-        for &b in s.as_bytes() {
+        for &b in s {
             while self.r.read().wrapping_sub(w) == 1 {
                 self.enable(w);
-                cortex_m::asm::wfe();
+                WFE();
             }
             // The ISR won't access the array element in question.
             unsafe {*self.buf[w as usize].as_mut() = b};
             w = w.wrapping_add(1);
         }
         self.enable(w);
+        Ok(())
     }
     fn enable(&self, w: u8) {
         barrier();
@@ -73,63 +69,34 @@ impl DebugA {
     }
 }
 
-#[inline(never)]
-fn debug_str(s: &str) {
+fn sdebug_bytes(s: &[u8]) -> core::fmt::Result {
     let uart = unsafe {&*stm32u031::USART2::ptr()};
-    for &b in s.as_bytes() {
+    for &b in s {
         // This is a bit manky...
         while !uart.ISR.read().TXFNF().bit() {
         }
         uart.TDR.write(|w| unsafe { w.bits(b as u32) });
     }
-}
-
-#[inline(never)]
-fn debug_char(s: char) {
-    let uart = unsafe {&*stm32u031::USART2::ptr()};
-    // This is manky and doesn't cope with UTF-8.
-    while !uart.ISR.read().TXFNF().bit() {
-    }
-    uart.TDR.write(|w| unsafe { w.bits(s as u32) });
-}
-
-#[inline(never)]
-fn async_debug_str(s: &str) {
-    let debug = DEBUG.as_ref();
-    debug.write_str(s);
-}
-
-#[inline(never)]
-fn async_debug_char(c: char) {
-    // In practice we only get called with ASCII. And async_debug_str doesn't
-    // complain if the character is not valid.
-    let cc = [c as u8];
-    async_debug_str(unsafe {str::from_utf8_unchecked(&cc)});
+    Ok(())
 }
 
 impl core::fmt::Write for DebugS {
-    #[inline(always)]
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        debug_str(s);
-        Ok(())
+        sdebug_bytes(s.as_bytes())
     }
-    #[inline(always)]
     fn write_char(&mut self, c: char) -> core::fmt::Result {
-        debug_char(c);
-        Ok(())
+        let cc = [c as u8];
+        sdebug_bytes(&cc)
     }
 }
 
 impl core::fmt::Write for DebugAMarker {
-    #[inline(always)]
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        async_debug_str(s);
-        Ok(())
+        DEBUG.write_bytes(s.as_bytes())
     }
-    #[inline(always)]
     fn write_char(&mut self, c: char) -> core::fmt::Result {
-        async_debug_char(c);
-        Ok(())
+        let cc = [c as u8];
+        DEBUG.write_bytes(&cc)
     }
 }
 

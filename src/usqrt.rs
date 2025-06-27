@@ -14,7 +14,7 @@ pub fn usqrt(x : u32) -> u32 {
             result = trial;
         }
     }
-    return result;
+    result
 }
 
 #[cfg(test)]

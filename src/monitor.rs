@@ -4,25 +4,22 @@
 #![feature(sync_unsafe_cell)]
 #![feature(str_from_raw_parts)]
 
-use crate::vcell::{UCell, VCell};
-use crate::noise::Noise;
+use adc::{adc_isr, dma1_isr};
+use vcell::{UCell, VCell, WFE};
+use noise::Noise;
 
+mod adc;
+mod dma;
 mod debug;
 mod i2c;
 mod noise;
+mod oled;
 mod usqrt;
 mod vcell;
 
 type I2C = stm32u031::I2C1;
 
-// DMA MUX lines.
-// Use DMA1 Ch1
-const ADC_MUXIN: u32 = 5;
-
-static ADC_DMA_BUF: [VCell<u16>; 3] = [const {VCell::new(0)}; 3];
-
 static TEMP: VCell<i16> = VCell::new(0);
-static ADC_DONE: VCell<bool> = VCell::new(false);
 static NOISE: UCell<[Noise; 4]> = UCell::new([Noise::new(); 4]);
 
 unsafe extern "C" {
@@ -30,87 +27,38 @@ unsafe extern "C" {
     static mut __bss_end: u8;
 }
 
-fn adc_isr() {
-    let adc = unsafe {&*stm32u031::ADC ::ptr()};
-    let dma = unsafe {&*stm32u031::DMA1::ptr()};
-    // Get EOC and OVR bits.
-    let isr = adc.ISR.read().bits();
-    adc.ISR.write(|w| unsafe{w.bits(isr & 0x18)});
-    // sdbgln!("ADC ISR {isr:#x}");
-    // FIXME - abort if OVR is set.
-    if dma.CNDTR1.read().NDT().bits() == 0 {
-        // sdbgln!("ADC done");
-        ADC_DONE.write(true);
-    }
-    // sdbgln!("{:#x} {:#x} {:#x} {:#x} {:#x}",
-    //        dma.ISR.read().bits(), dma.CCR1.read().bits(),
-    //        dma.CNDTR1.read().bits(), dma.CPAR1.read().bits(),
-    //        dma.CMAR1.read().bits());
-    // let dmamux = unsafe {&*stm32u031::DMAMUX::ptr()};
-    // sdbgln!(" {:#x}", dmamux.C0CR.read().bits());
-}
-
-fn dma1_isr() {
-    let adc = unsafe {&*stm32u031::ADC::ptr()};
-    let dma = unsafe {&*stm32u031::DMA1::ptr()};
-    let status = dma.ISR.read().bits();
-    dma.IFCR.write(|w| w.CGIF1().set_bit());
-    // sdbgln!("DMA1 ISR {status:#x}");
-    if status & 10 != 0 && adc.CR.read().ADSTART().bit() {
-        // sdbgln!("ADC DONE");
-        ADC_DONE.write(true);
-    }
-}
-
 fn systick_handler() {
     // sdbgln!("SYSTICK enter");
-    let adc = unsafe {&*stm32u031::ADC ::ptr()};
-    let dma = unsafe {&*stm32u031::DMA1::ptr()};
 
-    ADC_DONE.write(false);
+    adc::start();
 
-    // Set-up DMA for the ADC.
-    // FIXME - do we need to do this every time?
-    dma.CCR1.write(|w| unsafe {w.bits(0)});
-    dma.CMAR1.write(|w| unsafe {w.bits(ADC_DMA_BUF.as_ptr() as u32)});
-    dma.CPAR1.write(|w| unsafe {w.bits(adc.DR.as_ptr() as u32)});
-    dma.CNDTR1.write(|w| unsafe {w.bits(3)});
-    dma.CCR1.write(
-        |w| w.EN().set_bit().TCIE().set_bit().TEIE().set_bit().MINC().set_bit()
-            . MSIZE().B_0x1().PSIZE().B_0x1());
-
-    // Trigger ADC conversions and temperature conversion (via I2C).
-    adc.CR.write(|w| w.ADSTART().set_bit());
-
-    // Start the I2C transfer.  Use DMA3.
-    static ZERO: [u8; 1] = [0];
-    i2c::write_start(i2c::TMP117, &ZERO);
-
-    //dbgln!("I2C wait 1");
-    // FIXME - what happens on errors?
-    i2c::write_wait();
-
-    i2c::read_start(i2c::TMP117, TEMP.as_ptr());
+    i2c::read_reg_start(i2c::TMP117, 0, TEMP.as_ptr());
 
     // Wait for both I2C and ADC done.
-    while !i2c::I2C_DONE.read() || !ADC_DONE.read() {
-        cortex_m::asm::wfe();
+    while !i2c::CONTEXT.done.read() || !adc::DONE.read() {
+        WFE();
     }
 
     // Log the ADC & TEMP values....
-    let isense_counts = ADC_DMA_BUF[0].read() as i32;
-    let vsense_counts = ADC_DMA_BUF[1].read() as u32;
-    let v3v3_counts   = ADC_DMA_BUF[2].read() as u32;
+    let isense_counts = adc::DMA_BUF[0].read() as i32;
+    let vsense_counts = adc::DMA_BUF[1].read() as u32;
+    let v3v3_counts   = adc::DMA_BUF[2].read() as u32;
     let temp_counts   = i16::from_be(TEMP.read()) as i32;
 
     let isense = ((isense_counts - 2034 * 16) * 25000 + 32768) >> 16;
     let vsense = vsense_counts * (3300 * 118 / 24) / (65536 * 18 / 24);
-    let v3v3 = 65536 * 2500 / v3v3_counts;
+    let v3v3;
+    if v3v3_counts >= 45000 && v3v3_counts <= 55000 {
+        v3v3 = 65536 * 2500 / v3v3_counts;
+    }
+    else {
+        v3v3 = 3300;
+    }
 
     let noise = unsafe {NOISE.as_mut()};
-    noise[0].update(vsense as u32);
+    noise[0].update(vsense);
     noise[1].update(isense as u32);
-    noise[2].update(v3v3 as u32);
+    noise[2].update(v3v3);
     noise[3].update(temp_counts as u32);
 
     // sdbg!("?");
@@ -123,31 +71,25 @@ fn systick_handler() {
     // sdbg!("!");
 }
 
-#[inline]
-fn nothing() {
-    unsafe {core::arch::asm!("", options(nomem))}
-}
-
 pub fn main() -> ! {
-    let bss_start = &raw mut __bss_start;
-    let bss_end   = &raw mut __bss_end;
-    let bss_size = bss_end.addr() - bss_start.addr();
-
-    let adc    = unsafe {&*stm32u031::ADC   ::ptr()};
-    let dmamux = unsafe {&*stm32u031::DMAMUX::ptr()};
-    let gpioa  = unsafe {&*stm32u031::GPIOA ::ptr()};
-    let pwr    = unsafe {&*stm32u031::PWR   ::ptr()};
-    let rcc    = unsafe {&*stm32u031::RCC   ::ptr()};
-    let usart  = unsafe {&*stm32u031::USART2::ptr()};
-    let scb    = unsafe {&*cortex_m::peripheral::SCB ::PTR};
-    let nvic   = unsafe {&*cortex_m::peripheral::NVIC::PTR};
+    let gpioa = unsafe {&*stm32u031::GPIOA ::ptr()};
+    let pwr   = unsafe {&*stm32u031::PWR   ::ptr()};
+    let rcc   = unsafe {&*stm32u031::RCC   ::ptr()};
+    let usart = unsafe {&*stm32u031::USART2::ptr()};
+    let scb   = unsafe {&*cortex_m::peripheral::SCB ::PTR};
+    let nvic  = unsafe {&*cortex_m::peripheral::NVIC::PTR};
 
     // Go to 16MHz.
     rcc.CR.write(
         |w| w.MSIRANGE().B_0x8().MSIRGSEL().set_bit().MSION().set_bit());
 
-    unsafe {
-        core::ptr::write_bytes(&raw mut __bss_start, 0u8, bss_size);
+    if !cfg!(test) {
+        let bss_start = &raw mut __bss_start;
+        let bss_end   = &raw mut __bss_end;
+        let bss_size = bss_end.addr() - bss_start.addr();
+        unsafe {
+            core::ptr::write_bytes(&raw mut __bss_start, 0u8, bss_size);
+        }
     }
 
     // Enable clocks.
@@ -190,28 +132,15 @@ pub fn main() -> ! {
             .MODE11().B_0x1().MODE12().B_0x1()); // GPO.
 
     debug::init();
-    //dbgln!("BSS {bss_start:?} {bss_end:?} {bss_size}");
+
     sdbgln!("Debug up");
     dbgln!("Async debug up");
 
-    // Calibrate the ADC.  First enable the voltage reg.
-    adc.CR.write(|w| w.ADVREGEN().set_bit());
-    // Wait for LDO ready... 20µs.
-    for _ in 0..200 {
-        nothing();
-    }
-    // Start the calibration.
-    adc.CR.write(|w| w.ADCAL().set_bit().ADVREGEN().set_bit());
+    adc::init1();
 
     i2c::init();
 
-    // DMAMUX mapping.  Note the zero-based v. one-based f**kup.
-    // ADC to DMA1 channel 1,
-    dmamux.C0CR.write(|w| unsafe {w.bits(ADC_MUXIN)});
-
     // FIXME get the set-up correct.
-    //dma.CPAR1.write(|w| unsafe {w.bits(&adc.DR as *const _ as u32)});
-    //dma.CMAR1.write(|w| unsafe {w.bits(&ADC_DMA_BUF as *const _ as u32)});
 
     // Set the systick interrupt priority to a high value (other interrupts
     // pre-empt).
@@ -222,43 +151,6 @@ pub fn main() -> ! {
     unsafe {
         scb.shpr[1].write(0xc0 << 24);
     }
-
-    // Wait for ADC calibration complete.
-    dbgln!("Eocal wait");
-    while !adc.ISR.read().EOCAL().bit() {
-    }
-    adc.ISR.write(|w| w.EOCAL().set_bit());
-    dbgln!("Eocal done");
-    dbgln!("ADC CR = {:#x}, ISR = {:#x}", adc.CR.read().bits(),
-           adc.ISR.read().bits());
-
-    // Enable the ADC and wait for ready...
-    dbgln!("ADC CR = {:#x}, ISR = {:#x}", adc.CR.read().bits(),
-           adc.ISR.read().bits());
-    adc.CR.write(|w| w.ADVREGEN().set_bit().ADEN().set_bit());
-    dbgln!("ADC CR = {:#x}, ISR = {:#x}", adc.CR.read().bits(),
-           adc.ISR.read().bits());
-    while !adc.ISR.read().ADRDY().bit() {
-    }
-
-    // Use DMAEN, and set AUTOFF for intermittent conversions.
-    adc.CFGR1.write(|w| w.AUTOFF().set_bit().DMAEN().set_bit());
-    // Oversample config.
-    adc.CFGR2.write(|w| w.OVSS().B_0x4().OVSR().B_0x7().OVSE().set_bit());
-
-    // Configure ADC chanels and wait for ready.  The datasheet appears to lie.
-    // We actually get Isense on AIN9, VSENSE on A17 and VREF on A18 (0 based
-    // v. 1 based?)
-    adc.CHSELR.write(
-        |w| w.CHSEL9().set_bit().CHSEL17().set_bit().CHSEL18().set_bit());
-    // Wait for ready.
-    dbgln!("Ccrdy wait");
-    while !adc.ISR.read().CCRDY().bit() {
-    }
-    dbgln!("Ccrdy done");
-    // Enable ADC EOC and OVR interrupts.
-    adc.IER.write(|w| w.EOSIE().set_bit().OVRIE().set_bit());
-    adc.SMPR.write(|w| w.SMP1().B_0x7()); // ≈10µs sample gate.
 
     // Wait for LSE and then enable the MSI FLL.
     while !rcc.BDCR.read().LSERDY().bit() {
@@ -282,6 +174,12 @@ pub fn main() -> ! {
     // now.
     dbgln!("Going!");
 
+    oled::init();
+
+    dbgln!("Oled init!");
+
+    adc::init2();
+
     unsafe {
         let syst = &*cortex_m::peripheral::SYST::PTR;
         syst.rvr.write(199999);
@@ -290,7 +188,7 @@ pub fn main() -> ! {
     }
 
     loop {
-        cortex_m::asm::wfe();
+        WFE();
     }
 }
 

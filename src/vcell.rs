@@ -9,21 +9,16 @@ pub struct VCell<T>(SyncUnsafeCell<T>);
 #[repr(transparent)]
 pub struct UCell<T>(SyncUnsafeCell<T>);
 
-impl<T> VCell<T> {
+impl<T: Sync> VCell<T> {
     #[inline]
     pub const fn new(v: T) -> Self {Self(SyncUnsafeCell::new(v))}
-
     #[inline]
     pub fn as_ptr(&self) -> *mut T {self.0.get()}
     #[inline]
     pub fn as_mut(&mut self) -> &mut T {self.0.get_mut()}
 }
 
-impl<T> From<T> for VCell<T> {
-    fn from(v: T) -> VCell<T> {VCell::new(v)}
-}
-
-impl<T> UCell<T> {
+impl<T: Sync> UCell<T> {
     #[inline]
     pub const fn new(v: T) -> Self {Self(SyncUnsafeCell::new(v))}
     #[inline]
@@ -33,8 +28,30 @@ impl<T> UCell<T> {
     pub unsafe fn as_mut(&self) -> &mut T {unsafe{&mut *self.0.get()}}
 }
 
+#[inline(always)]
+pub fn barrier() {
+    core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
+}
+
+#[inline(always)]
+#[allow(non_snake_case)]
+pub fn WFE() {
+    if !cfg!(test) {
+        unsafe {
+            core::arch::asm!("wfe", options(nomem, preserves_flags, nostack))};
+    }
+    else {
+        panic!("wfe!");
+    }
+}
+
+impl<T: Sync> core::ops::Deref for UCell<T> {
+    type Target = T;
+    fn deref(&self) -> &T {self.as_ref()}
+}
+
 macro_rules! VCellImpl {
-    ($t:ty) => {
+    ($($t:ty),*) => {$(
         #[allow(dead_code)]
         impl VCell<$t> {
             #[inline(always)]
@@ -46,10 +63,7 @@ macro_rules! VCellImpl {
                 unsafe {core::ptr::write_volatile(self.as_ptr(), v)};
             }
         }
-    }
+    )*};
 }
 
-VCellImpl!(bool);
-VCellImpl!(i16);
-VCellImpl!(u8);
-VCellImpl!(u16);
+VCellImpl!(bool, i8, u8, i16, u16, i32, u32, isize, usize, char);

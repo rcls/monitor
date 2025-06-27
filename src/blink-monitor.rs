@@ -273,7 +273,7 @@ fn nothing() {
 }
 
 fn hang() {
-    loop { };
+    loop { }
 }
 
 #[repr(C)]
