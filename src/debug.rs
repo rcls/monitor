@@ -145,10 +145,14 @@ pub fn init() {
 #[cfg(not(test))]
 #[panic_handler]
 fn ph(info: &core::panic::PanicInfo) -> ! {
-    sdbg!("{info}");
+    sdbgln!("{info}");
     // Let the TX FIFO drain.
     let usart = unsafe { &*stm32u031::USART2::ptr() };
     while !usart.ISR().read().TXFE().bit() {
+        let isr = usart.ISR().read();
+        if isr.TXFE().bit() && isr.TC().bit() {
+            break;
+        }
     }
     loop {
         unsafe {(*cortex_m::peripheral::SCB::PTR).aircr.write(0x05fa0004)};

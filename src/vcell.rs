@@ -1,6 +1,9 @@
 
 use core::cell::SyncUnsafeCell;
 
+#[cfg(target_arch = "arm")]
+pub use cortex_m::interrupt;
+
 /// Interrupt safe volatile cell, has read/write for scalar types.
 #[repr(transparent)]
 pub struct VCell<T>(SyncUnsafeCell<T>);
@@ -36,13 +39,19 @@ pub fn barrier() {
 #[inline(always)]
 #[allow(non_snake_case)]
 pub fn WFE() {
-    if !cfg!(test) {
+    if cfg!(target_arch = "arm") {
         unsafe {
             core::arch::asm!("wfe", options(nomem, preserves_flags, nostack))};
     }
     else {
         panic!("wfe!");
     }
+}
+
+#[cfg(not(target_arch = "arm"))]
+pub mod interrupt {
+    pub unsafe fn enable() { }
+    pub fn disable() { }
 }
 
 impl<T: Sync> core::ops::Deref for UCell<T> {

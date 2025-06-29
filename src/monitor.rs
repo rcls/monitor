@@ -5,12 +5,14 @@
 #![feature(str_from_raw_parts)]
 
 use adc::{adc_isr, dma1_isr};
-use vcell::{UCell, VCell, WFE};
+use vcell::{UCell, WFE};
 use noise::Noise;
 
 mod adc;
+mod decimal;
 mod dma;
 mod debug;
+mod font;
 mod i2c;
 mod noise;
 mod oled;
@@ -19,7 +21,7 @@ mod vcell;
 
 type I2C = stm32u031::I2C1;
 
-static TEMP: VCell<i16> = VCell::new(0);
+static TEMP: UCell<i16> = UCell::new(0);
 static NOISE: UCell<[Noise; 4]> = UCell::new([Noise::new(); 4]);
 
 unsafe extern "C" {
@@ -28,28 +30,34 @@ unsafe extern "C" {
 }
 
 fn systick_handler() {
-    // sdbgln!("SYSTICK enter");
+    //sdbgln!("SYSTICK enter");
 
     adc::start();
 
-    i2c::read_reg_start(i2c::TMP117, 0, TEMP.as_ptr());
+    let temp = unsafe{TEMP.as_mut()};
+
+    let i2c_wait = i2c::read_reg(i2c::TMP117, 0, temp);
 
     // Wait for both I2C and ADC done.
-    while !i2c::CONTEXT.done.read() || !adc::DONE.read() {
+    while !adc::DONE.read() {
         WFE();
     }
+
+    drop(i2c_wait);
 
     // Log the ADC & TEMP values....
     let isense_counts = adc::DMA_BUF[0].read() as i32;
     let vsense_counts = adc::DMA_BUF[1].read() as u32;
     let v3v3_counts   = adc::DMA_BUF[2].read() as u32;
-    let temp_counts   = i16::from_be(TEMP.read()) as i32;
+    let temp_counts   = i16::from_be(*temp) as i32;
 
     let isense = ((isense_counts - 2034 * 16) * 25000 + 32768) >> 16;
-    let vsense = vsense_counts * (3300 * 118 / 24) / (65536 * 18 / 24);
+    let num = 3300 * 118 / 24;
+    let den = 65536 * 18 / 24;
+    let vsense = vsense_counts * (num * 2 + 1) / (den * 2);
     let v3v3;
     if v3v3_counts >= 45000 && v3v3_counts <= 55000 {
-        v3v3 = 65536 * 2500 / v3v3_counts;
+        v3v3 = (65536 * 2500 * 2 / v3v3_counts + 1) >> 1;
     }
     else {
         v3v3 = 3300;
@@ -62,13 +70,34 @@ fn systick_handler() {
     noise[3].update(temp_counts as u32);
 
     // sdbg!("?");
-
-    dbgln!("{vsense:6}mV{isense:6}mA{v3v3:6}mV{:6} d°C{:7} m°C {} {} {} {}",
-           (temp_counts * 5 + 32) >> 6, temp_counts * 1000 >> 7,
+    //   VV.VVV V
+    //  ±II.III A
+    // n.nnn -nn.n
+    dbgln!("{vsense:6}mV{isense:6}mA{v3v3:6}mV{:7} m°C {} {} {} {}",
+           temp_counts * 1000 >> 7,
            noise[0].decimal(), noise[1].decimal(),
            noise[2].decimal(), noise[3].decimal());
 
-    // sdbg!("!");
+    static FRAME: UCell<[oled::Line; 4]> = UCell::new([[0; _]; _]);
+    let frame = unsafe{FRAME.as_mut()};
+    let mut line = [b' '; 12];
+
+    line[9..].copy_from_slice(b" V ");
+    decimal::format_u32(&mut line[..9], vsense, 3);
+    oled::refresh_line(&mut frame[0], line[..].try_into().unwrap(), 0);
+
+    line[9..].copy_from_slice(b" A ");
+    decimal::format_i32(&mut line[..9], isense, true, 3);
+    oled::refresh_line(&mut frame[1], line[..].try_into().unwrap(), 2);
+
+    line[8..].copy_from_slice(b" oC ");
+    let millic = (temp_counts * 100 + 50) >> 7;
+    decimal::format_i32(&mut line[..8], millic, false, 2);
+    oled::refresh_line(&mut frame[2], line[..].try_into().unwrap(), 4);
+
+    line[9..].copy_from_slice(b" V ");
+    decimal::format_u32(&mut line[..9], v3v3, 3);
+    oled::refresh_line(&mut frame[3], line[..].try_into().unwrap(), 6);
 }
 
 pub fn main() -> ! {
@@ -182,8 +211,8 @@ pub fn main() -> ! {
 
     unsafe {
         let syst = &*cortex_m::peripheral::SYST::PTR;
-        syst.rvr.write(199999);
-        syst.cvr.write(199999);
+        syst.rvr.write(399999);
+        syst.cvr.write(399999);
         syst.csr.write(3);
     }
 

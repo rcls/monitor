@@ -24,7 +24,7 @@ impl DMA for Channel {
         barrier();
         self.CR.write(unsafe{
             |w| w.EN().set_bit().TCIE().set_bit().TEIE().set_bit()
-                .MINC().bit(data != 0).DIR().bit(write)
+                .MINC().set_bit().DIR().bit(write)
                 .PSIZE().bits(size).MSIZE().bits(size)});
         barrier();
     }

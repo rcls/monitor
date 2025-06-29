@@ -5,5 +5,5 @@ b = 'build --release --target thumbv6m-none-eabi -Zbuild-std -Zbuild-std-feature
 rustflags = [
   '-Clink-arg=-Tdevice.x',
   '-Cforce-frame-pointers=no',
-  '-Zlocation-detail=none',
+#  '-Zlocation-detail=none',
 ]
