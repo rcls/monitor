@@ -1,4 +1,6 @@
 
+use core::fmt::Write;
+
 use crate::vcell::{UCell, VCell, barrier, WFE};
 
 pub struct DebugS;
@@ -80,7 +82,7 @@ fn sdebug_bytes(s: &[u8]) -> core::fmt::Result {
     Ok(())
 }
 
-impl core::fmt::Write for DebugS {
+impl Write for DebugS {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         sdebug_bytes(s.as_bytes())
     }
@@ -90,7 +92,7 @@ impl core::fmt::Write for DebugS {
     }
 }
 
-impl core::fmt::Write for DebugAMarker {
+impl Write for DebugAMarker {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         DEBUG.write_bytes(s.as_bytes())
     }

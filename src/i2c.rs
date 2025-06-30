@@ -20,15 +20,17 @@ fn tx_channel() -> &'static Channel {crate::dma::dma().CH(TX_CHANNEL)}
 
 pub struct I2cContext {
     outstanding: VCell<u8>,
-    //constant: VCell<u8>,
+    error: VCell<u8>,
     pending_len: VCell<usize>,
 }
 
+#[must_use]
 pub struct Wait<'a>(PhantomData<&'a()>);
 
 //pub static I2C_DONE: VCell<bool> = VCell::new(false);
 pub static CONTEXT: UCell<I2cContext> = UCell::new(I2cContext{
     outstanding: VCell::new(0),
+    error      : VCell::new(0),
     pending_len: VCell::new(0),
 });
 
@@ -79,7 +81,7 @@ pub fn init() {
     dmamux.CCR(TX_CHANNEL).write(|w| unsafe {w.bits(TX_MUXIN)});
 
     if false {
-        write_reg(0, 0, &0i16);
+        write_reg(0, 0, &0i16).defer();
         // read_wait();
     }
 }
@@ -94,23 +96,32 @@ pub fn i2c_isr() {
     let todo = pl.min(255);
     let pl = pl - todo;
     *context.pending_len.as_mut() = pl;
+    let more = false && pl != 0;        // We don't need this yet.
 
     if todo != 0 && status.TC().bit() {
+        // Assume write -> read transition.
         i2c.CR2.modify(unsafe{
-            |_, w| w.NBYTES().bits(todo as u8).RELOAD().bit(pl != 0)
+            |_, w| w.NBYTES().bits(todo as u8).RELOAD().bit(more)
                 .START().set_bit().AUTOEND().set_bit().RD_WRN().set_bit()});
     }
     else if false && todo != 0 && status.TCR().bit() {
         // Continuation.  No start, just more data.
         let cr2 = i2c.CR2.read();
         i2c.CR2.write(unsafe{
-            |w| w.bits(cr2.bits()).RELOAD().bit(pl != 0).NBYTES()
+            |w| w.bits(cr2.bits()).RELOAD().bit(more).NBYTES()
                 .bits(todo as u8)});
         crate::sdbgln!("Reload {todo} {:#x} {:#x}", status.bits(), cr2.bits());
     }
     else if status.STOPF().bit() {
         i2c.ICR.write(|w| w.STOPCF().set_bit());
         *context.outstanding.as_mut() &= !F_I2C;
+    }
+    else if status.ARLO().bit() || status.BERR().bit() || status.NACKF().bit() {
+        i2c.ICR.write(
+            |w| w.ARLOCF().set_bit().BERRCF().set_bit().NACKCF().set_bit());
+        *context.outstanding.as_mut() = 0;
+        *context.error.as_mut() = 1;
+        rx_channel().CR.write(|w| w);
     }
     else {
         crate::sdbgln!("Unexpected I2C ISR {:#x} {:#x}", status.bits(),
@@ -143,7 +154,7 @@ impl I2cContext {
     fn read_reg_start(&self, addr: u8, reg: u8, data: usize, len: usize) {
         // Should only be called while I2C idle...
         let i2c = unsafe {&*I2C::ptr()};
-        self.outstanding.write(F_I2C | F_DMA);
+        self.arm();
         self.pending_len.write(len);
 
         // Synchronous I2C start for the reg ptr write.
@@ -163,8 +174,8 @@ impl I2cContext {
                 . SADD().bits(addr as u16).NBYTES().bits(len as u8 + 1)});
         i2c.TXDR.write(|w| unsafe{w.bits(reg as u32)});
         tx_channel().write(data, len, 0);
-        self.outstanding.write(F_I2C | F_DMA);
-        unsafe {interrupt::enable()};
+        self.arm();
+        interrupt::enable();
     }
     fn write_start(&self, addr: u8, data: usize, len: usize,
                    last: bool, reload: bool) {
@@ -178,24 +189,26 @@ impl I2cContext {
         // we manage to get an I2C error before the DMA set-up is done, we have
         // interrupts disabled.
         tx_channel().write(data, len, 0);
+        self.arm();
+        interrupt::enable();
+    }
+    pub fn arm(&self) {
+        self.error.write(0);
         self.outstanding.write(F_I2C | F_DMA);
-        unsafe {interrupt::enable()};
     }
     pub fn done(&self) -> bool {self.outstanding.read() == 0}
-    pub fn wait(&self) {
+    pub fn wait(&self) -> Result<(), ()> {
         while !self.done() {
             crate::vcell::WFE();
         }
         barrier();
+        if self.error.read() == 0 {Ok(())} else {Err(())}
     }
 }
 
 impl Wait<'_> {
     pub fn defer(self) {core::mem::forget(self);}
-}
-
-impl Drop for Wait<'_> {
-    fn drop(&mut self) {CONTEXT.wait();}
+    pub fn wait(self) -> Result<(), ()> {CONTEXT.wait()}
 }
 
 pub fn write<'a, T: Flat + ?Sized>(addr: u8, data: &'a T) -> Wait<'a> {

@@ -1,9 +1,6 @@
 
 use core::cell::SyncUnsafeCell;
 
-#[cfg(target_arch = "arm")]
-pub use cortex_m::interrupt;
-
 /// Interrupt safe volatile cell, has read/write for scalar types.
 #[repr(transparent)]
 pub struct VCell<T>(SyncUnsafeCell<T>);
@@ -48,9 +45,18 @@ pub fn WFE() {
     }
 }
 
-#[cfg(not(target_arch = "arm"))]
+
+#[allow(dead_code)]
 pub mod interrupt {
-    pub unsafe fn enable() { }
+    // We don't use disabling interrupts to transfer ownership, so no need for
+    // the enable to be unsafe.
+    #[cfg(target_arch = "arm")]
+    pub fn enable() {unsafe{cortex_m::interrupt::enable()}}
+    #[cfg(target_arch = "arm")]
+    pub fn disable() {cortex_m::interrupt::disable()}
+    #[cfg(not(target_arch = "arm"))]
+    pub fn enable() { }
+    #[cfg(not(target_arch = "arm"))]
     pub fn disable() { }
 }
 

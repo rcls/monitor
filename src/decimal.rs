@@ -26,7 +26,7 @@ fn format_fixed(result: &mut [u8], v: u32, sign: u8, dp: usize) {
     let len = result.len();
     for i in 0..len {
         let d;
-        if i == dp {
+        if i != 0 && i == dp {
             d = b'.'
         }
         else {
@@ -35,13 +35,6 @@ fn format_fixed(result: &mut [u8], v: u32, sign: u8, dp: usize) {
         }
         result[len - 1 - i] = d;
     }
-    // for i in (len - dp .. len).into_iter().rev() {
-    //     result[i] = next(&mut v);
-    // }
-    // result[len - dp - 1] = b'.';
-    // for i in (0 .. len - dp - 1).into_iter().rev() {
-    //     result[i] = next(&mut v);
-    // }
 
     // Discard leading zeros...
     let mut lead = 0;

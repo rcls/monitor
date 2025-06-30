@@ -3,10 +3,12 @@
 #![feature(format_args_nl)]
 #![feature(sync_unsafe_cell)]
 #![feature(str_from_raw_parts)]
+#![feature(trait_alias)]
 
 use adc::{adc_isr, dma1_isr};
-use vcell::{UCell, WFE};
 use noise::Noise;
+use static_assertions::const_assert;
+use vcell::{UCell, WFE};
 
 mod adc;
 mod decimal;
@@ -30,12 +32,16 @@ unsafe extern "C" {
 }
 
 fn systick_handler() {
+    let _ = do_systick_handler();
+}
+
+fn do_systick_handler() -> Result<(), ()> {
     //sdbgln!("SYSTICK enter");
 
     adc::start();
 
-    let temp = unsafe{TEMP.as_mut()};
-
+    let temp = unsafe {TEMP.as_mut()};
+    *temp = 0;
     let i2c_wait = i2c::read_reg(i2c::TMP117, 0, temp);
 
     // Wait for both I2C and ADC done.
@@ -51,17 +57,44 @@ fn systick_handler() {
     let v3v3_counts   = adc::DMA_BUF[2].read() as u32;
     let temp_counts   = i16::from_be(*temp) as i32;
 
-    let isense = ((isense_counts - 2034 * 16) * 25000 + 32768) >> 16;
-    let num = 3300 * 118 / 24;
-    let den = 65536 * 18 / 24;
-    let vsense = vsense_counts * (num * 2 + 1) / (den * 2);
+    let isense_raw = isense_counts - 2034 * 16;
+    let isense = (isense_raw * 25000 + 32768) >> 16;
+
+    const V_FULL_SCALE: f64 = 118.0 / 18.0 * 3.3;
+    const V_SHIFT: u32 = 11;
+    const V_MULT: u32 = (V_FULL_SCALE * (1 << V_SHIFT) as f64 + 0.5) as u32;
+    const_assert!(V_MULT >= 32768);
+    const_assert!(V_MULT < 65536);
+    let vsense = (vsense_counts * V_MULT + 32768) >> 16;
+
+    const COUNTS_V3: u32 = (2.5 / 3.0 * 65536.0) as u32;
+    const_assert!(65536 * 2500 / COUNTS_V3 >= 3000);
+    const_assert!(65536 * 2500 / (COUNTS_V3 + 1) < 3000);
     let v3v3;
-    if v3v3_counts >= 45000 && v3v3_counts <= 55000 {
-        v3v3 = (65536 * 2500 * 2 / v3v3_counts + 1) >> 1;
+    if v3v3_counts > 45000 && v3v3_counts <= COUNTS_V3 {
+        v3v3 = 65536 * 2500 / v3v3_counts;
     }
     else {
         v3v3 = 3300;
     }
+    //let v3v3 = v3v3::v3v3_est(v3v3_counts);
+
+    // u32::MAX is 270W.
+    // 65536 is 4mW, resolution on (v_counts * i_counts) is ≈ 0.1µW.
+    // Drop 12 bits, this gives us resolution of around 0.5mW.
+    #[allow(non_upper_case_globals)]
+    const cW_PER_COUNT: f64 = 118.0 / 18.0 * 3.3 / 65536.0 // Voltage
+        * 25.0 / 65536.0                                   // Current
+        * 100.0;
+    const POWER_SCALE: f64 = 65536.0 * 65536.0 * cW_PER_COUNT;
+    const MULT: u32 = POWER_SCALE as u32;
+    const_assert!(MULT < 65536 && MULT > 50000);
+    let power_counts = vsense_counts * isense_raw.unsigned_abs();
+    // Power in centiwatts * 65536.
+    let power = (power_counts >> 16) * MULT
+        + ((power_counts & 0xffff) * MULT + 32768 >> 16);
+    // Power in cW.
+    let power = power >> 16;
 
     let noise = unsafe {NOISE.as_mut()};
     noise[0].update(vsense);
@@ -82,29 +115,53 @@ fn systick_handler() {
     let frame = unsafe{FRAME.as_mut()};
     let mut line = [b' '; 12];
 
-    line[9..].copy_from_slice(b" V ");
-    decimal::format_u32(&mut line[..9], vsense, 3);
-    oled::refresh_line(&mut frame[0], line[..].try_into().unwrap(), 0);
+    line[8..].copy_from_slice(b" F  "); // F -> V
+    decimal::format_u32(&mut line[..8], vsense, 3);
+    oled::refresh_line(&mut frame[0], line[..].try_into().unwrap(), 0)?;
 
-    line[9..].copy_from_slice(b" A ");
-    decimal::format_i32(&mut line[..9], isense, true, 3);
-    oled::refresh_line(&mut frame[1], line[..].try_into().unwrap(), 2);
+    line[8..].copy_from_slice(b" A  ");
+    if isense > 0 {
+        line[..2].copy_from_slice(b"<=");
+    }
+    if isense < 0 {
+        line[10..].copy_from_slice(b"?>");
+    }
+    let usense = isense.unsigned_abs();
+    decimal::format_u32(&mut line[2..8], usense, 3);
+    oled::refresh_line(&mut frame[1], line[..].try_into().unwrap(), 2)?;
 
-    line[8..].copy_from_slice(b" oC ");
-    let millic = (temp_counts * 100 + 50) >> 7;
-    decimal::format_i32(&mut line[..8], millic, false, 2);
-    oled::refresh_line(&mut frame[2], line[..].try_into().unwrap(), 4);
+    line[7..].copy_from_slice(b"  l  ");
+    decimal::format_u32(&mut line[..7], power, 2);
+    oled::refresh_line(&mut frame[2], line[..].try_into().unwrap(), 4)?;
+    
+    let centic = (temp_counts * 100 + 50) >> 7;
+    decimal::format_u32(&mut line[..4], v3v3, 0);
+    line[4] = b'j';
+    decimal::format_i32(&mut line[5..11], centic, false, 2);
+    line[11..].copy_from_slice(b"o");
 
-    line[9..].copy_from_slice(b" V ");
-    decimal::format_u32(&mut line[..9], v3v3, 3);
-    oled::refresh_line(&mut frame[3], line[..].try_into().unwrap(), 6);
+    oled::refresh_line(&mut frame[3], &line, 6)?;
+
+    static CYCLE: UCell<u8> = UCell::new(0);
+    let cycle = unsafe{CYCLE.as_mut()};
+    if *cycle < 4 {
+        let content = frame[*cycle as usize];
+        frame[*cycle as usize] = [0; _];
+        oled::refresh_line(&mut frame[*cycle as usize], &content, *cycle * 2)?;
+        *cycle += 1;
+    }
+    else {
+        oled::reset()?;
+        *cycle = 0;
+    }
+    
+    Ok(())
 }
 
 pub fn main() -> ! {
     let gpioa = unsafe {&*stm32u031::GPIOA ::ptr()};
     let pwr   = unsafe {&*stm32u031::PWR   ::ptr()};
     let rcc   = unsafe {&*stm32u031::RCC   ::ptr()};
-    let usart = unsafe {&*stm32u031::USART2::ptr()};
     let scb   = unsafe {&*cortex_m::peripheral::SCB ::PTR};
     let nvic  = unsafe {&*cortex_m::peripheral::NVIC::PTR};
 
@@ -128,12 +185,6 @@ pub fn main() -> ! {
         |w| w.USART2EN().set_bit().I2C1EN().set_bit()
             . PWREN().set_bit());
     rcc.APBENR2.write(|w| w.ADCEN().set_bit());
-
-    // Set-up the UART TX.  TODO - we should enable RX at some point.  The dbg*
-    // macros will work after this.
-    usart.BRR.write(|w| unsafe {w.BRR().bits(139)});
-    usart.CR1.write(
-        |w| w.FIFOEN().set_bit().TE().set_bit().UE().set_bit());
 
     // Enable backup domain access.
     pwr.CR1.write(|w| w.DBP().set_bit());
@@ -167,6 +218,10 @@ pub fn main() -> ! {
 
     adc::init1();
 
+    // Poll for the I2C lines to rise.  They may take a while if we are relying
+    // on only the internal pull-ups.
+    while gpioa.IDR.read().bits() & 0x600 != 0x600 {
+    }
     i2c::init();
 
     // FIXME get the set-up correct.
@@ -203,7 +258,7 @@ pub fn main() -> ! {
     // now.
     dbgln!("Going!");
 
-    oled::init();
+    let _ = oled::init();
 
     dbgln!("Oled init!");
 
