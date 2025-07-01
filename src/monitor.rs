@@ -2,7 +2,6 @@
 #![cfg_attr(not(test), no_main)]
 #![feature(format_args_nl)]
 #![feature(sync_unsafe_cell)]
-#![feature(str_from_raw_parts)]
 
 use adc::{adc_isr, dma1_isr};
 use noise::Noise;
@@ -28,8 +27,11 @@ unsafe extern "C" {
 }
 
 struct Monitor {
-    cycle: u8,
+    divide: u8,
+    cycle_refresh: u8,
+    cycle_arrow: u8,
     temp: i16,
+    isense: i32,
     noise: [Noise; 4],
     frame: [oled::Line; 4],
 }
@@ -42,31 +44,45 @@ fn systick_handler() {
 
 impl Monitor {
     const fn new() -> Monitor {
-        Monitor{temp: 0, cycle: 0, noise: [Noise::new(); _], frame: [[0; _]; _]}
+        Monitor{
+            divide: 0,
+            cycle_refresh: 0,
+            cycle_arrow: 0,
+            temp: 0,
+            isense: 0,
+            noise: [Noise::new(); _],
+            frame: [[0; _]; _]
+        }
     }
 
-    fn systick_handler(&mut self) -> Result<(), ()> {
-        //sdbgln!("SYSTICK enter");
-
-        adc::start();
-
-        let temp = &mut self.temp;
-        let i2c_wait = i2c::read_reg(i2c::TMP117, 0, temp);
-
-        // Wait for both I2C and ADC done.
-        drop(i2c_wait);
-        while !adc::DONE.read() {
-            WFE();
+    fn systick_handler(&mut self) {
+        // Update arrows every tick.
+        let _ = self.update_arrows();
+        let divide = if self.divide == 0 {4} else {self.divide - 1};
+        self.divide = divide;
+        if divide == 0 {
+            adc::start();
         }
+        else if adc::DONE.read() {
+            adc::DONE.write(false);
+            let _ = self.analog_update();
+        }
+        else if divide == 4 {
+            let _ = self.refresh();
+        }
+    }
+
+    fn analog_update(&mut self) -> i2c::Result {
+        i2c::read_reg(i2c::TMP117, 0, &mut self.temp).wait()?;
 
         // Log the ADC & TEMP values....
         let isense_counts = adc::DMA_BUF[0].read() as i32;
         let vsense_counts = adc::DMA_BUF[1].read() as u32;
         let v3v3_counts   = adc::DMA_BUF[2].read() as u32;
-        let temp_counts   = i16::from_be(*temp) as i32;
+        let temp_counts   = i16::from_be(self.temp) as i32;
 
         let isense_raw = isense_counts - 32646;
-        let isense = (isense_raw * 25000 + 32768) >> 16;
+        self.isense = (isense_raw * 25000 + 32768) >> 16;
 
         let vsense = vconvert(vsense_counts);
 
@@ -100,7 +116,7 @@ impl Monitor {
         let power = power >> 16;
 
         self.noise[0].update(vsense);
-        self.noise[1].update(isense as u32);
+        self.noise[1].update(self.isense as u32);
         self.noise[2].update(v3v3);
         self.noise[3].update(temp_counts as u32);
 
@@ -108,50 +124,81 @@ impl Monitor {
         //   VV.VVV V
         //  ±II.III A
         // n.nnn -nn.n
+        if false {
+            let isense =self.isense;
         dbgln!("{vsense:6}mV{isense:6}mA({isense_counts:5}){v3v3:6}mV{:7} m°C {} {} {} {}",
             temp_counts * 1000 >> 7,
             self.noise[0].decimal(), self.noise[1].decimal(),
             self.noise[2].decimal(), self.noise[3].decimal());
+        }
 
-        let mut line = [0; 12];
-
-        line[8..].copy_from_slice(&CHARS_MAP!(" V  "));
-        decimal::format_u32(&mut line[..8], vsense, 3);
+        let mut line = [0; 10];
+        decimal::format_u32(&mut line[..7], power, 2);
+        line[7..].copy_from_slice(&CHARS_MAP!("  W"));
         oled::update_text(&mut self.frame[0], &line, 0, 0)?;
 
-        line[8..].copy_from_slice(&CHARS_MAP!(" A  "));
-        if isense > 0 {
-            line[..2].copy_from_slice(b"<=");
-        }
-        if isense < 0 {
-            line[10..].copy_from_slice(b"?>");
-        }
-        let usense = isense.unsigned_abs();
-        decimal::format_u32(&mut line[2..8], usense, 3);
-        oled::update_text(&mut self.frame[1], &line, 0, 2)?;
+        let mut line = [0; 8];
+        decimal::format_u32(&mut line[..6], vsense, 3);
+        line[6..].copy_from_slice(&CHARS_MAP!(" V"));
+        oled::update_text(&mut self.frame[1], &line, 2, 2)?;
 
-        line[7..].copy_from_slice(&CHARS_MAP!("  W  "));
-        decimal::format_u32(&mut line[..7], power, 2);
-        oled::update_text(&mut self.frame[2], &line, 0, 4)?;
+        let usense = self.isense.unsigned_abs();
+        decimal::format_u32(&mut line[..6], usense, 3);
+        line[6..].copy_from_slice(&CHARS_MAP!(" A"));
+        oled::update_text(&mut self.frame[2], &line, 2, 4)?;
 
+        let mut line = [0; 5];
         let centic = (temp_counts * 100 + 50) >> 7;
         decimal::format_u32(&mut line[..4], v3v3, 0);
         line[4] = font::LETTER_m;
-        decimal::format_i32(&mut line[5..11], centic, false, 2);
-        line[11] = font::DEGREE; // °
-
         oled::update_text(&mut self.frame[3], &line, 0, 6)?;
 
-        if self.cycle < 4 {
-            oled::draw_chars(&self.frame[self.cycle as usize],
-                             0, self.cycle * 2)?;
-            self.cycle += 1;
+        let mut line = [0; 7];
+        decimal::format_i32(&mut line[..6], centic, 2);
+        line[6] = font::DEGREE; // °
+        oled::update_text(&mut self.frame[3], &line, 5, 6)
+    }
+
+    fn refresh(&mut self) -> i2c::Result {
+        if self.cycle_refresh < 4 {
+            oled::draw_chars(&self.frame[self.cycle_refresh as usize],
+                             0, self.cycle_refresh * 2)?;
+            self.cycle_refresh += 1;
         }
         else {
             oled::reset()?;
-            self.cycle = 0;
+            self.cycle_refresh = 0;
         }
         Ok(())
+    }
+
+    fn update_arrows(&mut self) -> i2c::Result {
+        let cycle = self.cycle_arrow + 1 & 7;
+        self.cycle_arrow = cycle;
+
+        let mut base = font::SPACE;
+        let mut inc  = 0;
+        let mut dir  = 0;
+        if self.isense > 0 {
+            base = font::LEFT_TOP_0;
+            inc = 1;
+            dir = 2;
+        }
+        else if self.isense < 0 {
+            base = font::RIGHT_TOP_0;
+            inc = 1;
+            dir = 6;
+        }
+        let i0 = base + inc * cycle;
+        let i1 = base + inc * ((cycle + dir) & 7);
+        let d = 8 * inc;
+        let t = [i0, i1];
+        let b = [i0 + d, i1 + d];
+
+        oled::update_text(&mut self.frame[1], &t, 0, 2)?;
+        oled::update_text(&mut self.frame[1], &t, 10, 2)?;
+        oled::update_text(&mut self.frame[2], &b, 0, 4)?;
+        oled::update_text(&mut self.frame[2], &b, 10, 4)
     }
 }
 
@@ -263,8 +310,10 @@ pub fn main() -> ! {
 
     unsafe {
         let syst = &*cortex_m::peripheral::SYST::PTR;
-        syst.rvr.write(399999);
-        syst.cvr.write(399999);
+        syst.rvr.write(79999);
+        syst.cvr.write(79999);
+        //syst.rvr.write(399999);
+        //syst.cvr.write(399999);
         syst.csr.write(3);
     }
 
@@ -329,6 +378,11 @@ pub static VTORS: VectorTable = VectorTable {
 
 fn bugger() {
     panic!("Unexpected interrupt");
+}
+
+#[test]
+fn char_checks() {
+    assert_eq!(font::SPACE, 0);
 }
 
 #[test]

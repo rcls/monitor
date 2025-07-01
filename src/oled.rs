@@ -78,18 +78,20 @@ pub fn update_text<'a, 'b>(old: &'a mut Line, new: &'a[u8],
         }
         break;
     }
-    draw_chars(&new[start ..= end], start, y)
+    draw_chars(&new[start - base ..= end - base], start, y)
 }
 
 pub fn draw_chars(text: &[u8], start: usize, y: u8) -> Result {
     let mut data = arrayvec::ArrayVec::<u8, 129>::new();
+    let mut dwait = crate::i2c::waiter(&mut data);
+
     for r in 0 ..= 1 {
         let y = y + r as u8;
         let line = 1 << y & 0x81;
         let bs = if start == 0 {2} else {start as u8 * 10 + 6};
         let command = [0u8, 0xb0 + y, 16 + (bs >> 4), bs & 15];
-        i2c::CONTEXT.wait()?;
-        i2c::write(SH1106, &command).defer();
+        dwait.wait()?;
+        let cwait = i2c::write(SH1106, &command);
         data.clear();
         data.push(0x40);
         if start == 0 {
@@ -98,11 +100,11 @@ pub fn draw_chars(text: &[u8], start: usize, y: u8) -> Result {
         let row = &crate::font::FONT10X16[r];
         for &b in text {
             let item;
-            if b == 0 {
-                item = &[0; 10];
+            if (b as usize) < row.len() {
+                item = &row[b as usize];
             }
             else {
-                item = &row[b as usize % row.len()];
+                item = &row[0];
             }
             for c in item {
                 data.push(c | line);
@@ -112,10 +114,10 @@ pub fn draw_chars(text: &[u8], start: usize, y: u8) -> Result {
         if start + text.len() == LINE_LENGTH {
             data.extend([line, line, line, 255]);
         }
-        i2c::CONTEXT.wait()?;
-        i2c::write(SH1106, data.as_slice()).defer();
-    }
-    i2c::CONTEXT.wait()
+        cwait.wait()?;
+        dwait = i2c::write(SH1106, data.as_slice());
+    };
+    dwait.wait()
 }
 
 pub fn clear_screen() -> Result {
@@ -150,7 +152,7 @@ pub const fn char_len(s: &str) -> usize {
     len
 }
 
-const fn char_map(cc: char) -> u8 {
+pub const fn char_map(cc: char) -> u8 {
     let mut iter = konst::string::chars(crate::font::CHARS);
     let mut index = 0;
     if cc == ' ' {

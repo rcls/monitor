@@ -103,6 +103,13 @@ impl Write for DebugAMarker {
 }
 
 #[macro_export]
+macro_rules! dbg {
+    ($($tt:tt)*) => (
+        let _ = core::fmt::Write::write_fmt(
+            &mut $crate::debug::DebugAMarker, format_args!($($tt)*)););
+}
+
+#[macro_export]
 macro_rules! sdbg {
     ($($tt:tt)*) => (
         let _ = core::fmt::Write::write_fmt(

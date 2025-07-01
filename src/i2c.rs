@@ -201,7 +201,7 @@ impl I2cContext {
         self.outstanding.write(F_I2C | F_DMA);
     }
     pub fn done(&self) -> bool {self.outstanding.read() == 0}
-    pub fn wait(&self) -> Result {
+    fn wait(&self) -> Result {
         while !self.done() {
             crate::vcell::WFE();
         }
@@ -217,6 +217,10 @@ impl Wait<'_> {
 
 impl Drop for Wait<'_> {
     fn drop(&mut self) {let _ = CONTEXT.wait();}
+}
+
+pub fn waiter<'a, T>(_: &'a mut T) ->Wait<'a> {
+    Wait(PhantomData)
 }
 
 pub fn write<'a, T: Flat + ?Sized>(addr: u8, data: &'a T) -> Wait<'a> {

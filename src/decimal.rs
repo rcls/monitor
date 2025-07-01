@@ -1,3 +1,4 @@
+use crate::font::{DIGIT_0, PERIOD, SPACE};
 
 fn to_bcd(mut v: u32) -> u32 {
     if v == 0 {
@@ -27,10 +28,10 @@ fn format_fixed(result: &mut [u8], v: u32, sign: u8, dp: usize) {
     for i in 0..len {
         let d;
         if i != 0 && i == dp {
-            d = b'.'
+            d = PERIOD
         }
         else {
-            d = (v as u8 & 15) + b'0';
+            d = (v as u8 & 15) + DIGIT_0;
             v >>= 4;
         }
         result[len - 1 - i] = d;
@@ -38,8 +39,8 @@ fn format_fixed(result: &mut [u8], v: u32, sign: u8, dp: usize) {
 
     // Discard leading zeros...
     let mut lead = 0;
-    while result[lead] == b'0' && result[lead+1] != b'.' {
-        result[lead] = b' ';
+    while result[lead] == DIGIT_0 && result[lead+1] != PERIOD {
+        result[lead] = SPACE;
         lead += 1;
     }
     if sign == 0 {
@@ -57,39 +58,50 @@ pub fn format_u32(result: &mut [u8], v: u32, dp: usize) {
     format_fixed(result, v, 0, dp)
 }
 
-pub fn format_i32(result: &mut [u8], v: i32, sign: bool, dp: usize) {
-    let mut schar = 0;
-    let mut abs = v as u32;
+pub fn format_i32(result: &mut [u8], v: i32, dp: usize) {
+    let schar;
+    let abs;
     if v < 0 {
-        schar = b'-';
-        abs = 0u32.wrapping_sub(abs);
+        schar = crate::font::MINUS;
+        abs = 0u32.wrapping_sub(v as u32);
     }
-    else if sign {
-        schar = b'+';
+    else {
+        schar = 0;
+        abs = v as u32;
     }
     format_fixed(result, abs, schar, dp)
 }
 
 #[cfg(test)]
-fn format_fixed_str(v: u32, sign: u8, width: usize, dp: usize) -> String {
+fn ff_u32(v: u32, width: usize, dp: usize) -> String {
     let mut result = vec![0u8; width];
-    format_fixed(&mut result[..], v, sign, dp);
-    result.into_iter().map(|x| x as char).collect()
+    format_u32(&mut result[..], v, dp);
+    let chars: Vec<char> = crate::font::CHARS.chars().collect();
+    result.into_iter().map(|x| chars[x as usize]).collect()
+}
+
+#[cfg(test)]
+fn ff_i32(v: i32, width: usize, dp: usize) -> String {
+    let mut result = vec![0u8; width];
+    format_i32(&mut result[..], v, dp);
+    let chars: Vec<char> = crate::font::CHARS.chars().collect();
+    result.into_iter().map(|x| chars[x as usize]).collect()
 }
 
 #[test]
 fn unsigned() {
-    assert_eq!(format_fixed_str(12345, 0, 6, 3), "12.345");
-    assert_eq!(format_fixed_str(456789, 0, 7, 2), "4567.89");
-    assert_eq!(format_fixed_str(1, 0, 7, 2), "   0.01");
-    assert_eq!(format_fixed_str(1234, 0, 8, 2), "   12.34");
-    assert_eq!(format_fixed_str(1234, 0, 12, 2), "       12.34");
+    assert_eq!(ff_u32(12345, 6, 3) , "12.345");
+    assert_eq!(ff_u32(456789, 7, 2), "4567.89");
+    assert_eq!(ff_u32(1, 7, 2)     , "   0.01");
+    assert_eq!(ff_u32(1234, 8, 2)  , "   12.34");
+    assert_eq!(ff_u32(1234, 12, 2) , "       12.34");
 }
 
 #[test]
 fn signed() {
-    assert_eq!(format_fixed_str(12345, b'-', 6, 3), "-2.345");
-    assert_eq!(format_fixed_str(12345, b'-', 7, 3), "-12.345");
-    assert_eq!(format_fixed_str(12345, b'-', 8, 3), " -12.345");
-    assert_eq!(format_fixed_str(12345, b'+', 9, 3), "  +12.345");
+    assert_eq!(ff_i32(45689, 6, 2), "456.89");
+    assert_eq!(ff_i32(1, 7, 2)    , "   0.01");
+    assert_eq!(ff_i32(-12345, 6, 3), "-2.345");
+    assert_eq!(ff_i32(-12345, 7, 3), "-12.345");
+    assert_eq!(ff_i32(-12345, 8, 3), " -12.345");
 }
