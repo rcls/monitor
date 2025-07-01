@@ -5,6 +5,8 @@ use crate::vcell::{UCell, VCell, barrier, interrupt};
 
 use super::I2C;
 
+pub type Result = core::result::Result<(), ()>;
+
 // Use DMA1 Ch2
 const RX_MUXIN: u32 = 9;
 // Use DMA1 Ch3
@@ -165,6 +167,7 @@ impl I2cContext {
 
         rx_channel().read(data, len, 0);
     }
+    #[inline(never)]
     fn write_reg_start(&self, addr: u8, reg: u8, data: usize, len: usize) {
         let i2c = unsafe {&*I2C::ptr()};
 
@@ -177,6 +180,7 @@ impl I2cContext {
         self.arm();
         interrupt::enable();
     }
+    #[inline(never)]
     fn write_start(&self, addr: u8, data: usize, len: usize,
                    last: bool, reload: bool) {
         let i2c = unsafe {&*I2C::ptr()};
@@ -197,7 +201,7 @@ impl I2cContext {
         self.outstanding.write(F_I2C | F_DMA);
     }
     pub fn done(&self) -> bool {self.outstanding.read() == 0}
-    pub fn wait(&self) -> Result<(), ()> {
+    pub fn wait(&self) -> Result {
         while !self.done() {
             crate::vcell::WFE();
         }
@@ -208,7 +212,11 @@ impl I2cContext {
 
 impl Wait<'_> {
     pub fn defer(self) {core::mem::forget(self);}
-    pub fn wait(self) -> Result<(), ()> {CONTEXT.wait()}
+    pub fn wait(self) -> Result {CONTEXT.wait()}
+}
+
+impl Drop for Wait<'_> {
+    fn drop(&mut self) {let _ = CONTEXT.wait();}
 }
 
 pub fn write<'a, T: Flat + ?Sized>(addr: u8, data: &'a T) -> Wait<'a> {

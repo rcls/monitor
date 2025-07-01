@@ -1,3 +1,40 @@
+#![allow(dead_code, non_upper_case_globals)]
+
+pub static CHARS: &str = r#" AbCdeVghim+W-.°0123456789:;<=>?"#;
+
+pub const SPACE   : u8 =  0;
+pub const LETTER_A: u8 =  1;
+pub const LETTER_b: u8 =  2;
+pub const LETTER_C: u8 =  3;
+pub const LETTER_d: u8 =  4;
+pub const LETTER_e: u8 =  5;
+pub const LETTER_V: u8 =  6;
+pub const LETTER_g: u8 =  7;
+pub const LETTER_h: u8 =  8;
+pub const LETTER_i: u8 =  9;
+pub const LETTER_m: u8 = 10;
+pub const PLUS    : u8 = 11;
+pub const LETTER_W: u8 = 12;
+pub const MINUS   : u8 = 13;
+pub const PERIOD  : u8 = 14;
+pub const DEGREE  : u8 = 15;
+pub const DIGIT_0 : u8 = 16;
+pub const DIGIT_1 : u8 = 17;
+pub const DIGIT_2 : u8 = 18;
+pub const DIGIT_3 : u8 = 19;
+pub const DIGIT_4 : u8 = 20;
+pub const DIGIT_5 : u8 = 21;
+pub const DIGIT_6 : u8 = 22;
+pub const DIGIT_7 : u8 = 23;
+pub const DIGIT_8 : u8 = 24;
+pub const DIGIT_9 : u8 = 25;
+pub const COLON   : u8 = 26;
+pub const SEMICOLON: u8 = 27;
+pub const LEFT_ARROW: u8 = 28;
+pub const LEFT_ARROW_BAR: u8 = 29;
+pub const RIGHT_ARROW: u8 = 30;
+pub const RIGHT_ARROW_BAR: u8 = 31;
+
 pub static FONT10X16: [[[u8; 10]; 32]; 2] = [[
         [   0,   0,   0,   0,   0,   0,   0,   0,   0,   0],
         [ 192, 160, 144, 136, 132, 136, 144, 160, 192,   0], // A
@@ -14,7 +51,7 @@ pub static FONT10X16: [[[u8; 10]; 32]; 2] = [[
         [ 252,   0,   0,   0,   0,   0,   0,   0, 252,   0], // W
         [   0, 128, 128, 128, 128, 128, 128, 128,   0,   0], // -
         [   0,   0,   0,   0,   0,   0,   0,   0,   0,   0], // .
-        [   0,   0, 112, 136,   4,   4,   4, 136, 112,   0], // °
+        [ 112, 136,   4,   4,   4, 136, 112,   0,   0,   0], // °
         [ 240,   8,   4,   4, 132,   4,   4,   8, 240,   0], // 0
         [   0,  32,  16,   8, 252,   0,   0,   0,   0,   0], // 1
         [  16,   8,   4,   4,   4, 132,  68,  40,  16,   0], // 2
@@ -28,9 +65,9 @@ pub static FONT10X16: [[[u8; 10]; 32]; 2] = [[
         [   0,   0,   0,   0, 192, 192,   0,   0,   0,   0], // :
         [   0,   0,   0,   0, 192, 192,   0,   0,   0,   0], // ;
         [ 128, 192, 224, 240, 248, 252, 192, 192, 192, 192], // ←
-        [ 192, 192, 192, 192, 192, 192, 192, 192, 192,   0], // right-extend-bar
+        [ 192, 192, 192, 192, 192, 192, 192, 192, 192,   0], // LEFT_ARROW_BAR
         [ 192, 192, 192, 252, 248, 240, 224, 192, 128,   0], // →
-        [ 192, 192, 192, 192, 192, 192, 192, 192, 192, 192], // left-extend-bar
+        [ 192, 192, 192, 192, 192, 192, 192, 192, 192, 192], // RIGHT_ARROW_BAR
     ],
     [
         [   0,   0,   0,   0,   0,   0,   0,   0,   0,   0],
@@ -48,7 +85,7 @@ pub static FONT10X16: [[[u8; 10]; 32]; 2] = [[
         [  15,  16,   8,   4,   3,   4,   8,  16,  15,   0], // W
         [   0,   0,   0,   0,   0,   0,   0,   0,   0,   0], // -
         [   0,   0,   0,   0,  24,  24,   0,   0,   0,   0], // .
-        [   0,   0,   0,   0,   1,   1,   1,   0,   0,   0], // °
+        [   0,   0,   1,   1,   1,   0,   0,   0,   0,   0], // °
         [   7,   8,  16,  16,  16,  16,  16,   8,   7,   0], // 0
         [   0,  16,  16,  16,  31,  16,  16,  16,   0,   0], // 1
         [  16,  24,  20,  18,  17,  16,  16,  16,  16,   0], // 2
@@ -62,8 +99,8 @@ pub static FONT10X16: [[[u8; 10]; 32]; 2] = [[
         [   0,   0,   0,   0,  24,  24,   0,   0,   0,   0], // :
         [   0,   0,   0,   0,  88,  56,   0,   0,   0,   0], // ;
         [   0,   1,   3,   7,  15,  31,   1,   1,   1,   1], // ←
-        [   1,   1,   1,   1,   1,   1,   1,   1,   1,   0], // right-extend-bar
+        [   1,   1,   1,   1,   1,   1,   1,   1,   1,   0], // LEFT_ARROW_BAR
         [   1,   1,   1,  31,  15,   7,   3,   1,   0,   0], // →
-        [   1,   1,   1,   1,   1,   1,   1,   1,   1,   1], // left-extend-bar
+        [   1,   1,   1,   1,   1,   1,   1,   1,   1,   1], // RIGHT_ARROW_BAR
     ],
 ];

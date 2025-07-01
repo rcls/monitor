@@ -8,6 +8,7 @@ edition = '2024'
 [dependencies]
 stm32u031 = { path = './stm32u031' }
 arrayvec = {version = '*', default-features=false}
+konst = {version = '*', features = ['iter']}
 static_assertions = "*"
 
 [target.'cfg(not(target_arch = "arm"))'.dependencies]
@@ -42,3 +43,4 @@ codegen-units = 1
 opt-level = 'z'
 debug = true
 panic = 'abort'
+strip = false

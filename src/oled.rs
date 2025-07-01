@@ -1,5 +1,6 @@
 use crate::i2c;
 
+use i2c::Result;
 const SH1106: u8 = 0x78;
 
 #[inline]
@@ -11,11 +12,11 @@ const LINE_LENGTH: usize = 12;
 pub type Line = [u8; LINE_LENGTH];
 // type LineBits = [u8; 128];
 
-pub fn reset() -> Result<(), ()> {
+pub fn reset() -> Result {
     i2c::write(
         SH1106,
         &[0u8,
-          0x32,       // Default charge pump voltage.
+          0x30,       // Set low pump voltage.
           0xad, 0x8b, // Charge pump enable.
           0x40,       // COM0 address.
           0x80,       // Default contrast.
@@ -31,12 +32,12 @@ pub fn reset() -> Result<(), ()> {
         ).wait()
 }
 
-pub fn init() -> Result<(), ()> {
+pub fn init() -> Result {
     i2c::write(
         SH1106,
         &[0u8,
           0xaeu8,        // Display off.
-          0xdb, 0x35
+          0xdb, 0x35     // VCOM deselect level.
     ]).wait()?; // Common off voltage.
     reset()?;
 
@@ -47,84 +48,134 @@ pub fn init() -> Result<(), ()> {
     for _ in 0.. 1<<21 {
         nothing();
     }
-    outer_box()?;
-    for _ in 0.. 1<<21 {
-        nothing();
-    }
-
-    if false {
-        let mut frame = [[0u8; LINE_LENGTH]; 4];
-        let _ = refresh_line(&mut frame[0], b"<Testing123>", 0);
-        let _ = refresh_line(&mut frame[1], b"--foo  bar--", 2);
-        let _ = refresh_line(&mut frame[2], b"            ", 4);
-        let _ = refresh_line(&mut frame[0], b"<TestABC123>", 4);
-        let _ = refresh_line(&mut frame[0], b"[+-1234shag]", 6);
-
-        for _ in 0.. 1<<24 {
-            nothing();
-        }
-    }
-
-    Ok(())
+    clear_screen()
 }
 
-pub fn refresh_line(old: &mut Line, new: &Line, y: u8) -> Result<(),()> {
+pub fn update_text<'a, 'b>(old: &'a mut Line, new: &'a[u8],
+                           base: usize, y: u8) -> Result {
     let start;
-    'find: {
-        for (i, &n) in new.iter().enumerate() {
-            if old[i] != n {
-                start = i;
-                break 'find;
+    let mut end;
+
+    let mut iter = new.iter().zip(base..);
+    let mut i;
+    let mut n;
+    loop {
+        let Some(x) = iter.next() else {return Ok(())};
+        (n, i) = x;
+        if old[i] != *n {
+            break;
+        }
+    }
+    start = i;
+    'term: loop {
+        old[i] = *n;
+        end = i;
+        for x in &mut iter {
+            (n, i) = x;
+            if old[i] != *n {
+                continue 'term;
             }
         }
-        return Ok(()); // Nothing to do.
+        break;
     }
-    let mut end = LINE_LENGTH;
-    while new[end - 1] == old[end - 1] {
-        end -= 1;
-    }
+    draw_chars(&new[start ..= end], start, y)
+}
+
+pub fn draw_chars(text: &[u8], start: usize, y: u8) -> Result {
+    let mut data = arrayvec::ArrayVec::<u8, 129>::new();
     for r in 0 ..= 1 {
-        let mut data = arrayvec::ArrayVec::<u8, 129>::new();
-        data.push(0x40);
-        let bs = start as u8 * 10 + 6;
-        let command = [0u8, 0xb0 + y + r as u8, 16 + (bs >> 4), bs & 15];
+        let y = y + r as u8;
+        let line = 1 << y & 0x81;
+        let bs = if start == 0 {2} else {start as u8 * 10 + 6};
+        let command = [0u8, 0xb0 + y, 16 + (bs >> 4), bs & 15];
         i2c::CONTEXT.wait()?;
         i2c::write(SH1106, &command).defer();
-        for &b in &new[start .. end] {
-            use crate::font::FONT10X16;
-            let _ = data.try_extend_from_slice(&FONT10X16[r][b as usize & 31]);
+        data.clear();
+        data.push(0x40);
+        if start == 0 {
+            data.extend([255, line, line, line]);
+        }
+        let row = &crate::font::FONT10X16[r];
+        for &b in text {
+            let item;
+            if b == 0 {
+                item = &[0; 10];
+            }
+            else {
+                item = &row[b as usize % row.len()];
+            }
+            for c in item {
+                data.push(c | line);
+            }
+            // let _ = data.try_extend_from_slice(&row[b as usize & 31]);
+        }
+        if start + text.len() == LINE_LENGTH {
+            data.extend([line, line, line, 255]);
         }
         i2c::CONTEXT.wait()?;
         i2c::write(SH1106, data.as_slice()).defer();
     }
-    old[start .. end].copy_from_slice(&new[start .. end]);
     i2c::CONTEXT.wait()
 }
 
-pub fn outer_box() -> Result<(), ()> {
-    let mut row = [0x40u8; 129 + 4];
-    let mut command = [0u8, 0, 2, 0x10];
-    // Top row...
-    row[1] = 255;
-    for i in 2..128 {
-        row[i] = 1;
+pub fn clear_screen() -> Result {
+    for y in (0..8).step_by(2) {
+        draw_chars(&[crate::font::SPACE; LINE_LENGTH], 0, y)?
     }
-    row[128] = 255;
-    command[1] = 0xb0;
-    i2c::write(SH1106, &command).wait()?;
-    i2c::write(SH1106, &row).wait()?;
-    for i in 2..128 {
-        row[i] = 0;
+    Ok(())
+}
+
+trait MyType {
+    type Type;
+}
+impl<T> MyType for T {
+    type Type = Self;
+}
+
+#[macro_export]
+macro_rules! CHARS_MAP {
+    ($s:expr) => (const {{
+        const S: &str = $s;
+        $crate::oled::chars_map::<{const{$crate::oled::char_len(S)}}>(S)
+    }})
+}
+
+pub const fn char_len(s: &str) -> usize {
+    let mut iter = konst::string::chars(s);
+    let mut len = 0;
+    while let Some((_, i)) = iter.next() {
+        iter = i;
+        len += 1;
     }
-    for i in 1..=6 {
-        command[1] = 0xb0 + i;
-        i2c::write(SH1106, &command).wait()?;
-        i2c::write(SH1106, &row).wait()?;
+    len
+}
+
+const fn char_map(cc: char) -> u8 {
+    let mut iter = konst::string::chars(crate::font::CHARS);
+    let mut index = 0;
+    if cc == ' ' {
+        return 0;
     }
-    for i in 2..128 {
-        row[i] = 128;
+    while let Some((c, i)) = iter.next() {
+        iter = i;
+        if c == cc {
+            return if index != 0 {index} else {128}
+        }
+        index += 1;
     }
-    command[1] = 0xb7;
-    i2c::write(SH1106, &command).wait()?;
-    i2c::write(SH1106, &row).wait()
+    panic!()
+}
+
+pub const fn chars_map<const N: usize>(s: &str) -> [u8; N] {
+    let mut result = [0; N];
+    let mut iter = konst::string::chars(s);
+    let mut index = 0;
+    while let Some((c, i)) = iter.next() {
+        let c: char = c; // WTF is this needed?
+        iter = i;
+        result[index] = char_map(c);
+        index += 1;
+    }
+    assert!(index == N);
+    result
 }
