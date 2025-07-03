@@ -34,6 +34,12 @@ pub fn barrier() {
 }
 
 #[inline(always)]
+#[allow(dead_code)]
+pub fn nothing() {
+    unsafe {core::arch::asm!("", options(nomem))}
+}
+
+#[inline(always)]
 #[allow(non_snake_case)]
 pub fn WFE() {
     if cfg!(target_arch = "arm") {
@@ -44,7 +50,6 @@ pub fn WFE() {
         panic!("wfe!");
     }
 }
-
 
 #[allow(dead_code)]
 pub mod interrupt {

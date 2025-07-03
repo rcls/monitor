@@ -9,6 +9,7 @@ use static_assertions::const_assert;
 use vcell::{UCell, WFE};
 
 mod adc;
+mod cpu;
 mod decimal;
 mod dma;
 mod debug;
@@ -204,23 +205,9 @@ impl Monitor {
 
 pub fn main() -> ! {
     let gpioa = unsafe {&*stm32u031::GPIOA::ptr()};
-    let pwr   = unsafe {&*stm32u031::PWR  ::ptr()};
     let rcc   = unsafe {&*stm32u031::RCC  ::ptr()};
     let scb   = unsafe {&*cortex_m::peripheral::SCB ::PTR};
     let nvic  = unsafe {&*cortex_m::peripheral::NVIC::PTR};
-
-    // Go to 16MHz.
-    rcc.CR.write(
-        |w| w.MSIRANGE().B_0x8().MSIRGSEL().set_bit().MSION().set_bit());
-
-    if !cfg!(test) {
-        let bss_start = &raw mut __bss_start;
-        let bss_end   = &raw mut __bss_end;
-        let bss_size = bss_end.addr() - bss_start.addr();
-        unsafe {
-            core::ptr::write_bytes(&raw mut __bss_start, 0u8, bss_size);
-        }
-    }
 
     // Enable clocks.
     rcc.IOPENR.write(|w| w.GPIOAEN().set_bit());
@@ -230,11 +217,7 @@ pub fn main() -> ! {
             . PWREN().set_bit());
     rcc.APBENR2.write(|w| w.ADCEN().set_bit());
 
-    // Enable backup domain access.
-    pwr.CR1.write(|w| w.DBP().set_bit());
-
-    // Enable the LSE.  Set high drive strength for crystal start-up.
-    rcc.BDCR.write(|w| w.LSEON().set_bit().LSEDRV().B_0x3());
+    cpu::init1();
 
     // Pullups on I2C and USART RX pin.
     gpioa.PUPDR.write(
@@ -268,8 +251,6 @@ pub fn main() -> ! {
     }
     i2c::init();
 
-    // FIXME get the set-up correct.
-
     // Set the systick interrupt priority to a high value (other interrupts
     // pre-empt).
     // The Cortex-M crate doesn't use the ARM indexes, so be careful about the
@@ -280,14 +261,7 @@ pub fn main() -> ! {
         scb.shpr[1].write(0xc0 << 24);
     }
 
-    // Wait for LSE and then enable the MSI FLL.
-    while !rcc.BDCR.read().LSERDY().bit() {
-    }
-    rcc.CR.write(
-        |w| w.MSIRANGE().B_0x8().MSIRGSEL().set_bit().MSION().set_bit()
-            . MSIPLLEN().set_bit());
-    // Reduce drive strength.
-    rcc.BDCR.write(|w| w.LSEON().set_bit().LSEDRV().B_0x0());
+    cpu::init2();
 
     // Enable interrupts for I2C1, ADC and DMA.  FIXME - correct channels!
     use stm32u031::Interrupt::*;
@@ -298,8 +272,6 @@ pub fn main() -> ! {
             bit(DMA1_CHANNEL1) | bit(DMA1_CHANNEL2_3));
     }
 
-    // systick counts at 16MHz / 8 = 2MHz, divide by 20 to give 100kHz for
-    // now.
     dbgln!("Going!");
 
     let _ = oled::init();
@@ -308,12 +280,11 @@ pub fn main() -> ! {
 
     adc::init2();
 
+    // systick counts at 16MHz / 8 = 2MHz.
     unsafe {
         let syst = &*cortex_m::peripheral::SYST::PTR;
-        syst.rvr.write(79999);
+        syst.rvr.write(79999); // 2MHz / 80000 = 25Hz
         syst.cvr.write(79999);
-        //syst.rvr.write(399999);
-        //syst.cvr.write(399999);
         syst.csr.write(3);
     }
 
@@ -389,7 +360,7 @@ fn char_checks() {
 fn check_vtors() {
     use stm32u031::Interrupt::*;
 
-    assert!(std::ptr::fn_addr_eq(VTORS.reset, main as fn()->!));
+    assert!(std::ptr::fn_addr_eq(VTORS.reset, main as fn() -> !));
     assert!(std::ptr::fn_addr_eq(VTORS.interrupts[ADC_COMP as usize],
                                  adc_isr as fn()));
     assert!(std::ptr::fn_addr_eq(VTORS.interrupts[DMA1_CHANNEL1 as usize],

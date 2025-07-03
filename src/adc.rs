@@ -10,11 +10,6 @@ pub const ADC_MUXIN: u32 = 5;
 pub static DMA_BUF: [VCell<u16>; 3] = [const {VCell::new(0)}; 3];
 pub static DONE: VCell<bool> = VCell::new(false);
 
-#[inline]
-fn nothing() {
-    unsafe {core::arch::asm!("", options(nostack, nomem, preserves_flags))}
-}
-
 pub fn start() {
     let adc = unsafe {&*stm32u031::ADC ::ptr()};
     let dma = unsafe {&*stm32u031::DMA1::ptr()};
@@ -43,7 +38,7 @@ pub fn init1() {
 
     // Wait for LDO ready... ≈20µs.
     for _ in 0..200 {
-        nothing();
+        crate::vcell::nothing();
     }
     // Start the calibration.
     adc.CR.write(|w| w.ADCAL().set_bit().ADVREGEN().set_bit());

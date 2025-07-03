@@ -8,6 +8,8 @@
 mod debug;
 mod vcell;
 
+use vcell::nothing;
+
 type I2C = stm32u031::i2c1::RegisterBlock;
 
 const TMP117: u8 = 0x92;
@@ -262,13 +264,6 @@ pub fn main() -> ! {
                 adc_idx = 0;
             }
         }
-    }
-}
-
-#[inline]
-fn nothing() {
-    unsafe {
-        core::arch::asm!("", options(nomem))
     }
 }
 

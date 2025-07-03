@@ -1,12 +1,9 @@
 use crate::i2c;
+use crate::vcell::nothing;
 
 use i2c::Result;
-const SH1106: u8 = 0x78;
 
-#[inline]
-fn nothing() {
-    unsafe {core::arch::asm!("", options(nomem))}
-}
+const SH1106: u8 = 0x78;
 
 const LINE_LENGTH: usize = 12;
 pub type Line = [u8; LINE_LENGTH];
