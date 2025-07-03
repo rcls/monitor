@@ -7267,6 +7267,26 @@
 		)
 		(uuid "f13219a4-4345-421c-95ae-f3b810cded6f")
 	)
+	(text_box "Stuff-ups: Wrong part code used for R2.\nPG polarity is wrong.\nNo markings on programming header.\nPogo pins need 0.9mm max holes\nGet D1 out of the way of power."
+		(exclude_from_sim no)
+		(at 81.28 49.53 0)
+		(size 49.53 12.7)
+		(margins 0.9525 0.9525 0.9525 0.9525)
+		(stroke
+			(width 0)
+			(type solid)
+		)
+		(fill
+			(type none)
+		)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "660203fb-1d7d-4506-b0e4-a347ca94d392")
+	)
 	(junction
 		(at 38.1 129.54)
 		(diameter 0)

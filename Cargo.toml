@@ -31,8 +31,10 @@ name = 'blink-monitor'
 filename = 'blink-monitor.elf'
 path = 'src/blink-monitor.rs'
 
-[profile.test]
-opt-level = 1
+[[bin]]
+name = 'blink-clocky'
+filename = 'blink-clocky.elf'
+path = 'src/blink-clocky.rs'
 
 [profile.dev]
 panic = 'abort'
