@@ -26,6 +26,5 @@ impl DMA for Channel {
             |w| w.EN().set_bit().TCIE().set_bit().TEIE().set_bit()
                 .MINC().set_bit().DIR().bit(write)
                 .PSIZE().bits(size).MSIZE().bits(size)});
-        barrier();
     }
 }

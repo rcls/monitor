@@ -27,6 +27,8 @@ pub const D7: u8 = SEG_A | SEG_B | SEG_C;
 pub const D8: u8 = SEG_A | SEG_B | SEG_C | SEG_D | SEG_E | SEG_F | SEG_G;
 pub const D9: u8 = SEG_A | SEG_B | SEG_C | SEG_D | SEG_F | SEG_G;
 
+pub const MINUS: u8 = SEG_G;
+
 pub static DIGITS: [u8; 10] = [D0, D1, D2, D3, D4, D5, D6, D7, D8, D9];
 
 impl LCD {

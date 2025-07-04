@@ -40,14 +40,32 @@ fn systick_handler() {
 }
 
 fn advance(lcd: &mut lcd::LCD, num: u32) {
-    let mut div = num;
-    let mut segments = 0;
-    for n in 0..3 {
-        let d = div as usize % 10;
-        div = div / 10;
-        segments |= (lcd::DIGITS[d] as u64) << (num + n) % 6 * 8;
+
+    let mut segments = (lcd::DOT as u64) << 16;
+    let mut temp: i16 = 0;
+    let _ = i2c::read_reg(i2c::TMP117, 0, &mut temp);
+
+    let temp = i16::from_be(temp);
+
+    let mut n = 0;
+    let mut abs: usize = temp.abs() as usize * 10 / 128;
+    while n < 24 || abs != 0 {
+        segments |= (lcd::DIGITS[abs % 10] as u64) << n;
+        n += 8;
+        abs = abs / 10;
+        if abs == 0 {
+            break;
+        }
     }
-    lcd.segments = segments | (lcd::DOT as u64) << !num % 7 * 8;
+    if temp < 0 {
+        segments |= (lcd::MINUS as u64) << n;
+    }
+
+    segments |= 255 << 32;
+    let rot = num % 6 * 8;
+    segments = (segments << rot) & 0xffffffffffff | segments >> (48 - rot);
+
+    lcd.segments = segments;
 }
 
 fn main() -> ! {

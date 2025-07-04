@@ -66,6 +66,7 @@ impl Monitor {
         }
         else if adc::DONE.read() {
             adc::DONE.write(false);
+            vcell::barrier();
             let _ = self.analog_update();
         }
         else if divide == 4 {
