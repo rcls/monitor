@@ -282,6 +282,7 @@
 		(property pad_prop_heatsink)
 		(layers "*.Cu" "*.Mask")
 		(remove_unused_layers no)
+		(thermal_bridge_angle 45)
 		(uuid "69c3dc88-a37e-49ef-ae4d-497d3191ad5b")
 	)
 	(pad "S2" thru_hole oval
@@ -291,6 +292,7 @@
 		(property pad_prop_heatsink)
 		(layers "*.Cu" "*.Mask")
 		(remove_unused_layers no)
+		(thermal_bridge_angle 45)
 		(uuid "5991ca6f-c5c1-4692-8fe9-cf4b7ca50c4b")
 	)
 	(pad "S3" thru_hole oval
@@ -300,6 +302,7 @@
 		(property pad_prop_heatsink)
 		(layers "*.Cu" "*.Mask")
 		(remove_unused_layers no)
+		(thermal_bridge_angle 45)
 		(uuid "e783dde5-f762-4528-9b55-9220820b0b1c")
 	)
 	(pad "S4" thru_hole oval
@@ -309,6 +312,7 @@
 		(property pad_prop_heatsink)
 		(layers "*.Cu" "*.Mask")
 		(remove_unused_layers no)
+		(thermal_bridge_angle 45)
 		(uuid "af5ae63f-ef36-487e-a6b8-831b84890f25")
 	)
 	(embedded_fonts no)

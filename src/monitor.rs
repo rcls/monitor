@@ -212,7 +212,7 @@ pub fn main() -> ! {
 
     // Enable clocks.
     rcc.IOPENR.write(|w| w.GPIOAEN().set_bit());
-    rcc.AHBENR.write(|w| w.DMA1EN().set_bit());
+    rcc.AHBENR.write(|w| w.DMA1EN().set_bit().TSCEN().set_bit());
     rcc.APBENR1.write(
         |w| w.USART2EN().set_bit().I2C1EN().set_bit()
             . PWREN().set_bit());

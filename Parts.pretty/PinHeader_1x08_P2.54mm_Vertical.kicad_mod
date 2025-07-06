@@ -127,7 +127,7 @@
 	(pad "1" thru_hole circle
 		(at 0 0)
 		(size 1.7 1.7)
-		(drill 1)
+		(drill 0.9)
 		(layers "*.Cu" "*.Mask")
 		(remove_unused_layers no)
 		(thermal_bridge_angle 90)
@@ -136,7 +136,7 @@
 	(pad "2" thru_hole circle
 		(at 0 2.54)
 		(size 1.7 1.7)
-		(drill 1)
+		(drill 0.9)
 		(layers "*.Cu" "*.Mask")
 		(remove_unused_layers no)
 		(uuid "df74dac2-3b66-4c0a-ae88-ef6efef8a778")
@@ -144,7 +144,7 @@
 	(pad "3" thru_hole circle
 		(at 0 5.08)
 		(size 1.7 1.7)
-		(drill 1)
+		(drill 0.9)
 		(layers "*.Cu" "*.Mask")
 		(remove_unused_layers no)
 		(uuid "729c8e80-55f4-4b0f-a6e2-d73036367f6c")
@@ -152,7 +152,7 @@
 	(pad "4" thru_hole circle
 		(at 0 7.62)
 		(size 1.7 1.7)
-		(drill 1)
+		(drill 0.9)
 		(layers "*.Cu" "*.Mask")
 		(remove_unused_layers no)
 		(uuid "e56b2d3a-1bb1-4c2e-9ce4-19f47acd9251")
@@ -160,7 +160,7 @@
 	(pad "5" thru_hole circle
 		(at 0 10.16)
 		(size 1.7 1.7)
-		(drill 1)
+		(drill 0.9)
 		(layers "*.Cu" "*.Mask")
 		(remove_unused_layers no)
 		(uuid "7c2ec840-9a06-4c79-a576-f128a8645c1c")
@@ -168,7 +168,7 @@
 	(pad "6" thru_hole circle
 		(at 0 12.7)
 		(size 1.7 1.7)
-		(drill 1)
+		(drill 0.9)
 		(layers "*.Cu" "*.Mask")
 		(remove_unused_layers no)
 		(uuid "06884091-0e5c-47bc-8532-8062e3b66e8d")
@@ -176,7 +176,7 @@
 	(pad "7" thru_hole circle
 		(at 0 15.24)
 		(size 1.7 1.7)
-		(drill 1)
+		(drill 0.9)
 		(layers "*.Cu" "*.Mask")
 		(remove_unused_layers no)
 		(uuid "825d5d96-8e52-4a94-bab7-e3ae7845c38b")
@@ -184,7 +184,7 @@
 	(pad "8" thru_hole circle
 		(at 0 17.78)
 		(size 1.7 1.7)
-		(drill 1)
+		(drill 0.9)
 		(layers "*.Cu" "*.Mask")
 		(remove_unused_layers no)
 		(uuid "40b63dfe-252c-40ac-8c69-a88a5b896d1c")

@@ -10,7 +10,7 @@ mod i2c;
 mod lcd;
 mod vcell;
 
-use vcell::{UCell, WFE};
+use vcell::{UCell, VCell, WFE};
 
 type I2C = stm32u031::I2C1;
 
@@ -37,10 +37,13 @@ fn systick_handler() {
         advance(lcd, *i >> 3);
     }
     lcd.tick();
+
+    if *i & 15 == 0 {
+        tsc_start();
+    }
 }
 
 fn advance(lcd: &mut lcd::LCD, num: u32) {
-
     let mut segments = (lcd::DOT as u64) << 16;
     let mut temp: i16 = 0;
     let _ = i2c::read_reg(i2c::TMP117, 0, &mut temp);
@@ -68,17 +71,64 @@ fn advance(lcd: &mut lcd::LCD, num: u32) {
     lcd.segments = segments;
 }
 
+static TSC_BUSY: VCell<u8> = VCell::new(0);
+
+fn tsc_isr() {
+    let tsc   = unsafe {&*stm32u031::TSC::ptr()};
+    let sr = tsc.ISR.read().bits();
+    tsc.ICR.write(unsafe{|w| w.bits(sr)});
+    let ccr = tsc.IOCCR.read();
+    let gsr = tsc.IOGCSR().read().bits();
+    let val;
+    let ch;
+    if ccr.G7_IO3().bit() {
+        ch = '+';
+        val = tsc.IOG7CR.read().bits();
+        tsc.IOCCR.write(|w| w.G7_IO1().set_bit());
+        tsc.IOSCR.write(|w| w.G7_IO2().set_bit());
+        tsc.IOGCSR.write(|w| w.G7E().set_bit());
+    }
+    else if ccr.G7_IO1().bit() {
+        ch = '-';
+        val = tsc.IOG7CR.read().bits();
+        tsc.IOCCR.write(|w| w.G5_IO4().set_bit());
+        tsc.IOSCR.write(|w| w.G5_IO2().set_bit());
+        tsc.IOGCSR.write(|w| w.G5E().set_bit());
+    }
+    else {
+        ch = 'O';
+        val = tsc.IOG5CR.read().bits();
+        tsc.IOCCR.write(|w| w.G7_IO3().set_bit());
+        tsc.IOSCR.write(|w| w.G7_IO2().set_bit());
+        tsc.IOGCSR.write(|w| w.G7E().set_bit());
+    }
+
+    // Log some results...
+    dbgln!("CR {:#x} SR {:#x} GSR {gsr:#08x} {ch} {val}",
+           tsc.CR.read().bits(), sr);
+    TSC_BUSY.write(0);
+}
+
+fn tsc_start() {
+    let tsc   = unsafe {&*stm32u031::TSC  ::ptr()};
+    if TSC_BUSY.read() == 0 {
+        TSC_BUSY.write(1);
+        tsc.CR.modify(|_,w| w.START().set_bit());
+    }
+}
+
 fn main() -> ! {
     let gpioa = unsafe {&*stm32u031::GPIOA::ptr()};
     let gpiob = unsafe {&*stm32u031::GPIOB::ptr()};
     let rcc   = unsafe {&*stm32u031::RCC  ::ptr()};
+    let tsc   = unsafe {&*stm32u031::TSC  ::ptr()};
 
     //let scb   = unsafe {&*cortex_m::peripheral::SCB ::PTR};
     let nvic  = unsafe {&*cortex_m::peripheral::NVIC::PTR};
 
     // Enable clocks.
     rcc.IOPENR.write(|w| w.GPIOAEN().set_bit().GPIOBEN().set_bit());
-    rcc.AHBENR.write(|w| w.DMA1EN().set_bit());
+    rcc.AHBENR.write(|w| w.DMA1EN().set_bit().TSCEN().set_bit());
     rcc.APBENR1.write(
         |w| w.USART2EN().set_bit().I2C1EN().set_bit()
             . PWREN().set_bit());
@@ -123,8 +173,56 @@ fn main() -> ! {
     unsafe {
         nvic.iser[0].write(
             bit(I2C1) | bit(ADC_COMP) | bit(USART2_LPUART2) |
-            bit(DMA1_CHANNEL2_3));
+            bit(DMA1_CHANNEL2_3) | bit(TSC));
     }
+
+    // TSC has
+    // Plus: G7_IO1 (A8)
+    // Cap : G7_IO2 (A9)
+    // Minus: G7_IO3 (A10)
+    // Menu: G5_IO4 (PB11)
+    // Cap:  G5_IO2 (PB0)
+
+    // TODO - do we do this or just leave pins at analog?
+    gpioa.AFRH.modify(
+        |_,w| w.AFSEL8().B_0x9().AFSEL9().B_0x9().AFSEL10().B_0x9());
+    gpiob.AFRL.modify(|_,w| w.AFSEL0().B_0x9());
+    gpiob.AFRH.modify(|_,w| w.AFSEL11().B_0x9());
+    // Set open drain mode for the sampling cap pins.
+    gpioa.OTYPER.write(|w| w.OT9().B_0x1());
+    gpiob.OTYPER.write(|w| w.OT0().B_0x1());
+    //gpioa.OTYPER.write(|w| w.OT8().B_0x1().OT9().B_0x1().OT10().B_0x1());
+    //gpiob.OTYPER.write(|w| w.OT0().B_0x1().OT11().B_0x1());
+    // Enable AF.
+    gpioa.MODER.modify(|_,w| w.MODE8().B_0x2().MODE9().B_0x2().MODE10().B_0x2());
+    gpiob.MODER.modify(|_,w| w.MODE0().B_0x2().MODE11().B_0x2());
+
+    // TODO - timings are guesses...
+    // Docs talk about frequency 250kHz = 4µs = 64 clocks.
+    // Standard pulse range "500ns to 2µs".
+    // Use 2µs pulses for now.
+    // /16 prescaler.
+    // Max counts is set as high as possible.
+    tsc.CR.write(unsafe{
+        |w| w.CTPH().bits(4).CTPL().bits(4)
+            . SSD().bits(1). SSE().set_bit().SSPSC().set_bit()
+            . PGPSC().B_0x5().MCV().B_0x6().TSCE().set_bit()});
+    // Hysterysis & analog control?
+    // tsc.IOHCR.write(
+    //     |w| w.G7_IO1().set_bit().G7_IO2().set_bit().G7_IO3().set_bit()
+    //         . G5_IO2().set_bit().G5_IO4().set_bit());
+    // tsc.IOASCR.write(
+    //     |w| w.G7_IO1().set_bit().G7_IO2().set_bit().G7_IO3().set_bit()
+    //         . G5_IO2().set_bit().G5_IO4().set_bit());
+    // Sampling caps.
+    tsc.IOSCR().write(|w| w.G7_IO2().set_bit().G5_IO2().set_bit());
+    // Channels.  TODO - do we just leave all set, or do we toggle?
+    tsc.IOCCR.write(
+        |w| w.G7_IO1().set_bit().G7_IO3().set_bit().G5_IO4().set_bit());
+    // Use groups 5 and 7.
+    tsc.IOGCSR.write(|w| w.G5E().set_bit().G7E().set_bit());
+    // Enable end-of-acquire interrupt.
+    tsc.IER.write(|w| w.EOAIE().set_bit());
 
     if false {
         let _ = scrounge();
@@ -140,6 +238,27 @@ fn main() -> ! {
         syst.cvr.write(79999);
         syst.csr.write(3);
     }
+
+    // Reduce priority of the TSC interrupt.
+    #[cfg(not(test))]
+    unsafe {
+        assert_eq!(&nvic.ipr[5] as *const _ as usize, 0xE000E400 + 20);
+        //nvic.ipr[21].write(0xc0);
+        nvic.ipr[5].write(0xc0 << 8);
+    }
+
+    // Try a single touch sense acquisition.
+    // Busy wait.
+    // for _ in 0..1<<20 {
+        // if tsc.ISR.read().EOAF().bit() {
+            // break;
+        // }
+    // }
+    // Log some results...
+    // dbgln!("CR {:#x} SR {:#x} GSR {:#x} C5 {:#x} C7 {:#x}",
+        //    tsc.CR.read().bits(),
+        //    tsc.ISR.read().bits(), tsc.IOGCSR.read().bits(),
+        //    tsc.IOG5CR.read().bits(), tsc.IOG7CR.read().bits());
 
     loop {
         WFE();
@@ -176,7 +295,7 @@ pub static VTORS: VectorTable = VectorTable {
         bugger, bugger, bugger, bugger, bugger, bugger, bugger, bugger,
         bugger, bugger, i2c::dma23_isr, bugger,
         bugger, bugger, bugger, bugger,
-        bugger, bugger, bugger, bugger, bugger, bugger, bugger, i2c::i2c_isr,
+        bugger, bugger, bugger, bugger, bugger, tsc_isr, bugger, i2c::i2c_isr,
         bugger, bugger, bugger, bugger,
         debug::debug_isr, bugger, bugger, bugger,
     ],
@@ -201,4 +320,6 @@ fn check_vtors() {
                                  i2c::i2c_isr as fn()));
     assert!(std::ptr::fn_addr_eq(VTORS.interrupts[USART2_LPUART2 as usize],
                                  debug::debug_isr as fn()));
+    assert!(std::ptr::fn_addr_eq(VTORS.interrupts[TSC as usize],
+                                 tsc_isr as fn()));
 }
