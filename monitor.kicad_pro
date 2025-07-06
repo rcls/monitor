@@ -589,7 +589,7 @@
     "page_layout_descr_file": ""
   },
   "schematic": {
-    "annotate_start_num": 0,
+    "annotate_start_num": 50,
     "bom_export_filename": "${PROJECTNAME}.csv",
     "bom_fmt_presets": [
       {
