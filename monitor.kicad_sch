@@ -11746,7 +11746,7 @@
 				(hide yes)
 			)
 		)
-		(property "JLCPCB" "C25083"
+		(property "JLCPCB" "C25803"
 			(at 186.69 62.23 0)
 			(effects
 				(font
@@ -11841,7 +11841,7 @@
 				(hide yes)
 			)
 		)
-		(property "JLCPCB" "C2128"
+		(property "JLCPCB" "C68978"
 			(at 119.38 59.69 0)
 			(effects
 				(font
@@ -13150,7 +13150,7 @@
 		(mirror x)
 		(unit 1)
 		(exclude_from_sim no)
-		(in_bom no)
+		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "498fd1f8-a508-4e78-97a5-c1d4473a79be")
@@ -13171,7 +13171,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
 			(at 198.12 51.562 90)
 			(effects
 				(font
@@ -13198,7 +13198,7 @@
 				(hide yes)
 			)
 		)
-		(property "JLCPCB" ""
+		(property "JLCPCB" "C25077"
 			(at 198.12 53.34 0)
 			(effects
 				(font
@@ -14978,7 +14978,7 @@
 				(hide yes)
 			)
 		)
-		(property "JLCPCB" ""
+		(property "JLCPCB" "C25077"
 			(at 219.71 66.04 0)
 			(effects
 				(font
@@ -15604,7 +15604,7 @@
 				(hide yes)
 			)
 		)
-		(property "JLCPCB" ""
+		(property "JLCPCB" "C25803"
 			(at 111.76 66.04 0)
 			(effects
 				(font
@@ -15904,7 +15904,7 @@
 				(hide yes)
 			)
 		)
-		(property "JLCPCB" ""
+		(property "JLCPCB" "C31850"
 			(at 127 66.04 0)
 			(effects
 				(font
@@ -16112,7 +16112,7 @@
 				(hide yes)
 			)
 		)
-		(property "JLCPCB" "C11702"
+		(property "JLCPCB" "C21190"
 			(at 146.05 53.34 0)
 			(effects
 				(font
@@ -17220,7 +17220,7 @@
 				(hide yes)
 			)
 		)
-		(property "JLCPCB" ""
+		(property "JLCPCB" "C23137"
 			(at 127 54.61 0)
 			(effects
 				(font
@@ -18405,7 +18405,7 @@
 				(hide yes)
 			)
 		)
-		(property "JLCPCB" ""
+		(property "JLCPCB" "C22961"
 			(at 111.76 54.61 0)
 			(effects
 				(font

@@ -21,6 +21,7 @@ mod usqrt;
 mod vcell;
 
 type I2C = stm32u031::I2C1;
+const CPU_CLK: u32 = 16000000;
 
 unsafe extern "C" {
     static mut __bss_start: u8;

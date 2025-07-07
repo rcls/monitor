@@ -135,8 +135,11 @@ macro_rules! sdbgln {
 pub fn init() {
     // Set-up the UART TX.  TODO - we should enable RX at some point.  The dbg*
     // macros will work after this.
+
+    const BRR: u32 = (super::CPU_CLK * 2 / 115200 + 1) / 2;
+    assert!(BRR >= 16 && BRR < 65536);
     let usart  = unsafe {&*stm32u031::USART2::ptr()};
-    usart.BRR.write(|w| unsafe {w.BRR().bits(139)});
+    usart.BRR.write(|w| unsafe {w.BRR().bits(BRR as u16)});
     usart.CR1.write(
         |w| w.FIFOEN().set_bit().TE().set_bit().UE().set_bit());
 
