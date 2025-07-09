@@ -60,13 +60,25 @@ pub fn init() {
             . SDADEL().bits(2)
             . SCLDEL().bits(3));
     // 400kb/s from 16MHz, longer clock pulse.
-    #[cfg(true)]
-    i2c.TIMINGR.write(unsafe{
-        |w| w.PRESC().bits(1)
-            . SCLL().bits(3)
-            . SCLH().bits(9)
-            . SDADEL().bits(1)
-            . SCLDEL().bits(1)});
+    if super::CPU_CLK == 16000000 {
+        i2c.TIMINGR.write(
+            |w| w.PRESC().bits(1)
+                . SCLL().bits(3)
+                . SCLH().bits(9)
+                . SDADEL().bits(1)
+                . SCLDEL().bits(1));
+    }
+    else if super::CPU_CLK == 2000000 {
+        i2c.TIMINGR.write(
+            |w| w.PRESC().bits(0)
+                . SCLL().bits(1)
+                . SCLH().bits(2)
+                . SDADEL().bits(0)
+                . SCLDEL().bits(1));
+    }
+    else {
+        crate::vcell::unreachable();
+    }
 
     // Enable everything.
     i2c.CR1.write(

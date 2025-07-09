@@ -76,7 +76,7 @@ fn i2c_rx_reg16(i2c: &I2C, addr: u8, reg: u8, last: bool) -> Option<u16> {
 pub fn main() -> ! {
     let gpioa = unsafe {&*stm32u031::GPIOA ::ptr()};
     let rcc   = unsafe {&*stm32u031::RCC   ::ptr()};
-    let usart = unsafe {&*stm32u031::USART2::ptr()};
+    let uart  = unsafe {&*stm32u031::LPUART2::ptr()};
     let i2c   = unsafe {&*stm32u031::I2C1  ::ptr()};
     let pwr   = unsafe {&*stm32u031::PWR   ::ptr()};
     let adc   = unsafe {&*stm32u031::ADC   ::ptr()};
@@ -85,7 +85,8 @@ pub fn main() -> ! {
     rcc.CR.write(
         |w| w.MSIRANGE().B_0x8().MSIRGSEL().set_bit().MSION().set_bit());
     rcc.IOPENR.write(|w| w.GPIOAEN().set_bit());
-    rcc.APBENR1.write(|w| w.PWREN().set_bit().USART2EN().set_bit().I2C1EN().set_bit());
+    rcc.APBENR1.write(
+        |w| w.PWREN().set_bit().LPUART1EN().set_bit().I2C1EN().set_bit());
     rcc.APBENR2.write(|w| w.ADCEN().set_bit());
 
     // Enable backup domain access.
@@ -94,25 +95,17 @@ pub fn main() -> ! {
     // Enable the LSE.  Set high drive strength.
     rcc.BDCR.write(|w| w.LSEON().set_bit().LSEDRV().B_0x3()); // Already uppercase, no change
 
-    // Pullups on I2C and USART RX pin.
+    // Pullups on I2C and UART RX pin.
     gpioa.PUPDR.write(
         |w| w.PUPD3().B_0x1().PUPD9().B_0x1().PUPD10().B_0x1());
 
     // Set I2C pins to open drain - FIXME - is this needed?
     gpioa.OTYPER.write(|w| w.OT9().set_bit().OT10().set_bit());
 
-    // Set-up the UART TX.
-    usart.BRR.write(|w| unsafe {w.BRR().bits(139)});
-    usart.CR1.write(|w| w.FIFOEN().set_bit().TE().set_bit().UE().set_bit());
-
-    // PA2,3, USART2, AF7.
     // PA9,10, I2C1, SCL, SDA, AF4.
-    gpioa.AFRL.write(|w| w.AFSEL2().B_0x7().AFSEL3().B_0x7());
     gpioa.AFRH.write(|w| w.AFSEL9().B_0x4().AFSEL10().B_0x4());
 
     gpioa.MODER.modify(|_, w| w
-                       .MODE2().B_0x2() // USART
-                       .MODE3().B_0x2()
                        .MODE9().B_0x2() // I2C.
                        .MODE10().B_0x2()
                        .MODE11().B_0x1() // GPO.
@@ -192,7 +185,7 @@ pub fn main() -> ! {
             . SCLL  ().bits(3)
             . SCLH  ().bits(9)
             . SDADEL().bits(1)
-            . SCLDEL().bits(1)});
+            . SCLDEL().bits(1));
 
     // CR1 - only need PE?
     i2c.CR1.write(|w| w.PE().set_bit());

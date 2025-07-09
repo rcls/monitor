@@ -7,7 +7,10 @@ use crate::dbgln;
 // Use DMA1 Ch1
 pub const ADC_MUXIN: u32 = 5;
 
-pub static DMA_BUF: [VCell<u16>; 3] = [const {VCell::new(0)}; 3];
+use crate::ADC_CHANNELS;
+const NUM_CHANNELS: usize = ADC_CHANNELS.len();
+
+pub static DMA_BUF: [VCell<u16>; 3] = [const {VCell::new(0)}; NUM_CHANNELS];
 pub static DONE: VCell<bool> = VCell::new(false);
 
 pub fn start() {
@@ -17,7 +20,7 @@ pub fn start() {
     DONE.write(false);
 
     // Set-up DMA for the ADC.
-    dma.CH(0).read(DMA_BUF.as_ptr().addr(), 3, 1);
+    dma.CH(0).read(DMA_BUF.as_ptr().addr(), NUM_CHANNELS, 1);
 
     // Trigger ADC conversions and temperature conversion (via I2C).
     adc.CR.write(|w| w.ADSTART().set_bit());
@@ -73,8 +76,8 @@ pub fn init2() {
     // Configure ADC chanels and wait for ready.  The datasheet appears to lie.
     // We actually get Isense on AIN9, VSENSE on A17 and VREF on A18 (0 based
     // v. 1 based?)
-    adc.CHSELR.write(
-        |w| w.CHSEL9().set_bit().CHSEL17().set_bit().CHSEL18().set_bit());
+    const MASK: u32 = crate::utils::make_mask(&ADC_CHANNELS);
+    adc.CHSELR.write(|w| w.bits(MASK));
     // Wait for ready.
     dbgln!("Ccrdy wait");
     while !adc.ISR.read().CCRDY().bit() {

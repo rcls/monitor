@@ -4,6 +4,14 @@ unsafe extern "C" {
     static mut __bss_end: u8;
 }
 
+const MSIRANGE: u8 = const {
+    match super::CPU_CLK {
+        16000000 => 8,
+        2000000 => 5,
+        _ => panic!("CPU_CLK not implemented")
+    }
+};
+
 #[inline(always)]
 pub fn init1() {
     //let gpioa = unsafe {&*stm32u031::GPIOA::ptr()};
@@ -12,9 +20,9 @@ pub fn init1() {
     //let scb   = unsafe {&*cortex_m::peripheral::SCB ::PTR};
     //let nvic  = unsafe {&*cortex_m::peripheral::NVIC::PTR};
 
-    // Go to 16MHz.
+    // Use MSI at appropriate frequency.
     rcc.CR.write(
-        |w| w.MSIRANGE().B_0x8().MSIRGSEL().set_bit().MSION().set_bit());
+        |w| w.MSIRANGE().bits(MSIRANGE).MSIRGSEL().set_bit().MSION().set_bit());
 
     if !cfg!(test) {
         let bss_start = &raw mut __bss_start;
@@ -25,8 +33,9 @@ pub fn init1() {
         }
     }
 
-    // Enable backup domain access.
-    pwr.CR1.write(|w| w.DBP().set_bit());
+    // Enable backup domain access & maybe set lower-power run.
+    let low_power = super::CPU_CLK <= 2000000;
+    pwr.CR1.write(|w| w.LPR().bit(low_power).DBP().set_bit());
 
     // Enable the LSE.  Set high drive strength for crystal start-up.
     rcc.BDCR.write(|w| w.LSEON().set_bit().LSEDRV().B_0x3());
@@ -52,7 +61,7 @@ pub fn init2() {
     while !rcc.BDCR.read().LSERDY().bit() {
     }
     rcc.CR.write(
-        |w| w.MSIRANGE().B_0x8().MSIRGSEL().set_bit().MSION().set_bit()
+        |w| w.MSIRANGE().bits(MSIRANGE).MSIRGSEL().set_bit().MSION().set_bit()
             . MSIPLLEN().set_bit());
     // Reduce drive strength.
     rcc.BDCR.write(|w| w.LSEON().set_bit().LSEDRV().B_0x0());

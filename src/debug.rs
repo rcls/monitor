@@ -1,10 +1,14 @@
 
 use core::fmt::Write;
-
 use crate::vcell::{UCell, VCell, barrier, WFE};
+use static_assertions::const_assert;
 
+pub use stm32u031::LPUART1 as UART;
 pub struct DebugS;
 pub struct DebugAMarker;
+
+#[allow(unused_imports)]
+pub use stm32u031::Interrupt::USART3_LPUART1 as UART_ISR;
 
 pub static DEBUG: UCell<DebugA> = UCell::new(DebugA::new());
 
@@ -45,13 +49,13 @@ impl DebugA {
         let uart  = unsafe {&*UART::ptr()};
         // Use the FIFO empty interrupt.  Normally we should be fast enough
         // to refill before the last byte finishes.
-        usart.CR1.write(
+        uart.CR1.write(
             |w| w.FIFOEN().set_bit().TE().set_bit().UE().set_bit()
                 . TXFEIE().set_bit());
     }
     fn isr(&mut self) {
         // Assume no spurious wake-ups!
-        let usart  = unsafe {&*stm32u031::USART2::ptr()};
+        let uart  = unsafe {&*UART::ptr()};
         const FIFO_SIZE: usize = 8;
         let mut r = *self.r.as_mut() as usize;
         let w = *self.w.as_mut() as usize;
@@ -62,16 +66,16 @@ impl DebugA {
             done += 1;
         }
         if r == w {
-            usart.CR1.write(
+            uart.CR1.write(
                 |w| w.FIFOEN().set_bit().TE().set_bit().UE().set_bit());
         }
         *self.r.as_mut() = r as u8;
-        usart.ICR.write(|w| w.TXFECF().set_bit());
+        uart.ICR.write(|w| w.FECF().set_bit());
     }
 }
 
 fn sdebug_bytes(s: &[u8]) -> core::fmt::Result {
-    let uart = unsafe {&*stm32u031::USART2::ptr()};
+    let uart = unsafe {&*UART::ptr()};
     for &b in s {
         // This is a bit manky...
         while !uart.ISR.read().TXFNF().bit() {
@@ -132,14 +136,26 @@ macro_rules! sdbgln {
 }
 
 pub fn init() {
+    let gpioa = unsafe {&*stm32u031::GPIOA ::ptr()};
+    let uart  = unsafe {&*UART::ptr()};
+
+    // Configure UART lines.  sdbg! should now work.
+    gpioa.AFRL.modify(|_, w| w.AFSEL2().B_0x8().AFSEL3().B_0x8());
+    gpioa.MODER.modify(|_, w| w.MODE2().B_0x2().MODE3().B_0x2());
+
     // Set-up the UART TX.  TODO - we should enable RX at some point.  The dbg*
     // macros will work after this.
 
-    const BRR: u32 = (super::CPU_CLK * 2 / 115200 + 1) / 2;
-    assert!(BRR >= 16 && BRR < 65536);
-    let usart  = unsafe {&*stm32u031::USART2::ptr()};
-    usart.BRR.write(|w| unsafe {w.BRR().bits(BRR as u16)});
-    usart.CR1.write(
+    //const BRR: u32 = (super::CPU_CLK * 2 / 115200 + 1) / 2;
+    //assert!(BRR >= 16 && BRR < 65536);
+    const PB: (u32, u32) = prescale(115200);
+    const PRESC: u32 = PB.0;
+    const BRR: u32 = PB.1;
+    const_assert!(BRR >= 0x300);
+    const_assert!(BRR < 1 << 20);
+    uart.BRR.write(|w| w.bits(BRR));
+    uart.PRESC.write(|w| w.bits(PRESC));
+    uart.CR1.write(
         |w| w.FIFOEN().set_bit().TE().set_bit().UE().set_bit());
 
     if false {
@@ -158,9 +174,9 @@ pub fn init() {
 fn ph(info: &core::panic::PanicInfo) -> ! {
     sdbgln!("{info}");
     // Let the TX FIFO drain.
-    let usart = unsafe { &*stm32u031::USART2::ptr() };
-    while !usart.ISR().read().TXFE().bit() {
-        let isr = usart.ISR().read();
+    let uart = unsafe { &*UART::ptr() };
+    while !uart.ISR().read().TXFE().bit() {
+        let isr = uart.ISR().read();
         if isr.TXFE().bit() && isr.TC().bit() {
             break;
         }
@@ -168,4 +184,23 @@ fn ph(info: &core::panic::PanicInfo) -> ! {
     loop {
         unsafe {(*cortex_m::peripheral::SCB::PTR).aircr.write(0x05fa0004)};
     }
+}
+
+// Returns prescaler (prescaler index, BRR value).
+const fn prescale(bit_rate: u32) -> (u32, u32) {
+    const fn calc(bit_rate: u32, presc: usize) -> u32 {
+        let divs = [1, 2, 4, 6, 8, 10, 12, 16, 32, 64, 128, 256];
+        let div = divs[presc];
+        ((512 * super::CPU_CLK as u64 / bit_rate as u64) as u32 + div)
+            / 2 / div
+    }
+    const fn ok(bit_rate: u32, presc: usize) -> bool {
+        let brr = calc(bit_rate, presc);
+        brr >= 0x300 && brr < 1<<20
+    }
+    let mut presc = 11;
+    while !ok(bit_rate, presc) {
+        presc -= 1;
+    }
+    (presc as u32, calc(bit_rate, presc))
 }

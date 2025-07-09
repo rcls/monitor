@@ -18,10 +18,13 @@ mod i2c;
 mod noise;
 mod oled;
 mod usqrt;
+mod utils;
 mod vcell;
 
 type I2C = stm32u031::I2C1;
 const CPU_CLK: u32 = 16000000;
+
+const ADC_CHANNELS: [u32; 3] = [9, 17, 18];
 
 unsafe extern "C" {
     static mut __bss_start: u8;
@@ -215,30 +218,25 @@ pub fn main() -> ! {
     rcc.IOPENR.write(|w| w.GPIOAEN().set_bit());
     rcc.AHBENR.write(|w| w.DMA1EN().set_bit().TSCEN().set_bit());
     rcc.APBENR1.write(
-        |w| w.USART2EN().set_bit().I2C1EN().set_bit()
-            . PWREN().set_bit());
+        |w| w.LPUART1EN().set_bit().I2C1EN().set_bit().PWREN().set_bit());
     rcc.APBENR2.write(|w| w.ADCEN().set_bit());
 
     cpu::init1();
 
-    // Pullups on I2C and USART RX pin.
-    gpioa.PUPDR.write(
-        |w| w.PUPD3().B_0x1().PUPD9().B_0x1().PUPD10().B_0x1());
+    // Pullups on I2C and UART RX pin.
+    gpioa.PUPDR.write(|w| w.PUPD3().B_0x1().PUPD9().B_0x1().PUPD10().B_0x1());
 
     // Set I2C pins to open drain.
     gpioa.OTYPER.write(|w| w.OT9().set_bit().OT10().set_bit());
 
     // Configure pin functions.
-    // PA2,3, USART2, AF7.
     // PA9,10, I2C1, SCL, SDA, AF4.
-    gpioa.AFRL.write(|w| w.AFSEL2().B_0x7().AFSEL3().B_0x7());
     gpioa.AFRH.write(|w| w.AFSEL9().B_0x4().AFSEL10().B_0x4());
 
     gpioa.MODER.modify(
         |_, w| w
-            .MODE2 ().B_0x2().MODE3 ().B_0x2()   // USART.
             .MODE9 ().B_0x2().MODE10().B_0x2()   // I2C.
-            .MODE11().B_0x1().MODE12().B_0x1()); // GPO.
+            .MODE11().B_0x1().MODE12().B_0x1()); // GPO LEDs.
 
     debug::init();
 
@@ -270,7 +268,7 @@ pub fn main() -> ! {
     fn bit(i: stm32u031::Interrupt) -> u32 {1 << i as u16}
     unsafe {
         nvic.iser[0].write(
-            bit(I2C1) | bit(ADC_COMP) | bit(USART2_LPUART2) |
+            bit(I2C1) | bit(ADC_COMP) | bit(debug::UART_ISR) |
             bit(DMA1_CHANNEL1) | bit(DMA1_CHANNEL2_3));
     }
 
@@ -345,7 +343,7 @@ pub static VTORS: VectorTable = VectorTable {
         adc_isr, bugger, bugger, bugger,
         bugger, bugger, bugger, bugger, bugger, bugger, bugger, i2c::i2c_isr,
         bugger, bugger, bugger, bugger,
-        debug::debug_isr, bugger, bugger, bugger,
+        bugger, debug::debug_isr, bugger, bugger,
     ],
 };
 
@@ -371,6 +369,6 @@ fn check_vtors() {
                                  i2c::dma23_isr as fn()));
     assert!(std::ptr::fn_addr_eq(VTORS.interrupts[I2C1 as usize],
                                  i2c::i2c_isr as fn()));
-    assert!(std::ptr::fn_addr_eq(VTORS.interrupts[USART2_LPUART2 as usize],
+    assert!(std::ptr::fn_addr_eq(VTORS.interrupts[debug::UART_ISR as usize],
                                  debug::debug_isr as fn()));
 }
