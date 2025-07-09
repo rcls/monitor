@@ -92,34 +92,10 @@ impl Monitor {
 
         let vsense = vconvert(vsense_counts);
 
-        const COUNTS_V3: u32 = (2.5 / 3.0 * 65536.0) as u32;
-        const_assert!(65536 * 2500 / COUNTS_V3 >= 3000);
-        const_assert!(65536 * 2500 / (COUNTS_V3 + 1) < 3000);
-        let v3v3;
-        if v3v3_counts > 45000 && v3v3_counts <= COUNTS_V3 {
-            v3v3 = 65536 * 2500 / v3v3_counts;
-        }
-        else {
-            v3v3 = 3300;
-        }
+        let v3v3 = v3v3convert(v3v3_counts);
         //let v3v3 = v3v3::v3v3_est(v3v3_counts);
 
-        // u32::MAX is 270W.
-        // 65536 is 4mW, resolution on (v_counts * i_counts) is ≈ 0.1µW.
-        // Drop 12 bits, this gives us resolution of around 0.5mW.
-        #[allow(non_upper_case_globals)]
-        const cW_PER_COUNT: f64 = 118.0 / 18.0 * 3.3 / 65536.0 // Voltage
-            * 25.0 / 65536.0                                   // Current
-            * 100.0;
-        const POWER_SCALE: f64 = 65536.0 * 65536.0 * cW_PER_COUNT;
-        const MULT: u32 = POWER_SCALE as u32;
-        const_assert!(MULT < 65536 && MULT > 50000);
-        let power_counts = vsense_counts * isense_raw.unsigned_abs();
-        // Power in centiwatts * 65536.
-        let power = (power_counts >> 16) * MULT
-            + ((power_counts & 0xffff) * MULT + 32768 >> 16);
-        // Power in cW.
-        let power = power >> 16;
+        let power = power_cW(isense_raw, vsense_counts);
 
         self.noise[0].update(vsense);
         self.noise[1].update(self.isense as u32);
@@ -137,32 +113,33 @@ impl Monitor {
             self.noise[0].decimal(), self.noise[1].decimal(),
             self.noise[2].decimal(), self.noise[3].decimal());
         }
+        self.update_screen(power, vsense, v3v3, temp_counts)
+    }
 
+    fn update_screen(&mut self, power: u32, vsense: u32, v3v3: u32,
+                     temp_counts: i32) -> i2c::Result {
         let mut line = [0; 10];
         decimal::format_u32(&mut line[..7], power, 2);
         line[7..].copy_from_slice(&CHARS_MAP!("  W"));
-        oled::update_text(&mut self.frame[0], &line, 0, 0)?;
+        oled::update_text(&mut self.frame[0], &line[..10], 0, 0)?;
 
-        let mut line = [0; 8];
         decimal::format_u32(&mut line[..6], vsense, 3);
         line[6..].copy_from_slice(&CHARS_MAP!(" V"));
-        oled::update_text(&mut self.frame[1], &line, 2, 2)?;
+        oled::update_text(&mut self.frame[1], &line[..8], 2, 2)?;
 
         let usense = self.isense.unsigned_abs();
         decimal::format_u32(&mut line[..6], usense, 3);
         line[6..].copy_from_slice(&CHARS_MAP!(" A"));
-        oled::update_text(&mut self.frame[2], &line, 2, 4)?;
+        oled::update_text(&mut self.frame[2], &line[..8], 2, 4)?;
 
-        let mut line = [0; 5];
         let centic = (temp_counts * 100 + 50) >> 7;
         decimal::format_u32(&mut line[..4], v3v3, 0);
         line[4] = font::LETTER_m;
-        oled::update_text(&mut self.frame[3], &line, 0, 6)?;
+        oled::update_text(&mut self.frame[3], &line[..5], 0, 6)?;
 
-        let mut line = [0; 7];
         decimal::format_i32(&mut line[..6], centic, 2);
         line[6] = font::DEGREE; // °
-        oled::update_text(&mut self.frame[3], &line, 5, 6)
+        oled::update_text(&mut self.frame[3], &line[..7], 5, 6)
     }
 
     fn refresh(&mut self) -> i2c::Result {
@@ -300,6 +277,39 @@ fn vconvert(counts: u32) -> u32 {
     const_assert!(V_MULT >= 32768);
     const_assert!(V_MULT < 65536);
     (counts * V_MULT + (1 << V_SHIFT-1)) >> (16 + V_SHIFT)
+}
+
+fn v3v3convert(v3v3_counts: u32) -> u32 {
+    const COUNTS_V3: u32 = (2.5 / 3.0 * 65536.0) as u32;
+    const_assert!(65536 * 2500 / COUNTS_V3 >= 3000);
+    const_assert!(65536 * 2500 / (COUNTS_V3 + 1) < 3000);
+    if v3v3_counts > 45000 && v3v3_counts <= COUNTS_V3 {
+        65536 * 2500 / v3v3_counts
+    }
+    else {
+        3300
+    }
+}
+
+#[allow(non_snake_case)]
+// Note returns absolute value.
+fn power_cW(isense_raw: i32, vsense_counts: u32) -> u32 {
+    // u32::MAX is 270W.
+    // 65536 is 4mW, resolution on (v_counts * i_counts) is ≈ 0.1µW.
+    // Drop 12 bits, this gives us resolution of around 0.5mW.
+    #[allow(non_upper_case_globals)]
+    const cW_PER_COUNT: f64 = 118.0 / 18.0 * 3.3 / 65536.0 // Voltage
+        * 25.0 / 65536.0                                   // Current
+        * 100.0;
+    const POWER_SCALE: f64 = 65536.0 * 65536.0 * cW_PER_COUNT;
+    const MULT: u32 = POWER_SCALE as u32;
+    const_assert!(MULT < 65536 && MULT > 50000);
+    let power_counts = vsense_counts * isense_raw.unsigned_abs();
+    // Power in centiwatts * 65536.
+    let power = (power_counts >> 16) * MULT
+        + ((power_counts & 0xffff) * MULT + 32768 >> 16);
+    // Power in cW.
+    power >> 16
 }
 
 #[test]
