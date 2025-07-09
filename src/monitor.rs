@@ -2,8 +2,8 @@
 #![cfg_attr(not(test), no_main)]
 #![feature(format_args_nl)]
 #![feature(sync_unsafe_cell)]
+#![allow(unpredictable_function_pointer_comparisons)]
 
-use adc::{adc_isr, dma1_isr};
 use noise::Noise;
 use static_assertions::const_assert;
 use vcell::{UCell, WFE};
@@ -321,64 +321,15 @@ fn test_vconvert() {
     assert!((high as f64 - FS * 65535./65536.).abs() <= 1.);
 }
 
-#[repr(C)]
-pub struct VectorTable {
-    stack     : u32,
-    reset     : fn() -> !,
-    nmi       : fn(),
-    hard_fault: fn(),
-    reserved1 : [u32; 7],
-    svcall    : fn(),
-    reserved2 : [u32; 2],
-    pendsv    : fn(),
-    systick   : fn(),
-    interrupts: [fn(); 32],
-}
-
 #[used]
 #[unsafe(link_section = ".vectors")]
-pub static VTORS: VectorTable = VectorTable {
-    stack     : 0x20000000 + 12 * 1024,
-    reset     : main,
-    nmi       : bugger,
-    hard_fault: bugger,
-    reserved1 : [0; 7],
-    svcall    : bugger,
-    reserved2 : [0; 2],
-    pendsv    : bugger,
-    systick   : systick_handler,
-    interrupts: [
-        bugger, bugger, bugger, bugger, bugger, bugger, bugger, bugger,
-        bugger, dma1_isr, i2c::dma23_isr, bugger,
-        adc_isr, bugger, bugger, bugger,
-        bugger, bugger, bugger, bugger, bugger, bugger, bugger, i2c::i2c_isr,
-        bugger, bugger, bugger, bugger,
-        bugger, debug::debug_isr, bugger, bugger,
-    ],
-};
-
-fn bugger() {
-    panic!("Unexpected interrupt");
-}
+static VECTORS: cpu::VectorTable = *cpu::VectorTable::new()
+    .systick(systick_handler)
+    .debug_isr()
+    .adc_isrs()
+    .i2c_isr();
 
 #[test]
 fn char_checks() {
     assert_eq!(font::SPACE, 0);
-}
-
-#[test]
-fn check_vtors() {
-    use stm32u031::Interrupt::*;
-
-    assert!(std::ptr::fn_addr_eq(VTORS.reset, main as fn() -> !));
-    assert!(std::ptr::fn_addr_eq(VTORS.interrupts[ADC_COMP as usize],
-                                 adc_isr as fn()));
-    assert!(std::ptr::fn_addr_eq(VTORS.interrupts[DMA1_CHANNEL1 as usize],
-                                 dma1_isr as fn()));
-    assert!(std::ptr::fn_addr_eq(VTORS.interrupts[DMA1_CHANNEL2_3 as usize],
-                                 i2c::dma23_isr as fn()));
-    assert!(std::ptr::fn_addr_eq(VTORS.interrupts[I2C1 as usize],
-                                 i2c::i2c_isr as fn()));
-    assert!(std::ptr::fn_addr_eq(VTORS.interrupts[debug::UART_ISR as usize],
-                                 debug::debug_isr as fn()));
 }

@@ -1,10 +1,12 @@
 #![cfg_attr(not(test), no_std)]
 #![cfg_attr(not(test), no_main)]
 #![deny(warnings)]
+#![allow(unpredictable_function_pointer_comparisons)]
 #![feature(format_args_nl)]
 #![feature(sync_unsafe_cell)]
 #![feature(str_from_raw_parts)]
 
+mod cpu;
 mod debug;
 mod vcell;
 
@@ -75,25 +77,12 @@ fn i2c_rx_reg16(i2c: &I2C, addr: u8, reg: u8, last: bool) -> Option<u16> {
 
 pub fn main() -> ! {
     let gpioa = unsafe {&*stm32u031::GPIOA ::ptr()};
-    let rcc   = unsafe {&*stm32u031::RCC   ::ptr()};
     let uart  = unsafe {&*stm32u031::LPUART2::ptr()};
     let i2c   = unsafe {&*stm32u031::I2C1  ::ptr()};
-    let pwr   = unsafe {&*stm32u031::PWR   ::ptr()};
     let adc   = unsafe {&*stm32u031::ADC   ::ptr()};
 
     // Go to 16MHz.
-    rcc.CR.write(
-        |w| w.MSIRANGE().B_0x8().MSIRGSEL().set_bit().MSION().set_bit());
-    rcc.IOPENR.write(|w| w.GPIOAEN().set_bit());
-    rcc.APBENR1.write(
-        |w| w.PWREN().set_bit().LPUART1EN().set_bit().I2C1EN().set_bit());
-    rcc.APBENR2.write(|w| w.ADCEN().set_bit());
-
-    // Enable backup domain access.
-    pwr.CR1.write(|w| w.DBP().set_bit()); // Already uppercase, no change
-
-    // Enable the LSE.  Set high drive strength.
-    rcc.BDCR.write(|w| w.LSEON().set_bit().LSEDRV().B_0x3()); // Already uppercase, no change
+    cpu::init1();
 
     // Pullups on I2C and UART RX pin.
     gpioa.PUPDR.write(
@@ -190,20 +179,7 @@ pub fn main() -> ! {
     // CR1 - only need PE?
     i2c.CR1.write(|w| w.PE().set_bit());
 
-    // Wait for LSE and then enable the MSI FLL.
-    gpioa.BSRR.write(|w| w.bits(1 << 11 | 1 << 12));
-    while !rcc.BDCR.read().LSERDY().bit() {
-    }
-    gpioa.BSRR.write(|w| w.bits(1 << 27 | 1 << 28));
-    rcc.CR.write(
-        |w| w.MSIRANGE().B_0x8().MSIRGSEL().set_bit().MSION().set_bit()
-            . MSIPLLEN().set_bit());
-    // Reduce drive strength.
-    rcc.BDCR.write(|w| w.LSEON().set_bit().LSEDRV().B_0x0());
-
-    for r in 0..= 8 {
-        sdbgln!("Reg {r} = {v:?}", v = i2c_rx_reg16(i2c, TMP117, r, true));
-    }
+    cpu::init2();
 
     let mut adc_idx = 0;
     loop {
@@ -260,35 +236,6 @@ pub fn main() -> ! {
     }
 }
 
-fn hang() {
-    loop { }
-}
-
-#[repr(C)]
-pub struct VectorTable {
-    stack     : u32,
-    reset     : fn() -> !,
-    nmi       : fn(),
-    hard_fault: fn(),
-    reserved1 : [u32; 7],
-    svcall    : fn(),
-    reserved2 : [u32; 2],
-    pendsv    : fn(),
-    systick   : fn(),
-    interrupts: [fn(); 32],
-}
-
 #[used]
 #[unsafe(link_section = ".vectors")]
-pub static VTORS: VectorTable = VectorTable {
-    stack     : 0x20000000 + 12 * 1024,
-    reset     : main,
-    nmi       : hang,
-    hard_fault: hang,
-    reserved1 : [0; 7],
-    svcall    : hang,
-    reserved2 : [0; 2],
-    pendsv    : hang,
-    systick   : hang,
-    interrupts: [hang; 32],
-};
+pub static VECTORS: cpu::VectorTable = *cpu::VectorTable::new().debug_isr();

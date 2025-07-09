@@ -10,20 +10,16 @@ pub struct VCell<T>(SyncUnsafeCell<T>);
 pub struct UCell<T>(SyncUnsafeCell<T>);
 
 impl<T: Sync> VCell<T> {
-    #[inline]
     pub const fn new(v: T) -> Self {Self(SyncUnsafeCell::new(v))}
-    #[inline]
     pub fn as_ptr(&self) -> *mut T {self.0.get()}
-    #[inline]
     pub fn as_mut(&mut self) -> &mut T {self.0.get_mut()}
 }
 
 impl<T: Sync> UCell<T> {
-    #[inline]
     pub const fn new(v: T) -> Self {Self(SyncUnsafeCell::new(v))}
-    #[inline]
     pub fn as_ref(&self) -> &T {unsafe{&*(self.0.get() as *const T)}}
-    #[inline]
+    #[allow(dead_code)]
+    pub fn as_ptr(&self) -> *mut T {self.0.get()}
     /// We are naughty and use this in interrupts, using barriers.
     pub unsafe fn as_mut(&self) -> &mut T {unsafe{&mut *self.0.get()}}
 }
@@ -49,6 +45,16 @@ pub fn WFE() {
     else {
         panic!("wfe!");
     }
+}
+
+#[allow(dead_code)]
+pub fn unreachable() -> ! {
+    #[cfg(target_os = "none")]
+    unsafe {
+        unsafe extern "C" {fn nowayjose();}
+        nowayjose();
+    }
+    panic!();
 }
 
 #[allow(dead_code)]

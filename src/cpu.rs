@@ -42,10 +42,8 @@ pub fn init1() {
 }
 
 pub fn init2() {
-    //let pwr   = unsafe {&*stm32u031::PWR  ::ptr()};
-    let rcc   = unsafe {&*stm32u031::RCC  ::ptr()};
-    let scb   = unsafe {&*cortex_m::peripheral::SCB ::PTR};
-    //let nvic  = unsafe {&*cortex_m::peripheral::NVIC::PTR};
+    let rcc = unsafe {&*stm32u031::RCC  ::ptr()};
+    let scb = unsafe {&*cortex_m::peripheral::SCB ::PTR};
 
     // Set the systick and pendsv interrupt priority to a high value (other
     // interrupts pre-empt).
@@ -65,4 +63,54 @@ pub fn init2() {
             . MSIPLLEN().set_bit());
     // Reduce drive strength.
     rcc.BDCR.write(|w| w.LSEON().set_bit().LSEDRV().B_0x0());
+}
+
+#[derive(Clone, Copy)]
+#[repr(C)]
+pub struct VectorTable {
+    pub stack     : u32,
+    pub reset     : fn() -> !,
+    pub nmi       : fn(),
+    pub hard_fault: fn(),
+    pub reserved1 : [u32; 7],
+    pub svcall    : fn(),
+    pub reserved2 : [u32; 2],
+    pub pendsv    : fn(),
+    pub systick   : fn(),
+    pub isr       : [fn(); 32],
+}
+
+impl VectorTable {
+    pub const fn new() -> VectorTable {
+        VectorTable{
+            stack     : 0x20000000 + 12 * 1024,
+            reset     : super::main,
+            nmi       : bugger,
+            hard_fault: bugger,
+            reserved1 : [0; 7],
+            svcall    : bugger,
+            reserved2 : [0; 2],
+            pendsv    : bugger,
+            systick   : bugger,
+            isr       : [bugger; 32]}
+    }
+    #[allow(dead_code)]
+    pub const fn systick(&mut self, handler: fn()) -> &mut Self {
+        self.systick = handler;
+        self
+    }
+    pub const fn isr(&mut self,
+                     number: stm32u031::Interrupt, handler: fn()) -> &mut Self {
+        self.isr[number as usize] = handler;
+        self
+    }
+}
+
+fn bugger() {
+    panic!("Unexpected interrupt");
+}
+
+#[test]
+fn check_vectors() {
+    assert!(crate::VECTORS.reset == crate::main);
 }

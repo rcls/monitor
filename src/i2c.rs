@@ -1,6 +1,6 @@
 use core::marker::PhantomData;
 
-use crate::dma::{Channel, DMA};
+use crate::dma::{Channel, DMA, Flat};
 use crate::vcell::{UCell, VCell, barrier, interrupt};
 
 use super::I2C;
@@ -93,6 +93,8 @@ pub fn init() {
 
     dmamux.CCR(RX_CHANNEL).write(|w| w.bits(RX_MUXIN));
     dmamux.CCR(TX_CHANNEL).write(|w| w.bits(TX_MUXIN));
+
+    // Enable the ISRs.
 
     if false {
         write_reg(0, 0, &0i16).defer();
@@ -251,13 +253,17 @@ pub fn read_reg<'a, T: Flat + ?Sized>(addr: u8, reg: u8, data: &'a mut T) -> Wai
     Wait(PhantomData)
 }
 
-/// Trait Flat is used to check that we pass sane types to read/write.
-pub trait Flat {
-    fn addr(&self) -> usize {(self as *const Self).addr()}
+impl crate::cpu::VectorTable {
+    pub const fn i2c_isr(&mut self) -> &mut Self {
+        use stm32u031::Interrupt::*;
+        self.isr(I2C1, i2c_isr).isr(DMA1_CHANNEL2_3, dma23_isr)
+    }
 }
 
-impl Flat for [u8] {}
-impl<const N: usize> Flat for [u8; N] {}
-impl<const N: usize> Flat for [u16; N] {}
-impl Flat for i16 {}
-impl<T: Flat> Flat for VCell<T> {}
+#[test]
+fn check_vtors() {
+    use stm32u031::Interrupt::*;
+
+    assert!(crate::VECTORS.isr[DMA1_CHANNEL2_3 as usize] == dma23_isr);
+    assert!(crate::VECTORS.isr[I2C1 as usize] == i2c_isr);
+}

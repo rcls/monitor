@@ -7,11 +7,11 @@ pub fn dma() -> &'static Dma {unsafe {&*stm32u031::DMA1::ptr()}}
 
 pub trait DMA {
     fn setup(&self, data: usize, len: usize, size: u8, write: bool);
-    #[inline]
+    // Write to peripheral.
     fn write(&self, data: usize, len: usize, size: u8) {
         self.setup(data, len, size, true)}
-    #[inline]
-    fn read (&self, data: usize, len: usize, size: u8) {
+    // Read from peripheral.
+    fn read(&self, data: usize, len: usize, size: u8) {
         self.setup(data, len, size, false)}
 }
 
@@ -27,3 +27,16 @@ impl DMA for Channel {
                 .PSIZE().bits(size).MSIZE().bits(size));
     }
 }
+
+/// Trait Flat is used to check that we pass sane types to read/write.
+pub trait Flat {
+    fn addr(&self) -> usize {(self as *const Self).addr()}
+}
+
+impl Flat for [u8] {}
+impl<const N: usize> Flat for [u8; N] {}
+impl<const N: usize> Flat for [u16; N] {}
+impl Flat for i16 {}
+impl Flat for u32 {}
+impl Flat for u64 {}
+//impl<T: Flat> Flat for VCell<T> {}

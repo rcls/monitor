@@ -122,3 +122,21 @@ pub fn dma1_isr() {
         DONE.write(true);
     }
 }
+
+impl crate::cpu::VectorTable {
+    pub const fn adc_isrs(&mut self) -> &mut Self {
+        use stm32u031::Interrupt::*;
+        self.isr(ADC_COMP, adc_isr).isr(DMA1_CHANNEL1, dma1_isr)
+    }
+}
+
+#[test]
+fn check_vtors() {
+    use stm32u031::Interrupt::*;
+    use super::VECTORS;
+
+    assert!(std::ptr::fn_addr_eq(VECTORS.isr[ADC_COMP as usize],
+                                 adc_isr as fn()));
+    assert!(std::ptr::fn_addr_eq(VECTORS.isr[DMA1_CHANNEL1 as usize],
+                                 dma1_isr as fn()));
+}

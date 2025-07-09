@@ -2,6 +2,7 @@
 #![cfg_attr(not(test), no_main)]
 #![feature(format_args_nl)]
 #![feature(sync_unsafe_cell)]
+#![allow(unpredictable_function_pointer_comparisons)]
 
 mod cpu;
 mod debug;
@@ -13,7 +14,10 @@ mod vcell;
 use vcell::{UCell, VCell, WFE};
 
 type I2C = stm32u031::I2C1;
-const CPU_CLK: u32 = 16000000;
+const CPU_CLK: u32 = 2000000;
+
+type LcdBits = u64;
+const LCD_BITS: u32 = 48;
 
 unsafe extern "C" {
     static mut __bss_start: u8;
@@ -45,7 +49,7 @@ fn systick_handler() {
 }
 
 fn advance(lcd: &mut lcd::LCD, num: u32) {
-    let mut segments = (lcd::DOT as u64) << 16;
+    let mut segments = (lcd::DOT as u64) << 8;
     let mut temp: i16 = 0;
     let _ = i2c::read_reg(i2c::TMP117, 0, &mut temp);
 
@@ -131,18 +135,13 @@ fn main() -> ! {
     rcc.IOPENR.write(|w| w.GPIOAEN().set_bit().GPIOBEN().set_bit());
     rcc.AHBENR.write(|w| w.DMA1EN().set_bit().TSCEN().set_bit());
     rcc.APBENR1.write(
-        |w| w.USART2EN().set_bit().I2C1EN().set_bit()
-            . PWREN().set_bit());
+        |w| w.I2C1EN().set_bit().PWREN().set_bit().LPUART1EN().set_bit());
     rcc.APBENR2.write(|w| w.SPI1EN().set_bit());
 
     cpu::init1();
 
-    // Pullups on USART RX pin.
+    // Pullups on UART RX pin.
     gpioa.PUPDR.write(|w| w.PUPD3().B_0x1());
-
-    // Configure UART lines.  sdbg! should now work.
-    gpioa.AFRL.write(|w| w.AFSEL2().B_0x7().AFSEL3().B_0x7());
-    gpioa.MODER.modify(|_, w| w.MODE2().B_0x2().MODE3().B_0x2()); // USART.
 
     debug::init();
 
@@ -173,8 +172,8 @@ fn main() -> ! {
     fn bit(i: stm32u031::Interrupt) -> u32 {1 << i as u16}
     unsafe {
         nvic.iser[0].write(
-            bit(I2C1) | bit(ADC_COMP) | bit(USART2_LPUART2) |
-            bit(DMA1_CHANNEL2_3) | bit(TSC));
+            bit(I2C1) | bit(ADC_COMP) | bit(debug::UART_ISR) |
+            bit(DMA1_CHANNEL2_3) | bit(DMA1_CHANNEL4_5_6_7) | bit(TSC));
     }
 
     // TSC has
@@ -204,10 +203,10 @@ fn main() -> ! {
     // Use 2µs pulses for now.
     // /16 prescaler.
     // Max counts is set as high as possible.
-    tsc.CR.write(unsafe{
+    tsc.CR.write(
         |w| w.CTPH().bits(4).CTPL().bits(4)
             . SSD().bits(1). SSE().set_bit().SSPSC().set_bit()
-            . PGPSC().B_0x5().MCV().B_0x6().TSCE().set_bit()});
+            . PGPSC().B_0x5().MCV().B_0x6().TSCE().set_bit());
     // Hysterysis & analog control?
     // tsc.IOHCR.write(
     //     |w| w.G7_IO1().set_bit().G7_IO2().set_bit().G7_IO3().set_bit()
@@ -235,8 +234,8 @@ fn main() -> ! {
     // systick counts at 16MHz / 8 = 2MHz.
     unsafe {
         let syst = &*cortex_m::peripheral::SYST::PTR;
-        syst.rvr.write(79999); // 2MHz / 80000 = 25Hz
-        syst.cvr.write(79999);
+        syst.rvr.write(CPU_CLK / 8 / 25 - 1);
+        syst.cvr.write(CPU_CLK / 8 / 25 - 1);
         syst.csr.write(3);
     }
 
@@ -248,79 +247,23 @@ fn main() -> ! {
         nvic.ipr[5].write(0xc0 << 8);
     }
 
-    // Try a single touch sense acquisition.
-    // Busy wait.
-    // for _ in 0..1<<20 {
-        // if tsc.ISR.read().EOAF().bit() {
-            // break;
-        // }
-    // }
-    // Log some results...
-    // dbgln!("CR {:#x} SR {:#x} GSR {:#x} C5 {:#x} C7 {:#x}",
-        //    tsc.CR.read().bits(),
-        //    tsc.ISR.read().bits(), tsc.IOGCSR.read().bits(),
-        //    tsc.IOG5CR.read().bits(), tsc.IOG7CR.read().bits());
-
     loop {
         WFE();
     }
 }
 
-#[repr(C)]
-pub struct VectorTable {
-    stack     : u32,
-    reset     : fn() -> !,
-    nmi       : fn(),
-    hard_fault: fn(),
-    reserved1 : [u32; 7],
-    svcall    : fn(),
-    reserved2 : [u32; 2],
-    pendsv    : fn(),
-    systick   : fn(),
-    interrupts: [fn(); 32],
-}
-
 #[used]
 #[unsafe(link_section = ".vectors")]
-pub static VTORS: VectorTable = VectorTable {
-    stack     : 0x20000000 + 12 * 1024,
-    reset     : main,
-    nmi       : bugger,
-    hard_fault: bugger,
-    reserved1 : [0; 7],
-    svcall    : bugger,
-    reserved2 : [0; 2],
-    pendsv    : bugger,
-    systick   : systick_handler,
-    interrupts: [
-        bugger, bugger, bugger, bugger, bugger, bugger, bugger, bugger,
-        bugger, bugger, i2c::dma23_isr, bugger,
-        bugger, bugger, bugger, bugger,
-        bugger, bugger, bugger, bugger, bugger, tsc_isr, bugger, i2c::i2c_isr,
-        bugger, bugger, bugger, bugger,
-        debug::debug_isr, bugger, bugger, bugger,
-    ],
-};
-
-fn bugger() {
-    panic!("Unexpected interrupt");
-}
+static VECTORS: cpu::VectorTable = *cpu::VectorTable::new()
+    .systick(systick_handler)
+    .isr(stm32u031::Interrupt::TSC, tsc_isr)
+    .debug_isr().i2c_isr().lcd_isr();
 
 #[test]
 fn check_vtors() {
     use stm32u031::Interrupt::*;
 
-    assert!(std::ptr::fn_addr_eq(VTORS.reset, main as fn()->!));
-    //assert!(std::ptr::fn_addr_eq(VTORS.interrupts[ADC_COMP as usize],
-    //                             adc_isr as fn()));
-    //assert!(std::ptr::fn_addr_eq(VTORS.interrupts[DMA1_CHANNEL1 as usize],
-    //                             dma1_isr as fn()));
-    assert!(std::ptr::fn_addr_eq(VTORS.interrupts[DMA1_CHANNEL2_3 as usize],
-                                 i2c::dma23_isr as fn()));
-    assert!(std::ptr::fn_addr_eq(VTORS.interrupts[I2C1 as usize],
-                                 i2c::i2c_isr as fn()));
-    assert!(std::ptr::fn_addr_eq(VTORS.interrupts[USART2_LPUART2 as usize],
-                                 debug::debug_isr as fn()));
-    assert!(std::ptr::fn_addr_eq(VTORS.interrupts[TSC as usize],
-                                 tsc_isr as fn()));
+    assert!(std::ptr::fn_addr_eq(VECTORS.reset, main as fn()->!));
+    assert!(VECTORS.systick == systick_handler);
+    assert!(std::ptr::fn_addr_eq(VECTORS.isr[TSC as usize], tsc_isr as fn()));
 }

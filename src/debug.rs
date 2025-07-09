@@ -204,3 +204,17 @@ const fn prescale(bit_rate: u32) -> (u32, u32) {
     }
     (presc as u32, calc(bit_rate, presc))
 }
+
+impl crate::cpu::VectorTable {
+    pub const fn debug_isr(&mut self) -> &mut Self {
+        self.isr(UART_ISR, debug_isr)
+    }
+}
+
+#[test]
+fn check_vtors() {
+    use super::VECTORS;
+
+    assert!(std::ptr::fn_addr_eq(VECTORS.isr[UART_ISR as usize],
+                                 debug_isr as fn()));
+}
