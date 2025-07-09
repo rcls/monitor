@@ -58,6 +58,10 @@ pub fn init() {
     let gpioa  = unsafe {&*stm32u031::GPIOA ::ptr()};
     let gpiob  = unsafe {&*stm32u031::GPIOB ::ptr()};
     let spi    = unsafe {&*stm32u031::SPI1  ::ptr()};
+    let rcc    = unsafe {&*stm32u031::RCC   ::ptr()};
+
+    // Enable SPI1 clock.
+    rcc.APBENR2.modify(|_, w| w.SPI1EN().set_bit());
 
     // OE pin A11, CP=B3, DAT=B5, STR=A15, COM = B9.
     // Set all the SPI control pins to output low.
@@ -168,7 +172,8 @@ impl crate::cpu::VectorTable {
 #[test]
 fn check_isr() {
     use stm32u031::Interrupt::*;
-    assert!(std::ptr::fn_addr_eq(
-        super::VECTORS.isr[DMA1_CHANNEL4_5_6_7 as usize],
-        lcd_dma_isr as fn()));
+    use crate::VECTORS;
+    assert!(VECTORS.isr[DMA1_CHANNEL4_5_6_7 as usize] == lcd_dma_isr);
+    assert!(VECTORS.ahb_clocks() & 1 != 0); // DMA.
+    //assert!(VECTORS.apb2_clocks() & 1 << 12 != 0); // SPI1
 }

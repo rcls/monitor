@@ -143,6 +143,9 @@ pub fn init() {
     gpioa.AFRL.modify(|_, w| w.AFSEL2().B_0x8().AFSEL3().B_0x8());
     gpioa.MODER.modify(|_, w| w.MODE2().B_0x2().MODE3().B_0x2());
 
+    // Pullups on the UART RX pin.
+    gpioa.PUPDR.modify(|_, w| w.PUPD3().B_0x1());
+
     // Set-up the UART TX.  TODO - we should enable RX at some point.  The dbg*
     // macros will work after this.
 
@@ -217,4 +220,6 @@ fn check_vtors() {
 
     assert!(std::ptr::fn_addr_eq(VECTORS.isr[UART_ISR as usize],
                                  debug_isr as fn()));
+    assert!(VECTORS.apb1_clocks() & (1 << 20) != 0, "{:#x} {:#x}",
+            VECTORS.reserved1[0], VECTORS.apb1_clocks());
 }

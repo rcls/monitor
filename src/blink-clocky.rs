@@ -18,6 +18,7 @@ const CPU_CLK: u32 = 2000000;
 
 type LcdBits = u64;
 const LCD_BITS: u32 = 48;
+const I2C_LINES: i2c::I2CLines = i2c::I2CLines::B6_B7;
 
 unsafe extern "C" {
     static mut __bss_start: u8;
@@ -128,53 +129,21 @@ fn main() -> ! {
     let rcc   = unsafe {&*stm32u031::RCC  ::ptr()};
     let tsc   = unsafe {&*stm32u031::TSC  ::ptr()};
 
-    //let scb   = unsafe {&*cortex_m::peripheral::SCB ::PTR};
-    let nvic  = unsafe {&*cortex_m::peripheral::NVIC::PTR};
-
-    // Enable clocks.
+    // Enable IO clocks.
     rcc.IOPENR.write(|w| w.GPIOAEN().set_bit().GPIOBEN().set_bit());
-    rcc.AHBENR.write(|w| w.DMA1EN().set_bit().TSCEN().set_bit());
-    rcc.APBENR1.write(
-        |w| w.I2C1EN().set_bit().PWREN().set_bit().LPUART1EN().set_bit());
-    rcc.APBENR2.write(|w| w.SPI1EN().set_bit());
 
     cpu::init1();
-
-    // Pullups on UART RX pin.
-    gpioa.PUPDR.write(|w| w.PUPD3().B_0x1());
 
     debug::init();
 
     sdbgln!("Debug up");
 
-    // Configure I2C (B6, B7) lines and wait for them to rise.
-    gpiob.PUPDR.write(|w| w.PUPD6().B_0x1().PUPD7().B_0x1());
-    gpiob.AFRL.write(|w| w.AFSEL6().B_0x4().AFSEL7().B_0x4());
-    gpiob.MODER.modify(|_, w| w.MODE6().B_0x2().MODE7().B_0x2());
-
     lcd::init();
-
-    sdbgln!("I2C line wait");
-
-    // Poll for the I2C lines to rise.  They may take a while if we are relying
-    // on only the internal pull-ups.
-    while gpiob.IDR.read().bits() & 0xc0 != 0xc0 {
-    }
-    sdbgln!("I2C line wait done; i2c init");
 
     i2c::init();
 
     sdbgln!("CPU init2");
     cpu::init2();
-
-    // Enable interrupts.
-    use stm32u031::Interrupt::*;
-    fn bit(i: stm32u031::Interrupt) -> u32 {1 << i as u16}
-    unsafe {
-        nvic.iser[0].write(
-            bit(I2C1) | bit(ADC_COMP) | bit(debug::UART_ISR) |
-            bit(DMA1_CHANNEL2_3) | bit(DMA1_CHANNEL4_5_6_7) | bit(TSC));
-    }
 
     // TSC has
     // Plus: G7_IO1 (A8)
@@ -231,7 +200,7 @@ fn main() -> ! {
     sdbgln!("Ok, should be flying!");
     dbgln!("Going!");
 
-    // systick counts at 16MHz / 8 = 2MHz.
+    // 25Hz of systick.
     unsafe {
         let syst = &*cortex_m::peripheral::SYST::PTR;
         syst.rvr.write(CPU_CLK / 8 / 25 - 1);
@@ -242,8 +211,8 @@ fn main() -> ! {
     // Reduce priority of the TSC interrupt.
     #[cfg(not(test))]
     unsafe {
+        let nvic  = &*cortex_m::peripheral::NVIC::PTR;
         assert_eq!(&nvic.ipr[5] as *const _ as usize, 0xE000E400 + 20);
-        //nvic.ipr[21].write(0xc0);
         nvic.ipr[5].write(0xc0 << 8);
     }
 
@@ -263,7 +232,7 @@ static VECTORS: cpu::VectorTable = *cpu::VectorTable::new()
 fn check_vtors() {
     use stm32u031::Interrupt::*;
 
-    assert!(std::ptr::fn_addr_eq(VECTORS.reset, main as fn()->!));
+    assert!(VECTORS.reset == main);
     assert!(VECTORS.systick == systick_handler);
-    assert!(std::ptr::fn_addr_eq(VECTORS.isr[TSC as usize], tsc_isr as fn()));
+    assert!(VECTORS.isr[TSC as usize] == tsc_isr);
 }

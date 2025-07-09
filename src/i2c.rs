@@ -3,9 +3,16 @@ use core::marker::PhantomData;
 use crate::dma::{Channel, DMA, Flat};
 use crate::vcell::{UCell, VCell, barrier, interrupt};
 
-use super::I2C;
+use crate::I2C;
 
 pub type Result = core::result::Result<(), ()>;
+
+#[allow(dead_code)]
+#[allow(non_camel_case_types)]
+pub enum I2CLines {
+    B6_B7,
+    A9_A10,
+}
 
 // Use DMA1 Ch2
 const RX_MUXIN: u32 = 9;
@@ -42,25 +49,23 @@ const F_DMA: u8 = 2;
 pub fn init() {
     let dmamux = unsafe {&*stm32u031::DMAMUX::ptr()};
     let i2c = unsafe {&*I2C::ptr()};
+    let gpioa = unsafe {&*stm32u031::GPIOA::ptr()};
+    let gpiob = unsafe {&*stm32u031::GPIOB::ptr()};
 
-    // 50kb/s from 16MHz.
-    #[cfg(false)]
-    i2c.TIMINGR.write(
-        |w| w.PRESC().bits(7)
-            . SCLL().bits(19)
-            . SCLH().bits(15)
-            . SDADEL().bits(2)
-            . SCLDEL().bits(4));
-    // 400kb/s from 16MHz, STM documented timings.
-    #[cfg(false)]
-    i2c.TIMINGR.write(
-        |w| w.PRESC().bits(1)
-            . SCLL().bits(9)
-            . SCLH().bits(3)
-            . SDADEL().bits(2)
-            . SCLDEL().bits(3));
+    // Drive the lines up briefly.
+    match crate::I2C_LINES {
+        I2CLines::B6_B7 => {
+            gpiob.MODER.modify(|_, w| w.MODE6().B_0x1().MODE7().B_0x1());
+            gpiob.BSRR.write(|w| w.BS6().set_bit().BS7().set_bit());
+        },
+        I2CLines::A9_A10 => {
+            gpioa.MODER.modify(|_, w| w.MODE9().B_0x1().MODE10().B_0x1());
+            gpioa.BSRR.write(|w| w.BS9().set_bit().BS10().set_bit());
+        }
+    }
+
     // 400kb/s from 16MHz, longer clock pulse.
-    if super::CPU_CLK == 16000000 {
+    if crate::CPU_CLK == 16000000 {
         i2c.TIMINGR.write(
             |w| w.PRESC().bits(1)
                 . SCLL().bits(3)
@@ -68,7 +73,7 @@ pub fn init() {
                 . SDADEL().bits(1)
                 . SCLDEL().bits(1));
     }
-    else if super::CPU_CLK == 2000000 {
+    else if crate::CPU_CLK == 2000000 {
         i2c.TIMINGR.write(
             |w| w.PRESC().bits(0)
                 . SCLL().bits(1)
@@ -78,6 +83,22 @@ pub fn init() {
     }
     else {
         crate::vcell::unreachable();
+    }
+
+    // Configure the lines for use.
+    match crate::I2C_LINES {
+        I2CLines::B6_B7 => {
+            gpiob.AFRL.modify(|_,w| w.AFSEL6().B_0x4().AFSEL7().B_0x4());
+            gpiob.PUPDR.modify(|_,w| w.PUPD6().B_0x1().PUPD7().B_0x1());
+            gpiob.OTYPER.modify(|_,w| w.OT6().set_bit().OT7().set_bit());
+            gpiob.MODER.modify(|_, w| w.MODE6().B_0x2().MODE7().B_0x2());
+        },
+        I2CLines::A9_A10 => {
+            gpioa.AFRH.modify(|_,w| w.AFSEL9().B_0x4().AFSEL10().B_0x4());
+            gpioa.PUPDR.modify(|_,w| w.PUPD9().B_0x1().PUPD10().B_0x1());
+            gpioa.OTYPER.modify(|_,w| w.OT9().set_bit().OT10().set_bit());
+            gpioa.MODER.modify(|_, w| w.MODE9().B_0x2().MODE10().B_0x2());
+        }
     }
 
     // Enable everything.
@@ -93,8 +114,6 @@ pub fn init() {
 
     dmamux.CCR(RX_CHANNEL).write(|w| w.bits(RX_MUXIN));
     dmamux.CCR(TX_CHANNEL).write(|w| w.bits(TX_MUXIN));
-
-    // Enable the ISRs.
 
     if false {
         write_reg(0, 0, &0i16).defer();
@@ -263,7 +282,10 @@ impl crate::cpu::VectorTable {
 #[test]
 fn check_vtors() {
     use stm32u031::Interrupt::*;
+    use crate::VECTORS;
 
-    assert!(crate::VECTORS.isr[DMA1_CHANNEL2_3 as usize] == dma23_isr);
-    assert!(crate::VECTORS.isr[I2C1 as usize] == i2c_isr);
+    assert!(VECTORS.isr[DMA1_CHANNEL2_3 as usize] == dma23_isr);
+    assert!(VECTORS.isr[I2C1 as usize] == i2c_isr);
+    assert!(VECTORS.ahb_clocks() & 1 != 0); // DMA1.
+    assert!(VECTORS.apb1_clocks() & 1 << 21 != 0); // I2C1.
 }

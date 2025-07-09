@@ -26,6 +26,8 @@ const CPU_CLK: u32 = 16000000;
 
 const ADC_CHANNELS: [u32; 3] = [9, 17, 18];
 
+const I2C_LINES: i2c::I2CLines = i2c::I2CLines::A9_A10;
+
 unsafe extern "C" {
     static mut __bss_start: u8;
     static mut __bss_end: u8;
@@ -189,31 +191,13 @@ pub fn main() -> ! {
     let gpioa = unsafe {&*stm32u031::GPIOA::ptr()};
     let rcc   = unsafe {&*stm32u031::RCC  ::ptr()};
     let scb   = unsafe {&*cortex_m::peripheral::SCB ::PTR};
-    let nvic  = unsafe {&*cortex_m::peripheral::NVIC::PTR};
 
     // Enable clocks.
     rcc.IOPENR.write(|w| w.GPIOAEN().set_bit());
-    rcc.AHBENR.write(|w| w.DMA1EN().set_bit().TSCEN().set_bit());
-    rcc.APBENR1.write(
-        |w| w.LPUART1EN().set_bit().I2C1EN().set_bit().PWREN().set_bit());
-    rcc.APBENR2.write(|w| w.ADCEN().set_bit());
 
     cpu::init1();
 
-    // Pullups on I2C and UART RX pin.
-    gpioa.PUPDR.write(|w| w.PUPD3().B_0x1().PUPD9().B_0x1().PUPD10().B_0x1());
-
-    // Set I2C pins to open drain.
-    gpioa.OTYPER.write(|w| w.OT9().set_bit().OT10().set_bit());
-
-    // Configure pin functions.
-    // PA9,10, I2C1, SCL, SDA, AF4.
-    gpioa.AFRH.write(|w| w.AFSEL9().B_0x4().AFSEL10().B_0x4());
-
-    gpioa.MODER.modify(
-        |_, w| w
-            .MODE9 ().B_0x2().MODE10().B_0x2()   // I2C.
-            .MODE11().B_0x1().MODE12().B_0x1()); // GPO LEDs.
+    gpioa.MODER.modify(|_, w| w.MODE11().B_0x1().MODE12().B_0x1()); // GPO LEDs.
 
     debug::init();
 
@@ -222,10 +206,6 @@ pub fn main() -> ! {
 
     adc::init1();
 
-    // Poll for the I2C lines to rise.  They may take a while if we are relying
-    // on only the internal pull-ups.
-    while gpioa.IDR.read().bits() & 0x600 != 0x600 {
-    }
     i2c::init();
 
     // Set the systick interrupt priority to a high value (other interrupts
@@ -240,15 +220,6 @@ pub fn main() -> ! {
 
     cpu::init2();
 
-    // Enable interrupts for I2C1, ADC and DMA.  FIXME - correct channels!
-    use stm32u031::Interrupt::*;
-    fn bit(i: stm32u031::Interrupt) -> u32 {1 << i as u16}
-    unsafe {
-        nvic.iser[0].write(
-            bit(I2C1) | bit(ADC_COMP) | bit(debug::UART_ISR) |
-            bit(DMA1_CHANNEL1) | bit(DMA1_CHANNEL2_3));
-    }
-
     dbgln!("Going!");
 
     let _ = oled::init();
@@ -260,8 +231,8 @@ pub fn main() -> ! {
     // systick counts at 16MHz / 8 = 2MHz.
     unsafe {
         let syst = &*cortex_m::peripheral::SYST::PTR;
-        syst.rvr.write(79999); // 2MHz / 80000 = 25Hz
-        syst.cvr.write(79999);
+        syst.rvr.write(CPU_CLK / 8 / 25 - 1); // 2MHz / 80000 = 25Hz
+        syst.cvr.write(CPU_CLK / 8 / 25 - 1);
         syst.csr.write(3);
     }
 

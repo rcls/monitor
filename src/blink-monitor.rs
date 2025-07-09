@@ -80,6 +80,9 @@ pub fn main() -> ! {
     let uart  = unsafe {&*stm32u031::LPUART2::ptr()};
     let i2c   = unsafe {&*stm32u031::I2C1  ::ptr()};
     let adc   = unsafe {&*stm32u031::ADC   ::ptr()};
+    let rcc   = unsafe {&*stm32u031::RCC   ::ptr()};
+
+    rcc.IOPENR.write(|w| w.GPIOAEN().set_bit());
 
     // Go to 16MHz.
     cpu::init1();

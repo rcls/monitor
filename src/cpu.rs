@@ -12,13 +12,15 @@ const MSIRANGE: u8 = const {
     }
 };
 
-#[inline(always)]
 pub fn init1() {
-    //let gpioa = unsafe {&*stm32u031::GPIOA::ptr()};
-    let pwr   = unsafe {&*stm32u031::PWR  ::ptr()};
-    let rcc   = unsafe {&*stm32u031::RCC  ::ptr()};
-    //let scb   = unsafe {&*cortex_m::peripheral::SCB ::PTR};
-    //let nvic  = unsafe {&*cortex_m::peripheral::NVIC::PTR};
+    let pwr = unsafe {&*stm32u031::PWR::ptr()};
+    let rcc = unsafe {&*stm32u031::RCC::ptr()};
+
+    // We can infer some of what clocks to enable from the interrupt mask
+    // hidden in VECTORS.reserved1.  This is a bit inexact!
+    rcc.AHBENR .write(|w| w.bits(const {crate::VECTORS.ahb_clocks()}));
+    rcc.APBENR1.write(|w| w.bits(const {crate::VECTORS.apb1_clocks()}));
+    rcc.APBENR2.write(|w| w.bits(const {crate::VECTORS.apb2_clocks()}));
 
     // Use MSI at appropriate frequency.
     rcc.CR.write(
@@ -39,11 +41,14 @@ pub fn init1() {
 
     // Enable the LSE.  Set high drive strength for crystal start-up.
     rcc.BDCR.write(|w| w.LSEON().set_bit().LSEDRV().B_0x3());
+
+
 }
 
 pub fn init2() {
     let rcc = unsafe {&*stm32u031::RCC  ::ptr()};
     let scb = unsafe {&*cortex_m::peripheral::SCB ::PTR};
+    let nvic= unsafe {&*cortex_m::peripheral::NVIC::PTR};
 
     // Set the systick and pendsv interrupt priority to a high value (other
     // interrupts pre-empt).
@@ -63,6 +68,11 @@ pub fn init2() {
             . MSIPLLEN().set_bit());
     // Reduce drive strength.
     rcc.BDCR.write(|w| w.LSEON().set_bit().LSEDRV().B_0x0());
+
+    // Enable interrupts.  reserved1 has been abused to track what to enable.
+    unsafe {
+        nvic.iser[0].write(crate::VECTORS.reserved1[0]);
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -100,9 +110,33 @@ impl VectorTable {
         self
     }
     pub const fn isr(&mut self,
-                     number: stm32u031::Interrupt, handler: fn()) -> &mut Self {
-        self.isr[number as usize] = handler;
+                     isr: stm32u031::Interrupt, handler: fn()) -> &mut Self {
+        self.isr[isr as usize] = handler;
+        // We abuse reserved1 to track what ISRs are used!
+        self.reserved1[isr as usize / 32] |= 1 << isr as u32 % 32;
         self
+    }
+    pub const fn used(&self, isr: stm32u031::Interrupt) -> bool {
+        self.reserved1[0] & (1 << isr as u32) != 0
+    }
+    pub const fn used_bit(&self, isr: stm32u031::Interrupt, b: u32) -> u32 {
+        if self.used(isr) {1 << b} else {0}
+    }
+    pub const fn ahb_clocks(&self) -> u32 {
+        // TSC -> 24
+        use stm32u031::Interrupt::*;
+        self.used_bit(TSC, 24) | self.used_bit(DMA1_CHANNEL1, 0)
+        | self.used_bit(DMA1_CHANNEL2_3, 0)
+        | self.used_bit(DMA1_CHANNEL4_5_6_7, 0)
+    }
+    pub const fn apb1_clocks(&self) -> u32 {
+        use stm32u031::Interrupt::*;
+        // Always PWR.
+        1 << 28 | self.used_bit(USART3_LPUART1, 20) | self.used_bit(I2C1, 21)
+    }
+    pub const fn apb2_clocks(&self) -> u32 {
+        use stm32u031::Interrupt::*;
+        self.used_bit(ADC_COMP, 20) | self.used_bit(SPI1, 12)
     }
 }
 
