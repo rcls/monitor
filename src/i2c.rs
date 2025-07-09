@@ -45,20 +45,20 @@ pub fn init() {
 
     // 50kb/s from 16MHz.
     #[cfg(false)]
-    i2c.TIMINGR.write(unsafe{
+    i2c.TIMINGR.write(
         |w| w.PRESC().bits(7)
             . SCLL().bits(19)
             . SCLH().bits(15)
             . SDADEL().bits(2)
-            . SCLDEL().bits(4)});
+            . SCLDEL().bits(4));
     // 400kb/s from 16MHz, STM documented timings.
     #[cfg(false)]
-    i2c.TIMINGR.write(unsafe{
+    i2c.TIMINGR.write(
         |w| w.PRESC().bits(1)
             . SCLL().bits(9)
             . SCLH().bits(3)
             . SDADEL().bits(2)
-            . SCLDEL().bits(3)});
+            . SCLDEL().bits(3));
     // 400kb/s from 16MHz, longer clock pulse.
     #[cfg(true)]
     i2c.TIMINGR.write(unsafe{
@@ -75,12 +75,12 @@ pub fn init() {
             . STOPIE().set_bit());
 
     // I2C1_RX to DMA2 channel 2.
-    rx_channel().PAR.write(|w| unsafe {w.bits(i2c.RXDR.as_ptr().addr() as u32)});
+    rx_channel().PAR.write(|w| w.bits(i2c.RXDR.as_ptr().addr() as u32));
     // I2C1_TX to DMA2 channel 3.
-    tx_channel().PAR.write(|w| unsafe {w.bits(i2c.TXDR.as_ptr().addr() as u32)});
+    tx_channel().PAR.write(|w| w.bits(i2c.TXDR.as_ptr().addr() as u32));
 
-    dmamux.CCR(RX_CHANNEL).write(|w| unsafe {w.bits(RX_MUXIN)});
-    dmamux.CCR(TX_CHANNEL).write(|w| unsafe {w.bits(TX_MUXIN)});
+    dmamux.CCR(RX_CHANNEL).write(|w| w.bits(RX_MUXIN));
+    dmamux.CCR(TX_CHANNEL).write(|w| w.bits(TX_MUXIN));
 
     if false {
         write_reg(0, 0, &0i16).defer();
@@ -102,16 +102,16 @@ pub fn i2c_isr() {
 
     if todo != 0 && status.TC().bit() {
         // Assume write -> read transition.
-        i2c.CR2.modify(unsafe{
+        i2c.CR2.modify(
             |_, w| w.NBYTES().bits(todo as u8).RELOAD().bit(more)
-                .START().set_bit().AUTOEND().set_bit().RD_WRN().set_bit()});
+                .START().set_bit().AUTOEND().set_bit().RD_WRN().set_bit());
     }
     else if false && todo != 0 && status.TCR().bit() {
         // Continuation.  No start, just more data.
         let cr2 = i2c.CR2.read();
-        i2c.CR2.write(unsafe{
+        i2c.CR2.write(
             |w| w.bits(cr2.bits()).RELOAD().bit(more).NBYTES()
-                .bits(todo as u8)});
+                .bits(todo as u8));
         crate::sdbgln!("Reload {todo} {:#x} {:#x}", status.bits(), cr2.bits());
     }
     else if status.STOPF().bit() {
@@ -127,7 +127,7 @@ pub fn i2c_isr() {
     }
     else {
         crate::sdbgln!("Unexpected I2C ISR {:#x} {:#x}", status.bits(),
-            i2c.CR2.read().bits());
+                       i2c.CR2.read().bits());
         loop{}
     }
 }
@@ -138,8 +138,6 @@ pub fn dma23_isr() {
     // FIXME - do we need to wait for TC when appropriate?
     let status = dma.ISR.read();
     dma.IFCR.write(|w| w.CGIF2().set_bit().CGIF3().set_bit());
-    // TODO - definitive way to wait for I2C done?
-    // dbgln!("DMA23 ISR {status:#x}");
     if status.GIF2().bit() { // one-based v. zero based...
         dma.CH(1).CR.write(|w| w.EN().clear_bit());
     }
@@ -161,9 +159,9 @@ impl I2cContext {
 
         // Synchronous I2C start for the reg ptr write.
         // No DMA write is active so the dma req. hopefully just gets ignored.
-        i2c.CR2.write(unsafe{
-            |w| w.START().set_bit().SADD().bits(addr as u16).NBYTES().bits(1)});
-        i2c.TXDR.write(|w| unsafe{w.bits(reg as u32)});
+        i2c.CR2.write(
+            |w| w.START().set_bit().SADD().bits(addr as u16).NBYTES().bits(1));
+        i2c.TXDR.write(|w| w.bits(reg as u32));
 
         rx_channel().read(data, len, 0);
     }
@@ -172,10 +170,10 @@ impl I2cContext {
         let i2c = unsafe {&*I2C::ptr()};
 
         interrupt::disable();
-        i2c.CR2.write(unsafe{
+        i2c.CR2.write(
             |w| w.START().set_bit().AUTOEND().set_bit()
-                . SADD().bits(addr as u16).NBYTES().bits(len as u8 + 1)});
-        i2c.TXDR.write(|w| unsafe{w.bits(reg as u32)});
+                . SADD().bits(addr as u16).NBYTES().bits(len as u8 + 1));
+        i2c.TXDR.write(|w| w.bits(reg as u32));
         tx_channel().write(data, len, 0);
         self.arm();
         interrupt::enable();
@@ -186,9 +184,9 @@ impl I2cContext {
         let i2c = unsafe {&*I2C::ptr()};
 
         interrupt::disable();
-        i2c.CR2.write(unsafe{
+        i2c.CR2.write(
             |w| w.START().set_bit().AUTOEND().bit(last).RELOAD().bit(reload)
-                . SADD().bits(addr as u16).NBYTES().bits(len as u8)});
+                . SADD().bits(addr as u16).NBYTES().bits(len as u8));
         // Do the DMA set-up in the shadow of the address handling.  In case
         // we manage to get an I2C error before the DMA set-up is done, we have
         // interrupts disabled.

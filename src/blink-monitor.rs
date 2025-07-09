@@ -18,7 +18,7 @@ const TMP117: u8 = 0x92;
 fn i2c_tx_byte(i2c: &I2C, val: u8) -> Option<()> {
     loop {
         let status = i2c.ISR.read();
-        i2c.ICR.write(unsafe{|w| w.bits(status.bits() & 0x12)});
+        i2c.ICR.write(|w| w.bits(status.bits() & 0x12));
         if status.NACKF().bit() {
             return None;
         }
@@ -26,7 +26,7 @@ fn i2c_tx_byte(i2c: &I2C, val: u8) -> Option<()> {
             break;
         }
     }
-    i2c.TXDR.write(unsafe{|w| w.TXDATA().bits(val)});
+    i2c.TXDR.write(|w| w.TXDATA().bits(val));
     Some(())
 }
 
@@ -39,7 +39,7 @@ fn i2c_rx_byte(i2c: &I2C) -> u8 {
 fn i2c_wait_tc(i2c: &I2C) -> Option<()> {
     loop {
         let status = i2c.ISR.read();
-        i2c.ICR.write(unsafe{|w| w.bits(status.bits() & 0x50)});
+        i2c.ICR.write(|w| w.bits(status.bits() & 0x50));
         if status.NACKF().bit() {
             return None;
         }
@@ -51,9 +51,9 @@ fn i2c_wait_tc(i2c: &I2C) -> Option<()> {
 
 fn i2c_tx_reg16(i2c: &I2C, addr: u8, reg: u8, val: u16, last: bool)
                 -> Option<()> {
-    i2c.CR2.write(unsafe{
+    i2c.CR2.write(
         |w| w.START().set_bit().AUTOEND().bit(last)
-            . SADD().bits(addr as u16).NBYTES().bits(3)});
+            . SADD().bits(addr as u16).NBYTES().bits(3));
     i2c_tx_byte(i2c, reg)?;
     i2c_tx_byte(i2c, (val >> 8) as u8)?;
     i2c_tx_byte(i2c, val as u8)?;
@@ -61,14 +61,13 @@ fn i2c_tx_reg16(i2c: &I2C, addr: u8, reg: u8, val: u16, last: bool)
 }
 
 fn i2c_rx_reg16(i2c: &I2C, addr: u8, reg: u8, last: bool) -> Option<u16> {
-    i2c.CR2.write(unsafe{
-        |w| w.START().set_bit()
-            . SADD().bits(addr as u16).NBYTES().bits(1)});
+    i2c.CR2.write(
+        |w| w.START().set_bit(). SADD().bits(addr as u16).NBYTES().bits(1));
     i2c_tx_byte(i2c, reg)?;
     i2c_wait_tc(i2c);
-    i2c.CR2.write(unsafe{
+    i2c.CR2.write(
         |w| w.RD_WRN().set_bit().START().set_bit().AUTOEND().bit(last)
-            . SADD().bits(addr as u16).NBYTES().bits(2)});
+            . SADD().bits(addr as u16).NBYTES().bits(2));
     let byte1 = i2c_rx_byte(i2c);
     let byte2 = i2c_rx_byte(i2c);
     Some(byte1 as u16 * 256 + byte2 as u16)
@@ -188,7 +187,7 @@ pub fn main() -> ! {
             . SDADEL().bits(2)
             . SCLDEL().bits(3)});
     // 400kb/s from 16MHz, longer clock pulse.
-    i2c.TIMINGR.write(unsafe{
+    i2c.TIMINGR.write(
         |w| w.PRESC ().bits(1)
             . SCLL  ().bits(3)
             . SCLH  ().bits(9)
@@ -199,10 +198,10 @@ pub fn main() -> ! {
     i2c.CR1.write(|w| w.PE().set_bit());
 
     // Wait for LSE and then enable the MSI FLL.
-    gpioa.BSRR.write(|w| unsafe {w.bits(1 << 11 | 1 << 12)});
+    gpioa.BSRR.write(|w| w.bits(1 << 11 | 1 << 12));
     while !rcc.BDCR.read().LSERDY().bit() {
     }
-    gpioa.BSRR.write(|w| unsafe {w.bits(1 << 27 | 1 << 28)});
+    gpioa.BSRR.write(|w| w.bits(1 << 27 | 1 << 28));
     rcc.CR.write(
         |w| w.MSIRANGE().B_0x8().MSIRGSEL().set_bit().MSION().set_bit()
             . MSIPLLEN().set_bit());
@@ -215,8 +214,8 @@ pub fn main() -> ! {
 
     let mut adc_idx = 0;
     loop {
-        gpioa.BSRR.write(|w| unsafe {w.bits(1 << 27 | 1 << 12)});
-        usart.TDR.write(|w| unsafe {w.bits('U' as u32)});
+        gpioa.BSRR.write(|w| w.bits(1 << 27 | 1 << 12));
+        uart.TDR.write(|w| w.bits('U' as u32));
 
         // Trigger a temperature conversion.
         i2c_tx_reg16(i2c, TMP117, 1, 0xc, true);
@@ -224,8 +223,8 @@ pub fn main() -> ! {
         for _ in 0..2666666 {
             nothing();
         }
-        gpioa.BSRR.write(|w| unsafe {w.bits(1 << 28 | 1 << 11)});
-        usart.TDR.write(|w| unsafe {w.bits('y' as u32)});
+        gpioa.BSRR.write(|w| w.bits(1 << 28 | 1 << 11));
+        uart.TDR.write(|w| w.bits('y' as u32));
 
         // Read the temperature conversion.
         if let Some(temp) = i2c_rx_reg16(i2c, TMP117, 0, true) {
@@ -243,7 +242,7 @@ pub fn main() -> ! {
         }
         // Read an ADC measurement.
         let adc_st = adc.ISR.read().bits();
-        adc.ISR.write(unsafe{|w| w.bits(12)});
+        adc.ISR.write(|w| w.bits(12));
         if adc_st & 4 != 0 {
             adc_idx += 1;
             let val = adc.DR.read().DATA().bits() as i32;

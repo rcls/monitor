@@ -18,13 +18,12 @@ pub trait DMA {
 impl DMA for Channel {
     // size is 0 = 1byte, 1=2byte.
     fn setup(&self, data: usize, len: usize, size: u8, write: bool) {
-        self.MAR .write(|w| unsafe {w.bits(data as u32)});
-        self.NDTR.write(|w| unsafe {w.bits(len as u32)});
-        // dbgln!("DMA CCR3 {:#x}", dma.CCR3.read().bits());
+        self.MAR .write(|w| w.bits(data as u32));
+        self.NDTR.write(|w| w.bits(len as u32));
         barrier();
-        self.CR.write(unsafe{
+        self.CR.write(
             |w| w.EN().set_bit().TCIE().set_bit().TEIE().set_bit()
                 .MINC().set_bit().DIR().bit(write)
-                .PSIZE().bits(size).MSIZE().bits(size)});
+                .PSIZE().bits(size).MSIZE().bits(size));
     }
 }

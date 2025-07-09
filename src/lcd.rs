@@ -15,7 +15,7 @@ pub const SEG_E: u8 = 8;
 pub const SEG_F: u8 = 64;
 pub const SEG_G: u8 = 128;
 pub const DOT: u8 = 1;
- 
+
 pub const D0: u8 = SEG_A | SEG_B | SEG_C | SEG_D | SEG_E | SEG_F;
 pub const D1: u8 = SEG_B | SEG_C;
 pub const D2: u8 = SEG_A | SEG_B | SEG_D | SEG_E | SEG_G;
@@ -103,7 +103,6 @@ pub fn update_lcd(bits: u64, comm: bool) {
     // FIXME... poll for SPI properly.  Check all words received.
     while spi.SR.read().BSY().bit() {
     }
-    //sdbgln!("WTF, lets wait a bit more");
 
     // Set STR (A15) high.  Set col1 (A12), it's not driven yet.  (If both S and
     // R are set, then S wins.)

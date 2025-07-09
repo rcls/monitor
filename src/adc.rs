@@ -33,8 +33,8 @@ pub fn init1() {
 
     // DMAMUX mapping.  Note the zero-based v. one-based f**kup in the
     // datasheet.  By changing these to arrays we have both zero-based.
-    dmamux.CCR(0).write(|w| unsafe {w.bits(ADC_MUXIN)});
-    dma.CH(0).PAR.write(|w| unsafe {w.bits(adc.DR.as_ptr().addr() as u32)});
+    dmamux.CCR(0).write(|w| w.bits(ADC_MUXIN));
+    dma.CH(0).PAR.write(|w| w.bits(adc.DR.as_ptr().addr() as u32));
 
     // Wait for LDO ready... ≈20µs.
     for _ in 0..200 {
@@ -90,7 +90,7 @@ pub fn adc_isr() {
     let dma = unsafe {&*stm32u031::DMA1::ptr()};
     // Get EOC and OVR bits.
     let isr = adc.ISR.read().bits();
-    adc.ISR.write(|w| unsafe{w.bits(isr & 0x18)});
+    adc.ISR.write(|w| w.bits(isr & 0x18));
     // sdbgln!("ADC ISR {isr:#x}");
     // FIXME - abort if OVR is set.
     if dma.CH(0).NDTR.read().NDT().bits() == 0 {
@@ -112,7 +112,7 @@ pub fn dma1_isr() {
     dma.IFCR.write(|w| w.CGIF1().set_bit());
     // sdbgln!("DMA1 ISR {status:#x}");
     if status & 10 != 0 {
-        dma.CH(0).CR.write(|w| unsafe {w.bits(0)});
+        dma.CH(0).CR.write(|w| w.bits(0));
     }
     if status & 10 != 0 && adc.CR.read().ADSTART().bit() {
         // sdbgln!("ADC DONE");

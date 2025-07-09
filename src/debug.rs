@@ -42,7 +42,7 @@ impl DebugA {
     fn enable(&self, w: u8) {
         barrier();
         self.w.write(w);
-        let usart  = unsafe {&*stm32u031::USART2::ptr()};
+        let uart  = unsafe {&*UART::ptr()};
         // Use the FIFO empty interrupt.  Normally we should be fast enough
         // to refill before the last byte finishes.
         usart.CR1.write(
@@ -57,8 +57,7 @@ impl DebugA {
         let w = *self.w.as_mut() as usize;
         let mut done = 0;
         while r != w && done < FIFO_SIZE {
-            usart.TDR.write(
-                |w| unsafe{w.bits(*self.buf[r].as_ref() as u32)});
+            uart.TDR.write(|w| w.bits(*self.buf[r].as_ref() as u32));
             r = (r + 1) & 0xff;
             done += 1;
         }
@@ -77,7 +76,7 @@ fn sdebug_bytes(s: &[u8]) -> core::fmt::Result {
         // This is a bit manky...
         while !uart.ISR.read().TXFNF().bit() {
         }
-        uart.TDR.write(|w| unsafe { w.bits(b as u32) });
+        uart.TDR.write(|w| w.bits(b as u32));
     }
     Ok(())
 }

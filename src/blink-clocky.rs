@@ -77,7 +77,7 @@ static TSC_BUSY: VCell<u8> = VCell::new(0);
 fn tsc_isr() {
     let tsc   = unsafe {&*stm32u031::TSC::ptr()};
     let sr = tsc.ISR.read().bits();
-    tsc.ICR.write(unsafe{|w| w.bits(sr)});
+    tsc.ICR.write(|w| w.bits(sr));
     let ccr = tsc.IOCCR.read();
     let gsr = tsc.IOGCSR().read().bits();
     let val;
