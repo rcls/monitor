@@ -2,7 +2,7 @@
 KICAD_PRO:=$(wildcard *.kicad_pro)
 PROJECTS=$(KICAD_PRO:%.kicad_pro=%)
 
-$(PROJECTS:%=%.all): %.all: out/%_bom.csv out/%_cpl.csv out/%_gerber.zip
+$(PROJECTS:%=%.all): %.all: out/%_bom.csv out/%_cpl.csv out/%_gerber.zip out/%.rpt
 
 .PHONY: $(PROJECTS:%=%.all) $(PROJECTS:%=%.drc)
 
@@ -13,10 +13,10 @@ out/%.rpt: %.kicad_pcb
 	mkdir -p out
 	kicad-cli pcb drc --exit-code-violations -o $@ $<
 
-#%_bom.csv: %_bom_raw.csv filter_bom.py
-#	./filter_bom.py $< $@
+$(PROJECTS:%=out/%_bom.csv): %_bom.csv: %_bom_raw.csv filter_pos.py
+	./filter_pos.py bom $< $@
 
-$(PROJECTS:%=out/%_bom.csv): out/%_bom.csv: %.kicad_sch *.kicad_sch Parts.kicad_sym
+$(PROJECTS:%=out/%_bom_raw.csv): out/%_bom_raw.csv: %.kicad_sch *.kicad_sch Parts.kicad_sym
 	mkdir -p out
 #	kicad-cli sch export bom --exclude-dnp --labels Comment,Designator,Footprint,'JLCPcb Part' --ref-range-delimiter='' -o $@ $<
 	kicad-cli sch export bom --preset JLCPCB --exclude-dnp --labels Comment,Designator,Footprint,'JLCPcb Part' --ref-range-delimiter='' -o $@ $<
@@ -35,7 +35,7 @@ out/%_cpl_all.csv: %.kicad_pcb
 
 out/%_cpl.csv: out/%_cpl_all.csv out/%_bom.csv filter_pos.py
 	mkdir -p out
-	./filter_pos.py $< out/$*_bom.csv $@
+	./filter_pos.py cpl $< out/$*_bom.csv $@
 
 .PHONY: clean
 clean:
