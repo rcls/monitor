@@ -5,6 +5,7 @@ fp-info-cache
 ~*.lck
 *.pdf
 temp/
+temp.*
 out/
 _autosave-*
 stm32u031/raw/

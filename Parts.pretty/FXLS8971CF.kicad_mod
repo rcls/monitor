@@ -1,0 +1,227 @@
+(footprint "FXLS8971CF"
+	(version 20241229)
+	(generator "pcbnew")
+	(generator_version "9.0")
+	(layer "F.Cu")
+	(descr "SOT-2197-1")
+	(tags "Accelerometer")
+	(property "Reference" "AC**"
+		(at 0 0 0)
+		(layer "F.SilkS")
+		(uuid "53e210f8-885e-4ca6-8025-2d3640b5aef7")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.254)
+			)
+		)
+	)
+	(property "Value" "FXLS8971CF"
+		(at 0 0 0)
+		(layer "F.SilkS")
+		(hide yes)
+		(uuid "1f050731-e46d-4365-8c6b-039578a315b7")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.254)
+			)
+		)
+	)
+	(property "Datasheet" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "1bcb3a8d-acf2-4a8e-a4a3-c6250dfef11f")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Description" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "ecbcd12a-aed7-4937-827c-850b4b1c29f1")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr smd)
+	(fp_arc
+		(start -2.4 -0.975)
+		(mid -2.35 -1.025)
+		(end -2.3 -0.975)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "8ee2487b-81ef-4d64-bae8-dda9f856c4b1")
+	)
+	(fp_arc
+		(start -2.3 -0.975)
+		(mid -2.35 -0.925)
+		(end -2.4 -0.975)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "5354a2fe-9022-43cd-8e4d-fa2a580237be")
+	)
+	(fp_rect
+		(start -2 -2)
+		(end 2 2)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.CrtYd")
+		(uuid "4dda84d0-1628-4f7f-a20a-0717fa38ebb5")
+	)
+	(fp_rect
+		(start -1.5 -1.5)
+		(end 1.5 1.5)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.Fab")
+		(uuid "41a8f27d-2987-4853-a9e1-a9b2123a4784")
+	)
+	(fp_text user "${REFERENCE}"
+		(at 0 0 0)
+		(layer "F.Fab")
+		(uuid "0db4d5ac-3451-417e-be9b-ce08c2e905e6")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.254)
+			)
+		)
+	)
+	(pad "1" smd oval
+		(at -1.475 -0.975 90)
+		(size 0.35 0.85)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "4d6c314a-cf38-44a3-98be-4240c099e922")
+	)
+	(pad "2" smd oval
+		(at -1.475 -0.325 90)
+		(size 0.35 0.85)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "31b825f3-56bb-4019-9433-8307ff9b44dd")
+	)
+	(pad "3" smd oval
+		(at -1.475 0.325 90)
+		(size 0.35 0.85)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "77962759-d0ca-4416-9aa3-14b16d03c4f9")
+	)
+	(pad "4" smd oval
+		(at -1.475 0.975 90)
+		(size 0.35 0.85)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "66f40b0f-9cbf-44b8-807c-2b6c43380709")
+	)
+	(pad "5" smd oval
+		(at -0.325 1.475)
+		(size 0.35 0.85)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "a5000a2c-ec43-4b49-b28a-da063408040e")
+	)
+	(pad "6" smd oval
+		(at 0.325 1.475)
+		(size 0.35 0.85)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "adaaf414-fdf5-412b-8b86-e989bd099830")
+	)
+	(pad "7" smd oval
+		(at 1.475 0.975 90)
+		(size 0.35 0.85)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "acb02ca2-7e56-4b89-96f0-c9624fbe0f8b")
+	)
+	(pad "8" smd oval
+		(at 1.475 0.325 90)
+		(size 0.35 0.85)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "b515ef62-e42c-4db2-a1f9-a0ce4222644a")
+	)
+	(pad "9" smd oval
+		(at 1.475 -0.325 90)
+		(size 0.35 0.85)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "111f61ab-6ce4-40fa-bfad-fb1080ce0b20")
+	)
+	(pad "10" smd oval
+		(at 1.475 -0.975 90)
+		(size 0.35 0.85)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "8bd4b837-e83b-4ff5-b57e-c1cd65829c57")
+	)
+	(pad "11" smd oval
+		(at 0.325 -1.475)
+		(size 0.35 0.85)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "3e88117b-6a6a-434a-ad2f-63694e349719")
+	)
+	(pad "12" smd oval
+		(at -0.325 -1.475)
+		(size 0.35 0.85)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "5da92b26-7f10-47fa-81f0-ebd73dc26ccc")
+	)
+	(zone
+		(net 0)
+		(net_name "")
+		(layers "F.Cu" "F.SilkS")
+		(uuid "4e721545-2b2a-420a-8638-fc5328ab8a41")
+		(hatch edge 0.5)
+		(connect_pads
+			(clearance 0)
+		)
+		(min_thickness 0.25)
+		(filled_areas_thickness no)
+		(keepout
+			(tracks not_allowed)
+			(vias not_allowed)
+			(pads not_allowed)
+			(copperpour not_allowed)
+			(footprints allowed)
+		)
+		(placement
+			(enabled no)
+			(sheetname "")
+		)
+		(fill
+			(thermal_gap 0.5)
+			(thermal_bridge_width 0.5)
+		)
+		(polygon
+			(pts
+				(xy -0.9 -1) (xy -0.9 1) (xy 0.9 1) (xy 0.9 -1)
+			)
+		)
+	)
+	(embedded_fonts no)
+	(model "FXLS8971CF.stp"
+		(offset
+			(xyz 0 0 0)
+		)
+		(scale
+			(xyz 1 1 1)
+		)
+		(rotate
+			(xyz 0 0 0)
+		)
+	)
+)
