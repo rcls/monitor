@@ -1,7 +1,5 @@
 #![allow(non_upper_case_globals)]
 
-use crate::dma::{DMA, Flat};
-use crate::vcell::UCell;
 use crate::cpu::WFE;
 
 use super::{LCD_BITS, LcdBits};
@@ -12,13 +10,6 @@ pub struct LCD {
     comm: bool,
     pub segments: LcdBits,
 }
-
-const DMA_RX: usize = 3;
-const DMA_TX: usize = 4;
-const DMA_RX_MUX: u32 = 36;
-const DMA_TX_MUX: u32 = 37;
-
-const USE_TX_DMA: bool = LCD_BITS > 32;
 
 // ABCDEFG
 pub const SEG_A: u8 = 32;
@@ -66,12 +57,10 @@ impl LCD {
 /// Initialize the I/O to the LCD.  This should be good when waking up from
 /// standby, as we leave the LCD high impedance until we write something to it.
 pub fn init() {
-    let dma    = crate::dma::dma();
-    let dmamux = unsafe {&*stm32u031::DMAMUX::ptr()};
-    let gpioa  = unsafe {&*stm32u031::GPIOA ::ptr()};
-    let gpiob  = unsafe {&*stm32u031::GPIOB ::ptr()};
-    let spi    = unsafe {&*stm32u031::SPI1  ::ptr()};
-    let rcc    = unsafe {&*stm32u031::RCC   ::ptr()};
+    let gpioa = unsafe {&*stm32u031::GPIOA::ptr()};
+    let gpiob = unsafe {&*stm32u031::GPIOB::ptr()};
+    let spi   = unsafe {&*stm32u031::SPI1 ::ptr()};
+    let rcc   = unsafe {&*stm32u031::RCC  ::ptr()};
 
     // Enable SPI1 clock.
     rcc.APBENR2.modify(|_, w| w.SPI1EN().set_bit());
@@ -90,28 +79,17 @@ pub fn init() {
     gpiob.MODER.modify(|_,w| w.MODE3().B_0x2().MODE5().B_0x2());
 
     // Set-up SPI1.
-    spi.CR2.write(
-        |w| w.DS().B_0xF().SSOE().set_bit()
-            .RXDMAEN().set_bit().TXDMAEN().bit(USE_TX_DMA));
+    spi.CR2.write(|w| w.DS().B_0xF().SSOE().set_bit());
     let br = (crate::CPU_CLK / 1000000).ilog2() as u8;
     spi.CR1.write(
         |w| w.LSBFIRST().set_bit().SPE().set_bit().BR().bits(br)
             .MSTR().set_bit());
-
-    dma.CH(DMA_RX).PAR.write(
-        |w| w.bits(spi.DR.as_ptr().addr() as u32));
-    dmamux.CCR(DMA_RX).write(|w| w.bits(DMA_RX_MUX));
-    if USE_TX_DMA {
-        dma.CH(DMA_TX).PAR.write(|w| w.bits(spi.DR.as_ptr().addr() as u32));
-        dmamux.CCR(DMA_TX).write(|w| w.bits(DMA_TX_MUX));
-    }
 }
 
 pub fn update_lcd(bits: LcdBits, comm: bool) {
     // Invert segment bits if comm is high.
     let bits = if comm {!bits} else {bits};
 
-    let dma   = crate::dma::dma();
     let gpioa = unsafe {&*stm32u031::GPIOA::ptr()};
     let gpiob = unsafe {&*stm32u031::GPIOB::ptr()};
     let spi   = unsafe {&*stm32u031::SPI1 ::ptr()};
@@ -124,26 +102,21 @@ pub fn update_lcd(bits: LcdBits, comm: bool) {
     // Set COM (PB9) to high impedance.
     gpiob.MODER.modify(|_, w| w.MODE9().B_0x0());
 
-    static DUMMY: UCell<LcdBits> = UCell::new(0);
-    let num_xfers = match LCD_BITS {32 => 2, 48 => 3, _ => panic!()};
-    dma.CH(DMA_RX).read(unsafe {DUMMY.as_mut().addr()}, num_xfers, 1);
+    // Do one dummy data read before transmitting.  This will (eventually!)
+    // clear out fifo-not-clear problems.
+    spi.DR.read();
 
     // We have a 32 bit fifo.
-    if USE_TX_DMA {
-        dma.CH(DMA_TX).write(bits.addr(), num_xfers, 1);
+    spi.DR.write(|w| w.bits((bits & 0xffff) as u16));
+    spi.DR.write(|w| w.bits((bits >> 16) as u16));
+    // If we have have a third word to write, wait for one RX word then send it.
+    if LCD_BITS > 32 {
+        rx_word(spi);
+        spi.DR.write(|w| w.bits((bits >> 32) as u16));
     }
-    else {
-        spi.DR.write(|w| w.bits((bits & 0xffff) as u16));
-        spi.DR.write(|w| w.bits((bits >> 16) as u16));
-    }
-
-    // Wait for RX DMA complete.
-    loop {
-        WFE();
-        if !dma.CH(DMA_RX).CR.read().EN().bit() {
-            break;
-        }
-    }
+    // Wait for 2 words RX.
+    rx_word(spi);
+    rx_word(spi);
 
     // Set STR (A15) high.  Set col1 (A12), it's not driven yet.  (If both S and
     // R are set, then S wins.)
@@ -162,17 +135,25 @@ pub fn update_lcd(bits: LcdBits, comm: bool) {
     gpioa.MODER.modify(|_, w| w.MODE12().B_0x1());
 }
 
-pub fn lcd_dma_isr() {
-    let dma = crate::dma::dma();
-    let status = dma.ISR.read();
-    dma.IFCR.write(|w| w.bits(status.bits()));
-    // Zero-based v. one-based, sigh!
-    if status.GIF4().bit() {
-        dma.CH(3).CR.write(|w| w.EN().clear_bit());
+#[inline(never)]
+fn rx_word(spi: &stm32u031::spi1::RegisterBlock) {
+    let nvic = unsafe {&*cortex_m::peripheral::NVIC::PTR};
+    // SEVONPEND only wakes up on the rising edge of the pending flag.  So we
+    // need to clear the flag.
+    unsafe {
+        nvic.icpr[0].write(1 << stm32u031::Interrupt::SPI1 as u32);
     }
-    if status.GIF5().bit() {
-        dma.CH(4).CR.write(|w| w.EN().clear_bit());
+    // Make sure we actually get a rising edge on the interrupt!
+    let cr2 = spi.CR2.read().bits();
+    spi.CR2.write(|w| w.bits(cr2).RXNEIE().set_bit());
+    loop {
+        WFE(); // We rely on SEVONPEND to wake us up.
+        if spi.SR.read().RXNE().bit() {
+            break;
+        }
     }
+    spi.CR2.write(|w| w.bits(cr2).RXNEIE().clear_bit());
+    spi.DR.read();
 }
 
 #[allow(dead_code)]
@@ -193,20 +174,4 @@ pub fn backup() {
     pwr.PUCRB.write(|w| w.bits(mask_b));
     pwr.PDCRA.write(|w| w.bits(mask_a & !bits_a));
     pwr.PDCRB.write(|w| w.bits(mask_b & !bits_b));
-}
-
-impl crate::cpu::VectorTable {
-    pub const fn lcd_isr(&mut self) -> &mut Self {
-        use stm32u031::Interrupt::*;
-        self.isr(DMA1_CHANNEL4_5_6_7, lcd_dma_isr)
-    }
-}
-
-#[test]
-fn check_isr() {
-    use stm32u031::Interrupt::*;
-    use crate::VECTORS;
-    assert!(VECTORS.isr[DMA1_CHANNEL4_5_6_7 as usize] == lcd_dma_isr);
-    assert!(VECTORS.ahb_clocks() & 1 != 0); // DMA.
-    //assert!(VECTORS.apb2_clocks() & 1 << 12 != 0); // SPI1
 }

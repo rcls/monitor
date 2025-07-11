@@ -223,7 +223,7 @@ fn main() -> ! {
 static VECTORS: cpu::VectorTable = *cpu::VectorTable::new()
     .systick(systick_handler)
     .isr(stm32u031::Interrupt::TSC, tsc_isr)
-    .rcc_isr().debug_isr().i2c_isr().lcd_isr();
+    .rcc_isr().debug_isr().i2c_isr();
 
 #[test]
 fn check_vtors() {

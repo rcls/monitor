@@ -5,7 +5,6 @@
 #![allow(unpredictable_function_pointer_comparisons)]
 
 mod cpu;
-mod dma;
 mod debug;
 #[allow(dead_code)]
 mod lcd;
@@ -81,7 +80,6 @@ fn tick() {
     let shift = pos * 8;
     segments = segments << shift | segments >> 48 - shift;
     lcd::update_lcd(segments, com);
-    dbgln!("Seq = {seq}");
 }
 
 fn check_options() {
@@ -205,7 +203,4 @@ fn main() -> ! {
 #[used]
 #[unsafe(link_section = ".vectors")]
 static VECTORS: cpu::VectorTable = *cpu::VectorTable::new()
-    //.systick(systick_handler)
-    //.isr(stm32u031::Interrupt::TSC, tsc_isr)
-    .rcc_isr().debug_isr() // .i2c_isr()
-    .lcd_isr();
+    .rcc_isr().debug_isr();

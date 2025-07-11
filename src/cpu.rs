@@ -49,9 +49,9 @@ pub fn init1() {
 }
 
 pub fn init2() {
-    let rcc = unsafe {&*stm32u031::RCC::ptr()};
-    let scb = unsafe {&*cortex_m::peripheral::SCB ::PTR};
-    let nvic= unsafe {&*cortex_m::peripheral::NVIC::PTR};
+    let rcc  = unsafe {&*stm32u031::RCC::ptr()};
+    let scb  = unsafe {&*cortex_m::peripheral::SCB ::PTR};
+    let nvic = unsafe {&*cortex_m::peripheral::NVIC::PTR};
 
     // Set the systick and pendsv interrupt priority to a high value (other
     // interrupts pre-empt).
