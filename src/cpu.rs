@@ -149,9 +149,6 @@ impl VectorTable {
         use stm32u031::Interrupt::*;
         self.used_bit(ADC_COMP, 20) | self.used_bit(SPI1, 12)
     }
-    pub const fn rcc_isr(&mut self) -> &mut Self {
-        self
-    }
 }
 
 fn bugger() {

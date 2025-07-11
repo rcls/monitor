@@ -299,8 +299,7 @@ static VECTORS: cpu::VectorTable = *cpu::VectorTable::new()
     .systick(systick_handler)
     .adc_isrs()
     .debug_isr()
-    .i2c_isr()
-    .rcc_isr();
+    .i2c_isr();
 
 #[test]
 fn char_checks() {

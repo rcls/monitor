@@ -198,5 +198,4 @@ fn main() -> ! {
 
 #[used]
 #[unsafe(link_section = ".vectors")]
-static VECTORS: cpu::VectorTable = *cpu::VectorTable::new()
-    .rcc_isr().debug_isr();
+static VECTORS: cpu::VectorTable = *cpu::VectorTable::new().debug_isr();
