@@ -180,11 +180,7 @@ fn main() -> ! {
     rcc.CSR.write(|w| w.RMVF().set_bit().MSISRANGE().bits(5));
     verbose!("Sleeping...");
 
-    // Wait for the UART to become idle before entering deep sleep.
-    // Poll for TC on the UART.  (Ugh.)
-    let uart = unsafe {&*stm32u031::LPUART1::ptr()};
-    while !uart.ISR.read().TC().bit() {
-    }
+    debug::drain();
 
     // Clear the wake-up flags.  This seems to need to be some time after the
     // wake-up!  Presumably a clock-tick of the RTC domain.

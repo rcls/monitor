@@ -58,6 +58,14 @@ impl DebugA {
     fn isr(&mut self) {
         // Assume no spurious wake-ups!
         let uart  = unsafe {&*UART::ptr()};
+        let sr = uart.ISR.read();
+        if sr.TC().bit() {
+            uart.CR1.modify(|_,w| w.TCIE().clear_bit());
+        }
+        if !sr.TXFE().bit() {
+            return;
+        }
+
         const FIFO_SIZE: usize = 8;
         let mut r = *self.r.as_mut() as usize;
         let w = *self.w.as_mut() as usize;
@@ -67,12 +75,21 @@ impl DebugA {
             r = (r + 1) & 0xff;
             done += 1;
         }
-        if r == w {
-            uart.CR1.write(
-                |w| w.FIFOEN().set_bit().TE().set_bit().UE().set_bit());
-        }
         *self.r.as_mut() = r as u8;
-        uart.ICR.write(|w| w.FECF().set_bit());
+        if r == w {
+            uart.CR1.modify(|_,w| w.TXFEIE().clear_bit());
+        }
+    }
+}
+
+#[allow(dead_code)]
+pub fn drain() {
+    let uart  = unsafe {&*UART::ptr()};
+    // Enable the TC interrupt.
+    uart.CR1().modify(|_,w| w.TCIE().set_bit());
+    // Wait for the TC bit.
+    while !uart.ISR().read().TC().bit() {
+        WFE();
     }
 }
 
