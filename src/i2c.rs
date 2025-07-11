@@ -82,7 +82,7 @@ pub fn init() {
                 . SCLDEL().bits(1));
     }
     else {
-        crate::vcell::unreachable();
+        crate::utils::unreachable();
     }
 
     // Configure the lines for use.
@@ -234,7 +234,7 @@ impl I2cContext {
     pub fn done(&self) -> bool {self.outstanding.read() == 0}
     fn wait(&self) -> Result {
         while !self.done() {
-            crate::vcell::WFE();
+            crate::cpu::WFE();
         }
         barrier();
         if self.error.read() == 0 {Ok(())} else {Err(())}

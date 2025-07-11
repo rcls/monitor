@@ -36,6 +36,11 @@ name = 'blink-clocky'
 filename = 'blink-clocky.elf'
 path = 'src/blink-clocky.rs'
 
+[[bin]]
+name = 'clocky-lpblink'
+filename = 'clocky-lpblink.elf'
+path = 'src/clocky-lpblink.rs'
+
 [profile.dev]
 panic = 'abort'
 

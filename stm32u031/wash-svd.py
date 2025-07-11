@@ -151,6 +151,10 @@ dmamux = svd.find(".//peripheral[name='DMAMUX']")
 register_array(
     dmamux, 'C0CR', 'CCR[%s]', [f'C{i}CR' for i in range(12)]);
 
+tamp = svd.find(".//peripheral[name='TAMP']")
+register_array(
+    tamp, 'BKP0R', 'BKPR[%s]', [f'BKP{i}R' for i in range(9)])
+
 svd.write('washed.svd')
 
 #assert False

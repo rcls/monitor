@@ -1,29 +1,9 @@
 use crate::font::{DIGIT_0, PERIOD, SPACE};
 
-fn to_bcd(mut v: u32) -> u32 {
-    if v == 0 {
-        return 0;
-    }
-    let mut remain = 32;
-    while v & 15 << 28 == 0 {
-        v <<= 4;
-        remain -= 4;
-    }
-    let pos = 0x11111111;
-    let mut bcd = 0u32;
-    for _ in 0..remain {
-        let overflow = bcd + 3 * pos & pos * 8;
-        bcd = bcd.wrapping_add(bcd + (overflow >> 1) + (overflow >> 2));
-        bcd += v >> 31;
-        v <<= 1;
-    }
-    bcd
-}
-
 // Right justified.
 fn format_fixed(result: &mut [u8], v: u32, sign: u8, dp: usize) {
     // Create the digits backwards.
-    let mut v = to_bcd(v);
+    let mut v = crate::utils::to_bcd(v);
     let len = result.len();
     for i in 0..len {
         let d;

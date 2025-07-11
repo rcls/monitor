@@ -13,6 +13,7 @@ const MSIRANGE: u8 = const {
 };
 
 pub fn init1() {
+    let scb = unsafe {&*cortex_m::peripheral::SCB::PTR};
     let pwr = unsafe {&*stm32u031::PWR::ptr()};
     let rcc = unsafe {&*stm32u031::RCC::ptr()};
 
@@ -26,6 +27,11 @@ pub fn init1() {
     rcc.CR.write(
         |w| w.MSIRANGE().bits(MSIRANGE).MSIRGSEL().set_bit().MSION().set_bit());
 
+    // Enable backup domain access & maybe set lower-power run.
+    let low_power = super::CPU_CLK <= 2000000;
+    pwr.CR1.write(|w| w.LPR().bit(low_power).DBP().set_bit());
+
+    // Clear the BSS.
     if !cfg!(test) {
         let bss_start = &raw mut __bss_start;
         let bss_end   = &raw mut __bss_end;
@@ -35,18 +41,15 @@ pub fn init1() {
         }
     }
 
-    // Enable backup domain access & maybe set lower-power run.
-    let low_power = super::CPU_CLK <= 2000000;
-    pwr.CR1.write(|w| w.LPR().bit(low_power).DBP().set_bit());
+    // We use sev-on-pending to avoid trivial interrupt handlers.
+    unsafe {scb.scr.write(16)};
 
     // Enable the LSE.  Set high drive strength for crystal start-up.
     rcc.BDCR.write(|w| w.LSEON().set_bit().LSEDRV().B_0x3());
-
-
 }
 
 pub fn init2() {
-    let rcc = unsafe {&*stm32u031::RCC  ::ptr()};
+    let rcc = unsafe {&*stm32u031::RCC::ptr()};
     let scb = unsafe {&*cortex_m::peripheral::SCB ::PTR};
     let nvic= unsafe {&*cortex_m::peripheral::NVIC::PTR};
 
@@ -54,20 +57,29 @@ pub fn init2() {
     // interrupts pre-empt).
     // The Cortex-M crate doesn't use the ARM indexes, so be careful about the
     // address.  We want SHPR3.
-    assert_eq!(&scb.shpr[1] as *const _ as usize, 0xE000ED20);
+    assert_eq!(core::ptr::from_ref(&scb.shpr[1]) as usize, 0xE000ED20);
     #[cfg(not(test))]
     unsafe {
         scb.shpr[1].write(0xc0 << 24);
     }
 
+    // Enable the LSE interrupt, wait for it and then enable the MSI FLL.
+    rcc.CIER.write(|w| w.LSERDYIE().set_bit());
+    //unsafe {nvic.iser[0].write(1u32 << stm32u031::Interrupt::RCC_CRS as u32)};
+
     // Wait for LSE and then enable the MSI FLL.
     while !rcc.BDCR.read().LSERDY().bit() {
+        WFE();
     }
+    rcc.CIER.write(|w| w.LSIRDYIE().clear_bit());
+    rcc.CICR.write(|w| w.bits(!0));
+
     rcc.CR.write(
         |w| w.MSIRANGE().bits(MSIRANGE).MSIRGSEL().set_bit().MSION().set_bit()
             . MSIPLLEN().set_bit());
-    // Reduce drive strength.
-    rcc.BDCR.write(|w| w.LSEON().set_bit().LSEDRV().B_0x0());
+
+    // Reduce drive strength.  (Lowest drive strength appears unreliable).
+    rcc.BDCR.write(|w| w.LSEON().set_bit().LSEDRV().B_0x1());
 
     // Enable interrupts.  reserved1 has been abused to track what to enable.
     unsafe {
@@ -123,7 +135,6 @@ impl VectorTable {
         if self.used(isr) {1 << b} else {0}
     }
     pub const fn ahb_clocks(&self) -> u32 {
-        // TSC -> 24
         use stm32u031::Interrupt::*;
         self.used_bit(TSC, 24) | self.used_bit(DMA1_CHANNEL1, 0)
         | self.used_bit(DMA1_CHANNEL2_3, 0)
@@ -138,10 +149,25 @@ impl VectorTable {
         use stm32u031::Interrupt::*;
         self.used_bit(ADC_COMP, 20) | self.used_bit(SPI1, 12)
     }
+    pub const fn rcc_isr(&mut self) -> &mut Self {
+        self
+    }
 }
 
 fn bugger() {
     panic!("Unexpected interrupt");
+}
+
+#[inline(always)]
+#[allow(non_snake_case)]
+pub fn WFE() {
+    if cfg!(target_arch = "arm") {
+        unsafe {
+            core::arch::asm!("wfe", options(nomem, preserves_flags, nostack))};
+    }
+    else {
+        panic!("wfe!");
+    }
 }
 
 #[test]

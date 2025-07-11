@@ -9,9 +9,11 @@ mod debug;
 mod dma;
 mod i2c;
 mod lcd;
+mod utils;
 mod vcell;
 
-use vcell::{UCell, VCell, WFE};
+use cpu::WFE;
+use vcell::{UCell, VCell};
 
 type I2C = stm32u031::I2C1;
 const CPU_CLK: u32 = 2000000;
@@ -20,16 +22,11 @@ type LcdBits = u64;
 const LCD_BITS: u32 = 48;
 const I2C_LINES: i2c::I2CLines = i2c::I2CLines::B6_B7;
 
-unsafe extern "C" {
-    static mut __bss_start: u8;
-    static mut __bss_end: u8;
-}
-
 fn scrounge() -> i2c::Result {
     let mut temp: i16 = 0;
-    i2c::read_reg(i2c::TMP117, 0, &mut temp).wait()?;
     i2c::write(123, &[1u8,2]).wait()?;
-    i2c::waiter(&mut temp).wait()
+    i2c::waiter(&mut temp).wait()?;
+    Ok(())
 }
 
 fn systick_handler() {
@@ -226,7 +223,7 @@ fn main() -> ! {
 static VECTORS: cpu::VectorTable = *cpu::VectorTable::new()
     .systick(systick_handler)
     .isr(stm32u031::Interrupt::TSC, tsc_isr)
-    .debug_isr().i2c_isr().lcd_isr();
+    .rcc_isr().debug_isr().i2c_isr().lcd_isr();
 
 #[test]
 fn check_vtors() {

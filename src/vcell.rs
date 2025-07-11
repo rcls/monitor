@@ -35,28 +35,6 @@ pub fn nothing() {
     unsafe {core::arch::asm!("", options(nomem))}
 }
 
-#[inline(always)]
-#[allow(non_snake_case)]
-pub fn WFE() {
-    if cfg!(target_arch = "arm") {
-        unsafe {
-            core::arch::asm!("wfe", options(nomem, preserves_flags, nostack))};
-    }
-    else {
-        panic!("wfe!");
-    }
-}
-
-#[allow(dead_code)]
-pub fn unreachable() -> ! {
-    #[cfg(target_os = "none")]
-    unsafe {
-        unsafe extern "C" {fn nowayjose();}
-        nowayjose();
-    }
-    panic!();
-}
-
 #[allow(dead_code)]
 pub mod interrupt {
     // We don't use disabling interrupts to transfer ownership, so no need for

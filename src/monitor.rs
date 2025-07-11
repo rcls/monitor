@@ -4,9 +4,10 @@
 #![feature(sync_unsafe_cell)]
 #![allow(unpredictable_function_pointer_comparisons)]
 
+use cpu::WFE;
 use noise::Noise;
 use static_assertions::const_assert;
-use vcell::{UCell, WFE};
+use vcell::UCell;
 
 mod adc;
 mod cpu;
@@ -296,9 +297,10 @@ fn test_vconvert() {
 #[unsafe(link_section = ".vectors")]
 static VECTORS: cpu::VectorTable = *cpu::VectorTable::new()
     .systick(systick_handler)
-    .debug_isr()
     .adc_isrs()
-    .i2c_isr();
+    .debug_isr()
+    .i2c_isr()
+    .rcc_isr();
 
 #[test]
 fn char_checks() {

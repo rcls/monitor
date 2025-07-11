@@ -1,6 +1,8 @@
 
+use crate::cpu::WFE;
+use crate::vcell::{UCell, VCell, barrier};
+
 use core::fmt::Write;
-use crate::vcell::{UCell, VCell, barrier, WFE};
 use static_assertions::const_assert;
 
 pub use stm32u031::LPUART1 as UART;
