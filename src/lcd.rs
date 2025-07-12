@@ -11,7 +11,6 @@ pub struct LCD {
     pub segments: LcdBits,
 }
 
-// ABCDEFG
 pub const SEG_A: u8 = 32;
 pub const SEG_B: u8 = 16;
 pub const SEG_C: u8 = 2;
@@ -21,23 +20,23 @@ pub const SEG_F: u8 = 64;
 pub const SEG_G: u8 = 128;
 pub const DOT: u8 = 1;
 
-pub const D0: u8 = SEG_A | SEG_B | SEG_C | SEG_D | SEG_E | SEG_F;
+pub const D0: u8 = D8 & !SEG_G;
 pub const D1: u8 = SEG_B | SEG_C;
-pub const D2: u8 = SEG_A | SEG_B | SEG_D | SEG_E | SEG_G;
-pub const D3: u8 = SEG_A | SEG_B | SEG_C | SEG_D | SEG_G;
-pub const D4: u8 = SEG_B | SEG_C | SEG_F | SEG_G;
+pub const D2: u8 = D6 & !SEG_E;
+pub const D3: u8 = D9 & !SEG_F;
+pub const D4: u8 = D1 | SEG_F | SEG_G;
 pub const D5: u8 = SEG_A | SEG_C | SEG_D | SEG_F | SEG_G;
-pub const D6: u8 = SEG_A | SEG_C | SEG_D | SEG_E | SEG_F | SEG_G;
-pub const D7: u8 = SEG_A | SEG_B | SEG_C;
-pub const D8: u8 = SEG_A | SEG_B | SEG_C | SEG_D | SEG_E | SEG_F | SEG_G;
-pub const D9: u8 = SEG_A | SEG_B | SEG_C | SEG_D | SEG_F | SEG_G;
+pub const D6: u8 = D5 | SEG_E;
+pub const D7: u8 = D1 | SEG_A;
+pub const D8: u8 = D6 | SEG_B;
+pub const D9: u8 = D8 & !SEG_E;
 
 // Hex!
 pub const DA: u8 = D8 & !SEG_D;
 pub const Db: u8 = D6 & !SEG_A;
 pub const Dc: u8 = SEG_D | SEG_E | SEG_G;
-pub const Dd: u8 = SEG_B | SEG_C | SEG_D | SEG_G;
-pub const DE: u8 = D8 & !SEG_B & !SEG_C;
+pub const Dd: u8 = Dc | SEG_B | SEG_C;
+pub const DE: u8 = D6 & !SEG_C;
 pub const DF: u8 = DE & !SEG_D;
 
 pub const MINUS: u8 = SEG_G;
@@ -53,6 +52,11 @@ impl LCD {
         update_lcd(self.segments, self.comm);
     }
 }
+
+// We preserve the LCD control lines with pullups/pulldowns during standby.
+pub const STANDBY_PRESERVE: u64
+    = 1 << 0x0b | 1 << 0x0c | 1 << 0x0f
+    | 1 << 0x13 | 1 << 0x14 | 1 << 0x15 | 1 << 0x19;
 
 /// Initialize the I/O to the LCD.  This should be good when waking up from
 /// standby, as we leave the LCD high impedance until we write something to it.
@@ -174,4 +178,9 @@ pub fn backup() {
     pwr.PUCRB.write(|w| w.bits(mask_b));
     pwr.PDCRA.write(|w| w.bits(mask_a & !bits_a));
     pwr.PDCRB.write(|w| w.bits(mask_b & !bits_b));
+}
+
+#[test]
+fn check_preserve() {
+    assert_eq!(crate::STANDBY_PRESERVE & STANDBY_PRESERVE, STANDBY_PRESERVE);
 }

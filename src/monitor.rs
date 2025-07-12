@@ -111,10 +111,10 @@ impl Monitor {
         // n.nnn -nn.n
         if false {
             let isense =self.isense;
-        dbgln!("{vsense:6}mV{isense:6}mA({isense_counts:5}){v3v3:6}mV{:7} m°C {} {} {} {}",
-            temp_counts * 1000 >> 7,
-            self.noise[0].decimal(), self.noise[1].decimal(),
-            self.noise[2].decimal(), self.noise[3].decimal());
+            dbgln!("{vsense:6}mV{isense:6}mA({isense_counts:5}){v3v3:6}mV{:7} m°C {} {} {} {}",
+                temp_counts * 1000 >> 7,
+                self.noise[0].decimal(), self.noise[1].decimal(),
+                self.noise[2].decimal(), self.noise[3].decimal());
         }
         self.update_screen(power, vsense, v3v3, temp_counts)
     }

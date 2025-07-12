@@ -22,10 +22,13 @@ type LcdBits = u64;
 const LCD_BITS: u32 = 48;
 const I2C_LINES: i2c::I2CLines = i2c::I2CLines::B6_B7;
 
+use lcd::STANDBY_PRESERVE;
+
 fn scrounge() -> i2c::Result {
     let mut temp: i16 = 0;
     i2c::write(123, &[1u8,2]).wait()?;
     i2c::waiter(&mut temp).wait()?;
+    let _ = STANDBY_PRESERVE;
     Ok(())
 }
 
