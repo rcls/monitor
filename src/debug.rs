@@ -6,27 +6,26 @@ use core::fmt::Write;
 use static_assertions::const_assert;
 
 pub use stm32u031::LPUART1 as UART;
-pub struct DebugS;
-pub struct DebugAMarker;
 
-#[allow(unused_imports)]
+pub struct DebugMarker;
+
 pub use stm32u031::Interrupt::USART3_LPUART1 as UART_ISR;
 
-pub static DEBUG: UCell<DebugA> = UCell::new(DebugA::new());
+pub static DEBUG: Debug = Debug::new();
 
-pub struct DebugA {
+pub struct Debug {
     w: VCell<u8>,
     r: VCell<u8>,
     buf: [UCell<u8>; 256],
 }
 
 pub fn debug_isr() {
-    unsafe {DEBUG.as_mut()}.isr();
+    DEBUG.isr();
 }
 
-impl DebugA {
-    const fn new() -> DebugA {
-        DebugA {
+impl Debug {
+    const fn new() -> Debug {
+        Debug {
             w: VCell::new(0), r: VCell::new(0),
             buf: [const {UCell::new(0)}; 256]
         }
@@ -35,8 +34,7 @@ impl DebugA {
         let mut w = self.w.read();
         for &b in s {
             while self.r.read().wrapping_sub(w) == 1 {
-                self.enable(w);
-                WFE();
+                self.push(w);
             }
             // The ISR won't access the array element in question.
             unsafe {*self.buf[w as usize].as_mut() = b};
@@ -44,6 +42,18 @@ impl DebugA {
         }
         self.enable(w);
         Ok(())
+    }
+    fn push(&self, w: u8) {
+        self.enable(w);
+        WFE();
+        // If the interrupt is pending, call the ISR ourselves.  Read the bit
+        // twice in case there is a race condition where we read pending on an
+        // enabled interrupt.
+        let nvic = unsafe {&*cortex_m::peripheral::NVIC::PTR};
+        if nvic.ipr[0].read() & 1 != 0 && nvic.ipr[0].read() & 1 != 0 {
+            unsafe {nvic.icpr[0].write(1)};
+            debug_isr();
+        }
     }
     fn enable(&self, w: u8) {
         barrier();
@@ -55,8 +65,7 @@ impl DebugA {
             |w| w.FIFOEN().set_bit().TE().set_bit().UE().set_bit()
                 . TXFEIE().set_bit());
     }
-    fn isr(&mut self) {
-        // Assume no spurious wake-ups!
+    fn isr(&self) {
         let uart  = unsafe {&*UART::ptr()};
         let sr = uart.ISR.read();
         if sr.TC().bit() {
@@ -67,15 +76,15 @@ impl DebugA {
         }
 
         const FIFO_SIZE: usize = 8;
-        let mut r = *self.r.as_mut() as usize;
-        let w = *self.w.as_mut() as usize;
+        let mut r = self.r.read() as usize;
+        let w = self.w.read() as usize;
         let mut done = 0;
         while r != w && done < FIFO_SIZE {
             uart.TDR.write(|w| w.bits(*self.buf[r].as_ref() as u32));
             r = (r + 1) & 0xff;
             done += 1;
         }
-        *self.r.as_mut() = r as u8;
+        self.r.write(r as u8);
         if r == w {
             uart.CR1.modify(|_,w| w.TXFEIE().clear_bit());
         }
@@ -93,28 +102,7 @@ pub fn drain() {
     }
 }
 
-fn sdebug_bytes(s: &[u8]) -> core::fmt::Result {
-    let uart = unsafe {&*UART::ptr()};
-    for &b in s {
-        // This is a bit manky...
-        while !uart.ISR.read().TXFNF().bit() {
-        }
-        uart.TDR.write(|w| w.bits(b as u32));
-    }
-    Ok(())
-}
-
-impl Write for DebugS {
-    fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        sdebug_bytes(s.as_bytes())
-    }
-    fn write_char(&mut self, c: char) -> core::fmt::Result {
-        let cc = [c as u8];
-        sdebug_bytes(&cc)
-    }
-}
-
-impl Write for DebugAMarker {
+impl Write for DebugMarker {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         DEBUG.write_bytes(s.as_bytes())
     }
@@ -128,30 +116,15 @@ impl Write for DebugAMarker {
 macro_rules! dbg {
     ($($tt:tt)*) => (
         let _ = core::fmt::Write::write_fmt(
-            &mut $crate::debug::DebugAMarker, format_args!($($tt)*)););
-}
-
-#[macro_export]
-macro_rules! sdbg {
-    ($($tt:tt)*) => (
-        let _ = core::fmt::Write::write_fmt(
-            &mut $crate::debug::DebugS, format_args!($($tt)*)););
+            &mut $crate::debug::DebugMarker, format_args!($($tt)*)););
 }
 
 #[macro_export]
 macro_rules! dbgln {
     () => ({let _ = core::fmt::Write::write_str(
-        &mut $crate::debug::DebugAMarker, "\n");});
+        &mut $crate::debug::DebugMarker, "\n");});
     ($($tt:tt)*) => ({let _ = core::fmt::Write::write_fmt(
-        &mut $crate::debug::DebugAMarker, format_args_nl!($($tt)*));});
-}
-
-#[macro_export]
-macro_rules! sdbgln {
-    () => ({let _ = core::fmt::Write::write_str(
-        &mut $crate::debug::DebugS, "\n");});
-    ($($tt:tt)*) => ({let _ = core::fmt::Write::write_fmt(
-        &mut $crate::debug::DebugS, format_args_nl!($($tt)*));});
+        &mut $crate::debug::DebugMarker, format_args_nl!($($tt)*));});
 }
 
 pub fn init() {
@@ -186,15 +159,15 @@ pub fn init() {
         dbgln!();
         dbgln!("Hello world!");
         // sdbg!("Hello world!");
-        sdbgln!();
-        sdbgln!("Hello world!")
+        //sdbgln!();
+        //sdbgln!("Hello world!")
     }
 }
 
 #[cfg(not(test))]
 #[panic_handler]
 fn ph(info: &core::panic::PanicInfo) -> ! {
-    sdbgln!("{info}");
+    dbgln!("{info}");
     // Let the TX FIFO drain.
     let uart = unsafe { &*UART::ptr() };
     while !uart.ISR().read().TXFE().bit() {

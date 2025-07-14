@@ -202,8 +202,7 @@ pub fn main() -> ! {
 
     debug::init();
 
-    sdbgln!("Debug up");
-    dbgln!("Async debug up");
+    dbgln!("Debug up");
 
     adc::init1();
 

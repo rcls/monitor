@@ -120,21 +120,21 @@ pub fn main() -> ! {
     // Start the calibration.
     adc.CR.write(|w| w.ADCAL().set_bit().ADVREGEN().set_bit());
     // Wait for it.
-    sdbgln!("A1");
+    dbgln!("A1");
     while !adc.ISR.read().EOCAL().bit() {
     }
-    sdbgln!("A2");
+    dbgln!("A2");
 
     adc.CR.write(|w| w.ADVREGEN().set_bit().ADEN().set_bit());
 
     for _ in 0..1000000 {
         if adc.ISR.read().ADRDY().bit() {
-            sdbgln!("ADRDY");
+            dbgln!("ADRDY");
             break;
         }
     }
     //}
-    sdbgln!("A3");
+    dbgln!("A3");
 
     adc.SMPR.write(|w| w.SMP1().B_0x7()); // 10µs sample gate.
     //adc.cr.write(|w| w.advregen().set_bit().aden().set_bit());
@@ -201,8 +201,7 @@ pub fn main() -> ! {
         // Read the temperature conversion.
         if let Some(temp) = i2c_rx_reg16(i2c, TMP117, 0, true) {
             let cels = (temp * 5 + 32) / 64;
-            sdbgln!("T {cels}");
-            //sdbgln!("T {}", cels);
+            dbgln!("T {cels}");
         }
 
         // Trigger a ADC conversion.  We probably don't need all these bits?
@@ -220,16 +219,16 @@ pub fn main() -> ! {
             let val = adc.DR.read().DATA().bits() as i32;
             match adc_idx {
                 // 132 mV/A
-                1 => sdbgln!(
+                1 => dbgln!(
                     "Isense: {} mA ({val})",
                     ((val - 2034*16) * 25000 + 32768) / 65536),
-                2 => sdbgln!(
+                2 => dbgln!(
                     "Vsense: {} mV ({val})",
                     val * (3300 * 118 / 24) / (65536 * 18 / 24)),
                 // 33/(val / 4096 / 25)
                 // 1v gets val/2.5
                 // 4096 gets 4096 / (val/2.5)
-                3 => sdbgln!("3V3: {} mV ({val})", 65536 * 2500 / val),
+                3 => dbgln!("3V3: {} mV ({val})", 65536 * 2500 / val),
                 _ => (),
             }
             if adc_st & 8 != 0 {

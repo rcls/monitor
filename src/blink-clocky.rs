@@ -15,7 +15,6 @@ mod vcell;
 use cpu::WFE;
 use vcell::{UCell, VCell};
 
-type I2C = stm32u031::I2C1;
 const CPU_CLK: u32 = 2000000;
 
 type LcdBits = u64;
@@ -25,9 +24,7 @@ const I2C_LINES: i2c::I2CLines = i2c::I2CLines::B6_B7;
 use lcd::STANDBY_PRESERVE;
 
 fn scrounge() -> i2c::Result {
-    let mut temp: i16 = 0;
     i2c::write(123, &[1u8,2]).wait()?;
-    i2c::waiter(&mut temp).wait()?;
     let _ = STANDBY_PRESERVE;
     Ok(())
 }
@@ -136,13 +133,13 @@ fn main() -> ! {
 
     debug::init();
 
-    sdbgln!("Debug up");
+    dbgln!("Debug up");
 
     lcd::init();
 
     i2c::init();
 
-    sdbgln!("CPU init2");
+    dbgln!("CPU init2");
     cpu::init2();
 
     // TSC has
@@ -197,7 +194,7 @@ fn main() -> ! {
         let _ = scrounge();
     }
 
-    sdbgln!("Ok, should be flying!");
+    dbgln!("Ok, should be flying!");
     dbgln!("Going!");
 
     // 25Hz of systick.

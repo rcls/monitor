@@ -145,7 +145,7 @@ pub fn i2c_isr() {
         i2c.CR2.write(
             |w| w.bits(cr2.bits()).RELOAD().bit(more).NBYTES()
                 .bits(todo as u8));
-        crate::sdbgln!("Reload {todo} {:#x} {:#x}", status.bits(), cr2.bits());
+        crate::dbgln!("Reload {todo} {:#x} {:#x}", status.bits(), cr2.bits());
     }
     else if status.STOPF().bit() {
         i2c.ICR.write(|w| w.STOPCF().set_bit());
@@ -159,8 +159,8 @@ pub fn i2c_isr() {
         rx_channel().CR.write(|w| w);
     }
     else {
-        crate::sdbgln!("Unexpected I2C ISR {:#x} {:#x}", status.bits(),
-                       i2c.CR2.read().bits());
+        crate::dbgln!("Unexpected I2C ISR {:#x} {:#x}", status.bits(),
+                      i2c.CR2.read().bits());
         loop{}
     }
 }
