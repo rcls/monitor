@@ -16,7 +16,11 @@ mod vcell;
 const LCD_BITS: u32 = 48;
 type LcdBits = u64;
 
-const CPU_CLK: u32 = 2000000;
+const I2C_LINES: i2c::I2CLines = i2c::I2CLines::B6_B7;
+
+//const CPU_CLK: u32 = 2000000;
+const CONFIG: cpu::CpuConfig = *cpu::CpuConfig::new(2000000)
+    .debug_isr().i2c_isr();
 
 const MAGIC: u32 = 0xc6ea33e;
 
@@ -72,11 +76,6 @@ fn main() -> ! {
 
     verbose!("CPU init2");
     cpu::init2();
-
-    // Clear any wakeup bits.
-    //dbgln!("Pre clear {}", rtc.SR.read().bits());
-    //rtc.SCR.write(|w| w.bits(4));
-    //dbgln!("Pst clear {}", rtc.SR.read().bits());
 
     let rcc_csr = rcc.CSR.read().bits();
     verbose!("RCC CSR {rcc_csr:08x}");

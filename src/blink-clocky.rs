@@ -15,7 +15,11 @@ mod vcell;
 use cpu::WFE;
 use vcell::{UCell, VCell};
 
-const CPU_CLK: u32 = 2000000;
+const CONFIG: cpu::CpuConfig = *cpu::CpuConfig::new(2000000)
+    .systick(systick_handler)
+    .isr(stm32u031::Interrupt::TSC, tsc_isr)
+    .clocks(1 << 24, 0, 0)
+    .debug_isr().i2c_isr();
 
 type LcdBits = u64;
 const LCD_BITS: u32 = 48;
@@ -200,8 +204,8 @@ fn main() -> ! {
     // 25Hz of systick.
     unsafe {
         let syst = &*cortex_m::peripheral::SYST::PTR;
-        syst.rvr.write(CPU_CLK / 8 / 25 - 1);
-        syst.cvr.write(CPU_CLK / 8 / 25 - 1);
+        syst.rvr.write(CONFIG.clk / 8 / 25 - 1);
+        syst.cvr.write(CONFIG.clk / 8 / 25 - 1);
         syst.csr.write(3);
     }
 
@@ -218,18 +222,11 @@ fn main() -> ! {
     }
 }
 
-#[used]
-#[unsafe(link_section = ".vectors")]
-static VECTORS: cpu::VectorTable = *cpu::VectorTable::new()
-    .systick(systick_handler)
-    .isr(stm32u031::Interrupt::TSC, tsc_isr)
-    .debug_isr().i2c_isr();
-
 #[test]
 fn check_vtors() {
     use stm32u031::Interrupt::*;
 
-    assert!(VECTORS.reset == main);
-    assert!(VECTORS.systick == systick_handler);
-    assert!(VECTORS.isr[TSC as usize] == tsc_isr);
+    assert!(cpu::VECTORS.reset == main);
+    assert!(cpu::VECTORS.systick == systick_handler);
+    assert!(cpu::VECTORS.isr[TSC as usize] == tsc_isr);
 }

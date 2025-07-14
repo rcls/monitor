@@ -22,7 +22,11 @@ mod usqrt;
 mod utils;
 mod vcell;
 
-const CPU_CLK: u32 = 16000000;
+const CONFIG: cpu::CpuConfig = *cpu::CpuConfig::new(16000000)
+    .systick(systick_handler)
+    .adc_isrs()
+    .debug_isr()
+    .i2c_isr();
 
 const ADC_CHANNELS: [u32; 3] = [9, 17, 18];
 
@@ -230,8 +234,8 @@ pub fn main() -> ! {
     // systick counts at 16MHz / 8 = 2MHz.
     unsafe {
         let syst = &*cortex_m::peripheral::SYST::PTR;
-        syst.rvr.write(CPU_CLK / 8 / 25 - 1); // 2MHz / 80000 = 25Hz
-        syst.cvr.write(CPU_CLK / 8 / 25 - 1);
+        syst.rvr.write(CONFIG.clk / 8 / 25 - 1); // 2MHz / 80000 = 25Hz
+        syst.cvr.write(CONFIG.clk / 8 / 25 - 1);
         syst.csr.write(3);
     }
 
@@ -290,14 +294,6 @@ fn test_vconvert() {
     let high = vconvert(0xffff);
     assert!((high as f64 - FS * 65535./65536.).abs() <= 1.);
 }
-
-#[used]
-#[unsafe(link_section = ".vectors")]
-static VECTORS: cpu::VectorTable = *cpu::VectorTable::new()
-    .systick(systick_handler)
-    .adc_isrs()
-    .debug_isr()
-    .i2c_isr();
 
 #[test]
 fn char_checks() {

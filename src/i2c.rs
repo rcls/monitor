@@ -65,7 +65,7 @@ pub fn init() {
     }
 
     // 400kb/s from 16MHz, longer clock pulse.
-    if crate::CPU_CLK == 16000000 {
+    if crate::CONFIG.clk == 16000000 {
         i2c.TIMINGR.write(
             |w| w.PRESC().bits(1)
                 . SCLL().bits(3)
@@ -73,7 +73,7 @@ pub fn init() {
                 . SDADEL().bits(1)
                 . SCLDEL().bits(1));
     }
-    else if crate::CPU_CLK == 2000000 {
+    else if crate::CONFIG.clk == 2000000 {
         i2c.TIMINGR.write(
             |w| w.PRESC().bits(0)
                 . SCLL().bits(1)
@@ -272,20 +272,22 @@ pub fn read_reg<'a, T: Flat + ?Sized>(addr: u8, reg: u8, data: &'a mut T) -> Wai
     Wait(PhantomData)
 }
 
-impl crate::cpu::VectorTable {
+impl crate::cpu::CpuConfig {
     pub const fn i2c_isr(&mut self) -> &mut Self {
         use stm32u031::Interrupt::*;
-        self.isr(I2C1, i2c_isr).isr(DMA1_CHANNEL2_3, dma23_isr)
+        self
+            .isr(I2C1, i2c_isr).isr(DMA1_CHANNEL2_3, dma23_isr)
+            .clocks(1 << 0, 1 << 21, 0)
     }
 }
 
 #[test]
 fn check_vtors() {
     use stm32u031::Interrupt::*;
-    use crate::VECTORS;
+    use crate::cpu::VECTORS;
 
     assert!(VECTORS.isr[DMA1_CHANNEL2_3 as usize] == dma23_isr);
     assert!(VECTORS.isr[I2C1 as usize] == i2c_isr);
-    assert!(VECTORS.ahb_clocks() & 1 != 0); // DMA1.
-    assert!(VECTORS.apb1_clocks() & 1 << 21 != 0); // I2C1.
+    assert!(crate::CONFIG.ahb_clocks & 1 != 0); // DMA1.
+    assert!(crate::CONFIG.apb1_clocks & 1 << 21 != 0); // I2C1.
 }

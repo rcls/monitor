@@ -186,7 +186,7 @@ const fn prescale(bit_rate: u32) -> (u32, u32) {
     const fn calc(bit_rate: u32, presc: usize) -> u32 {
         let divs = [1, 2, 4, 6, 8, 10, 12, 16, 32, 64, 128, 256];
         let div = divs[presc];
-        ((512 * super::CPU_CLK as u64 / bit_rate as u64) as u32 + div)
+        ((512 * crate::CONFIG.clk as u64 / bit_rate as u64) as u32 + div)
             / 2 / div
     }
     const fn ok(bit_rate: u32, presc: usize) -> bool {
@@ -200,18 +200,20 @@ const fn prescale(bit_rate: u32) -> (u32, u32) {
     (presc as u32, calc(bit_rate, presc))
 }
 
-impl crate::cpu::VectorTable {
+impl crate::cpu::CpuConfig {
     pub const fn debug_isr(&mut self) -> &mut Self {
-        self.isr(UART_ISR, debug_isr)
+        self.isr(UART_ISR, debug_isr);
+        self.clocks(0, 1 << 20, 0)
     }
 }
 
 #[test]
 fn check_vtors() {
-    use super::VECTORS;
+    use crate::cpu::VECTORS;
+    use crate::CONFIG;
 
     assert!(std::ptr::fn_addr_eq(VECTORS.isr[UART_ISR as usize],
                                  debug_isr as fn()));
-    assert!(VECTORS.apb1_clocks() & (1 << 20) != 0, "{:#x} {:#x}",
-            VECTORS.reserved1[0], VECTORS.apb1_clocks());
+    assert!(CONFIG.apb1_clocks & (1 << 20) != 0, "{:#x} {:#x}",
+            CONFIG.interrupts, CONFIG.apb1_clocks);
 }

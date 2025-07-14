@@ -123,17 +123,18 @@ pub fn dma1_isr() {
     }
 }
 
-impl crate::cpu::VectorTable {
+impl crate::cpu::CpuConfig {
     pub const fn adc_isrs(&mut self) -> &mut Self {
         use stm32u031::Interrupt::*;
         self.isr(ADC_COMP, adc_isr).isr(DMA1_CHANNEL1, dma1_isr)
+            .clocks(1 << 0, 0, 1 << 20)
     }
 }
 
 #[test]
 fn check_vtors() {
     use stm32u031::Interrupt::*;
-    use super::VECTORS;
+    use crate::cpu::VECTORS;
 
     assert!(std::ptr::fn_addr_eq(VECTORS.isr[ADC_COMP as usize],
                                  adc_isr as fn()));

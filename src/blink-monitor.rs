@@ -13,7 +13,7 @@ mod vcell;
 use vcell::nothing;
 
 type I2C = stm32u031::i2c1::RegisterBlock;
-const CPU_CLK: u32 = 16000000;
+const CONFIG: cpu::CpuConfig = *cpu::CpuConfig::new(16000000).debug_isr();
 
 const TMP117: u8 = 0x92;
 
@@ -237,7 +237,3 @@ pub fn main() -> ! {
         }
     }
 }
-
-#[used]
-#[unsafe(link_section = ".vectors")]
-pub static VECTORS: cpu::VectorTable = *cpu::VectorTable::new().debug_isr();

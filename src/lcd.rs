@@ -84,7 +84,7 @@ pub fn init() {
 
     // Set-up SPI1.
     spi.CR2.write(|w| w.DS().B_0xF().SSOE().set_bit());
-    let br = (crate::CPU_CLK / 1000000).ilog2() as u8;
+    let br = (crate::CONFIG.clk / 1000000).ilog2() as u8;
     spi.CR1.write(
         |w| w.LSBFIRST().set_bit().SPE().set_bit().BR().bits(br)
             .MSTR().set_bit());

@@ -1,11 +1,29 @@
 
+#[derive(Clone, Copy)]
+pub struct CpuConfig {
+    pub clk: u32,
+    pub vectors: VectorTable,
+    pub ahb_clocks: u32,
+    pub apb1_clocks: u32,
+    pub apb2_clocks: u32,
+    pub interrupts: u32,
+    //pub pull_up: u64,
+    //pub pull_down: u64,
+    //pub standby_pull_up: u64,
+    //pub standby_preserve: u64,
+}
+
+#[used]
+#[unsafe(link_section = ".vectors")]
+pub static VECTORS: VectorTable = crate::CONFIG.vectors;
+
 unsafe extern "C" {
     static mut __bss_start: u8;
     static mut __bss_end: u8;
 }
 
 const MSIRANGE: u8 = const {
-    match super::CPU_CLK {
+    match crate::CONFIG.clk {
         16000000 => 8,
         2000000 => 5,
         _ => panic!("CPU_CLK not implemented")
@@ -19,16 +37,16 @@ pub fn init1() {
 
     // We can infer some of what clocks to enable from the interrupt mask
     // hidden in VECTORS.reserved1.  This is a bit inexact!
-    rcc.AHBENR .write(|w| w.bits(const {crate::VECTORS.ahb_clocks()}));
-    rcc.APBENR1.write(|w| w.bits(const {crate::VECTORS.apb1_clocks()}));
-    rcc.APBENR2.write(|w| w.bits(const {crate::VECTORS.apb2_clocks()}));
+    rcc.AHBENR .write(|w| w.bits(crate::CONFIG.ahb_clocks));
+    rcc.APBENR1.write(|w| w.bits(crate::CONFIG.apb1_clocks));
+    rcc.APBENR2.write(|w| w.bits(crate::CONFIG.apb2_clocks));
 
     // Use MSI at appropriate frequency.
     rcc.CR.write(
         |w| w.MSIRANGE().bits(MSIRANGE).MSIRGSEL().set_bit().MSION().set_bit());
 
     // Enable backup domain access & maybe set lower-power run.
-    let low_power = super::CPU_CLK <= 2000000;
+    let low_power = crate::CONFIG.clk <= 2000000;
     pwr.CR1.write(|w| w.LPR().bit(low_power).DBP().set_bit());
 
     // Clear the BSS.
@@ -86,7 +104,7 @@ pub fn init2() {
 
     // Enable interrupts.  reserved1 has been abused to track what to enable.
     unsafe {
-        nvic.iser[0].write(crate::VECTORS.reserved1[0]);
+        nvic.iser[0].write(crate::CONFIG.interrupts);
     }
 }
 
@@ -105,11 +123,37 @@ pub struct VectorTable {
     pub isr       : [fn(); 32],
 }
 
+impl CpuConfig {
+    pub const fn new(clk: u32) -> CpuConfig {
+        CpuConfig{
+            clk, vectors: VectorTable::new(),
+            ahb_clocks: 0, apb1_clocks: 1 << 28, apb2_clocks: 0,
+            interrupts: 0}
+    }
+    pub const fn isr(&mut self,
+                     isr: stm32u031::Interrupt, handler: fn()) -> &mut Self {
+        self.vectors.isr[isr as usize] = handler;
+        self.interrupts |= 1 << isr as u32;
+        self
+    }
+    #[allow(dead_code)]
+    pub const fn systick(&mut self, handler: fn()) -> &mut Self {
+        self.vectors.systick = handler;
+        self
+    }
+    pub const fn clocks(&mut self, hb: u32, pb1: u32, pb2: u32) -> &mut Self {
+        self.ahb_clocks |= hb;
+        self.apb1_clocks |= pb1;
+        self.apb2_clocks |= pb2;
+        self
+    }
+}
+
 impl VectorTable {
     pub const fn new() -> VectorTable {
         VectorTable{
             stack     : 0x20000000 + 12 * 1024,
-            reset     : super::main,
+            reset     : crate::main,
             nmi       : bugger,
             hard_fault: bugger,
             reserved1 : [0; 7],
@@ -118,39 +162,6 @@ impl VectorTable {
             pendsv    : bugger,
             systick   : bugger,
             isr       : [bugger; 32]}
-    }
-    #[allow(dead_code)]
-    pub const fn systick(&mut self, handler: fn()) -> &mut Self {
-        self.systick = handler;
-        self
-    }
-    pub const fn isr(&mut self,
-                     isr: stm32u031::Interrupt, handler: fn()) -> &mut Self {
-        self.isr[isr as usize] = handler;
-        // We abuse reserved1 to track what ISRs are used!
-        self.reserved1[isr as usize / 32] |= 1 << isr as u32 % 32;
-        self
-    }
-    pub const fn used(&self, isr: stm32u031::Interrupt) -> bool {
-        self.reserved1[0] & (1 << isr as u32) != 0
-    }
-    pub const fn used_bit(&self, isr: stm32u031::Interrupt, b: u32) -> u32 {
-        if self.used(isr) {1 << b} else {0}
-    }
-    pub const fn ahb_clocks(&self) -> u32 {
-        use stm32u031::Interrupt::*;
-        self.used_bit(TSC, 24) | self.used_bit(DMA1_CHANNEL1, 0)
-        | self.used_bit(DMA1_CHANNEL2_3, 0)
-        | self.used_bit(DMA1_CHANNEL4_5_6_7, 0)
-    }
-    pub const fn apb1_clocks(&self) -> u32 {
-        use stm32u031::Interrupt::*;
-        // Always PWR.
-        1 << 28 | self.used_bit(USART3_LPUART1, 20) | self.used_bit(I2C1, 21)
-    }
-    pub const fn apb2_clocks(&self) -> u32 {
-        use stm32u031::Interrupt::*;
-        self.used_bit(ADC_COMP, 20) | self.used_bit(SPI1, 12)
     }
 }
 
@@ -168,9 +179,4 @@ pub fn WFE() {
     else {
         panic!("wfe!");
     }
-}
-
-#[test]
-fn check_vectors() {
-    assert!(crate::VECTORS.reset == crate::main);
 }
