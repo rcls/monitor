@@ -3,7 +3,7 @@ use core::marker::PhantomData;
 use crate::dma::{Channel, DMA, Flat};
 use crate::vcell::{UCell, VCell, barrier, interrupt};
 
-use crate::I2C;
+pub type I2C = stm32u031::I2C1;
 
 pub type Result = core::result::Result<(), ()>;
 
@@ -227,11 +227,11 @@ impl I2cContext {
         self.arm();
         interrupt::enable();
     }
-    pub fn arm(&self) {
+    fn arm(&self) {
         self.error.write(0);
         self.outstanding.write(F_I2C | F_DMA);
     }
-    pub fn done(&self) -> bool {self.outstanding.read() == 0}
+    fn done(&self) -> bool {self.outstanding.read() == 0}
     fn wait(&self) -> Result {
         while !self.done() {
             crate::cpu::WFE();
@@ -250,19 +250,19 @@ impl Drop for Wait<'_> {
     fn drop(&mut self) {let _ = CONTEXT.wait();}
 }
 
-pub fn waiter<'a, T>(_: &'a mut T) ->Wait<'a> {
+pub fn waiter<'a, T: ?Sized>(_: &'a T) ->Wait<'a> {
     Wait(PhantomData)
 }
 
 pub fn write<'a, T: Flat + ?Sized>(addr: u8, data: &'a T) -> Wait<'a> {
     CONTEXT.write_start(addr & !1, data.addr(), size_of_val(data),
                         true, false);
-    Wait(PhantomData)
+    waiter(data)
 }
 
 pub fn write_reg<'a, T: Flat + ?Sized>(addr: u8, reg: u8, data: &'a T) -> Wait<'a> {
     CONTEXT.write_reg_start(addr & !1, reg, data.addr(), size_of_val(data));
-    Wait(PhantomData)
+    waiter(data)
 }
 
 pub fn read_reg<'a, T: Flat + ?Sized>(addr: u8, reg: u8, data: &'a mut T) -> Wait<'a> {

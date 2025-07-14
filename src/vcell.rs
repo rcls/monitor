@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 
 use core::cell::SyncUnsafeCell;
 
@@ -18,7 +19,6 @@ impl<T: Sync> VCell<T> {
 impl<T: Sync> UCell<T> {
     pub const fn new(v: T) -> Self {Self(SyncUnsafeCell::new(v))}
     pub fn as_ref(&self) -> &T {unsafe{&*(self.0.get() as *const T)}}
-    #[allow(dead_code)]
     pub fn as_ptr(&self) -> *mut T {self.0.get()}
     /// We are naughty and use this in interrupts, using barriers.
     pub unsafe fn as_mut(&self) -> &mut T {unsafe{&mut *self.0.get()}}
@@ -30,12 +30,10 @@ pub fn barrier() {
 }
 
 #[inline(always)]
-#[allow(dead_code)]
 pub fn nothing() {
     unsafe {core::arch::asm!("", options(nomem))}
 }
 
-#[allow(dead_code)]
 pub mod interrupt {
     // We don't use disabling interrupts to transfer ownership, so no need for
     // the enable to be unsafe.
@@ -56,7 +54,6 @@ impl<T: Sync> core::ops::Deref for UCell<T> {
 
 macro_rules! VCellImpl {
     ($($t:ty),*) => {$(
-        #[allow(dead_code)]
         impl VCell<$t> {
             #[inline(always)]
             pub fn read(&self) -> $t {

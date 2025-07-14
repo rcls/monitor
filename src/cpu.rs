@@ -33,11 +33,14 @@ pub fn init1() {
 
     // Clear the BSS.
     if !cfg!(test) {
-        let bss_start = &raw mut __bss_start;
-        let bss_end   = &raw mut __bss_end;
-        let bss_size = bss_end.addr() - bss_start.addr();
-        unsafe {
-            core::ptr::write_bytes(&raw mut __bss_start, 0u8, bss_size);
+        // The rustc memset is hideous.
+        let mut p = (&raw mut __bss_start) as *mut u32;
+        loop {
+            unsafe {*p = 0};
+            p = p.wrapping_add(1);
+            if p as *mut u8 >= &raw mut __bss_end {
+                break;
+            }
         }
     }
 

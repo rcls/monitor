@@ -22,7 +22,7 @@ pub const DOT: u8 = 1;
 
 pub const D0: u8 = D8 & !SEG_G;
 pub const D1: u8 = SEG_B | SEG_C;
-pub const D2: u8 = D6 & !SEG_E;
+pub const D2: u8 = D8 & !SEG_C & !SEG_F;
 pub const D3: u8 = D9 & !SEG_F;
 pub const D4: u8 = D1 | SEG_F | SEG_G;
 pub const D5: u8 = SEG_A | SEG_C | SEG_D | SEG_F | SEG_G;
@@ -158,26 +158,6 @@ fn rx_word(spi: &stm32u031::spi1::RegisterBlock) {
     }
     spi.CR2.write(|w| w.bits(cr2).RXNEIE().clear_bit());
     spi.DR.read();
-}
-
-#[allow(dead_code)]
-pub fn backup() {
-    let gpioa = unsafe {&*stm32u031::GPIOA::ptr()};
-    let gpiob = unsafe {&*stm32u031::GPIOB::ptr()};
-    let pwr   = unsafe {&*stm32u031::PWR  ::ptr()};
-
-    // Backup the IO pins into the standby pullup/down state:
-    // OE pin A11, CP=B3, DAT=B5, STR=A15, COM = B9, COL = A12.
-    // PWR=PB4.
-    let mask_a = 1 << 11 | 1 << 12 | 1 << 15;
-    let mask_b = 1 << 3 | 1 << 4 | 1 << 5 | 1 << 9;
-    let bits_a = gpioa.IDR.read().bits();
-    let bits_b = gpiob.IDR.read().bits();
-    // Pull down wins.
-    pwr.PUCRA.write(|w| w.bits(mask_a));
-    pwr.PUCRB.write(|w| w.bits(mask_b));
-    pwr.PDCRA.write(|w| w.bits(mask_a & !bits_a));
-    pwr.PDCRB.write(|w| w.bits(mask_b & !bits_b));
 }
 
 #[test]

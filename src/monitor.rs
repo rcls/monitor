@@ -22,7 +22,6 @@ mod usqrt;
 mod utils;
 mod vcell;
 
-type I2C = stm32u031::I2C1;
 const CPU_CLK: u32 = 16000000;
 
 const ADC_CHANNELS: [u32; 3] = [9, 17, 18];
