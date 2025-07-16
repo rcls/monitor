@@ -74,8 +74,29 @@ def register_array(peripheral, first, pattern, items, increment = None):
     assert type(children) == list
     for r in children:
         name = r.find('name')
-        if name != first and name in items:
+        if name != first and name.text in items:
             registers.remove(r)
+
+def register_derivatives(peripheral, prototype: str, derived: [str]):
+    registers = peripheral.find('registers')
+    assert registers is not None
+    proto = registers.find(f"register[name='{prototype}']")
+    assert proto is not None
+    for d in derived:
+        reg = registers.find(f"register[name='{d}']")
+        assert reg != proto, f'{prototype} {d} {proto} {reg}'
+        reg.set('derivedFrom', prototype)
+        reg.remove(reg.find('fields'))
+
+def peripheral_derivatives(svd, prototype: str, derived: [str]):
+    peripherals = svd.find('.//peripherals')
+    proto = peripherals.find(f"peripheral[name='{prototype}']")
+    assert proto is not None
+    for d in derived:
+        periph = peripherals.find(f"peripheral[name='{d}']")
+        assert periph != proto
+        periph.set('derivedFrom', prototype)
+        periph.remove(periph.find('registers'))
 
 def num_field(n, f):
     return int(n.find(f).text, 0)
@@ -154,6 +175,12 @@ register_array(
 tamp = svd.find(".//peripheral[name='TAMP']")
 register_array(
     tamp, 'BKP0R', 'BKPR[%s]', [f'BKP{i}R' for i in range(9)])
+
+pwr = svd.find(".//peripheral[name='PWR']")
+register_derivatives(pwr, 'PUCRA', ['PUCRB', 'PUCRC'])
+register_derivatives(pwr, 'PDCRA', ['PDCRB', 'PDCRC'])
+
+peripheral_derivatives(svd, 'GPIOA', ['GPIOB', 'GPIOC'])
 
 svd.write('washed.svd')
 
