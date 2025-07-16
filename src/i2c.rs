@@ -52,6 +52,13 @@ pub fn init() {
     let gpioa = unsafe {&*stm32u031::GPIOA::ptr()};
     let gpiob = unsafe {&*stm32u031::GPIOB::ptr()};
 
+    if crate::CONFIG.apb1_clocks & 1 << 21 == 0 {
+        // Lazy initialization.  Enable the clocks.
+        let rcc = unsafe {&*stm32u031::RCC::ptr()};
+        rcc.AHBENR.modify(|_,w| w.DMA1EN().set_bit());
+        rcc.APBENR1.modify(|_,w| w.I2C1EN().set_bit());
+    }
+
     // Drive the lines up briefly.
     match crate::I2C_LINES {
         I2CLines::B6_B7 => {
@@ -68,18 +75,14 @@ pub fn init() {
     if crate::CONFIG.clk == 16000000 {
         i2c.TIMINGR.write(
             |w| w.PRESC().bits(1)
-                . SCLL().bits(3)
-                . SCLH().bits(9)
-                . SDADEL().bits(1)
-                . SCLDEL().bits(1));
+                . SCLL().bits(3).SCLH().bits(9)
+                . SDADEL().bits(1).SCLDEL().bits(1));
     }
     else if crate::CONFIG.clk == 2000000 {
         i2c.TIMINGR.write(
             |w| w.PRESC().bits(0)
-                . SCLL().bits(1)
-                . SCLH().bits(2)
-                . SDADEL().bits(0)
-                . SCLDEL().bits(1));
+                . SCLL().bits(1).SCLH().bits(2)
+                . SDADEL().bits(0).SCLDEL().bits(1));
     }
     else {
         crate::utils::unreachable();
@@ -89,13 +92,11 @@ pub fn init() {
     match crate::I2C_LINES {
         I2CLines::B6_B7 => {
             gpiob.AFRL.modify(|_,w| w.AFSEL6().B_0x4().AFSEL7().B_0x4());
-            gpiob.PUPDR.modify(|_,w| w.PUPD6().B_0x1().PUPD7().B_0x1());
             gpiob.OTYPER.modify(|_,w| w.OT6().set_bit().OT7().set_bit());
             gpiob.MODER.modify(|_, w| w.MODE6().B_0x2().MODE7().B_0x2());
         },
         I2CLines::A9_A10 => {
             gpioa.AFRH.modify(|_,w| w.AFSEL9().B_0x4().AFSEL10().B_0x4());
-            gpioa.PUPDR.modify(|_,w| w.PUPD9().B_0x1().PUPD10().B_0x1());
             gpioa.OTYPER.modify(|_,w| w.OT9().set_bit().OT10().set_bit());
             gpioa.MODER.modify(|_, w| w.MODE9().B_0x2().MODE10().B_0x2());
         }
@@ -272,12 +273,21 @@ pub fn read_reg<'a, T: Flat + ?Sized>(addr: u8, reg: u8, data: &'a mut T) -> Wai
     Wait(PhantomData)
 }
 
-impl crate::cpu::CpuConfig {
-    pub const fn i2c_isr(&mut self) -> &mut Self {
+impl crate::cpu::Config {
+    pub const fn lazy_i2c(&mut self) -> &mut Self {
         use stm32u031::Interrupt::*;
-        self
-            .isr(I2C1, i2c_isr).isr(DMA1_CHANNEL2_3, dma23_isr)
-            .clocks(1 << 0, 1 << 21, 0)
+        let pullup;
+        match crate::I2C_LINES {
+            I2CLines::B6_B7  => pullup = 1 << 6 + 16 | 1 << 7 + 16,
+            I2CLines::A9_A10 => pullup = 1 << 9      | 1 << 10,
+        }
+        self.pullup |= pullup;
+        self.standby_pu |= pullup;
+        self.isr(I2C1, i2c_isr).isr(DMA1_CHANNEL2_3, dma23_isr)
+    }
+    #[allow(dead_code)]
+    pub const fn i2c(&mut self) -> &mut Self {
+        self.lazy_i2c().clocks(1 << 0, 1 << 21, 0)
     }
 }
 
@@ -288,6 +298,4 @@ fn check_vtors() {
 
     assert!(VECTORS.isr[DMA1_CHANNEL2_3 as usize] == dma23_isr);
     assert!(VECTORS.isr[I2C1 as usize] == i2c_isr);
-    assert!(crate::CONFIG.ahb_clocks & 1 != 0); // DMA1.
-    assert!(crate::CONFIG.apb1_clocks & 1 << 21 != 0); // I2C1.
 }

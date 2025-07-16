@@ -123,8 +123,8 @@ pub fn dma1_isr() {
     }
 }
 
-impl crate::cpu::CpuConfig {
-    pub const fn adc_isrs(&mut self) -> &mut Self {
+impl crate::cpu::Config {
+    pub const fn adc(&mut self) -> &mut Self {
         use stm32u031::Interrupt::*;
         self.isr(ADC_COMP, adc_isr).isr(DMA1_CHANNEL1, dma1_isr)
             .clocks(1 << 0, 0, 1 << 20)

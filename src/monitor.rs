@@ -1,5 +1,7 @@
 #![cfg_attr(not(test), no_std)]
 #![cfg_attr(not(test), no_main)]
+#![feature(const_default)]
+#![feature(const_trait_impl)]
 #![feature(format_args_nl)]
 #![feature(sync_unsafe_cell)]
 #![allow(unpredictable_function_pointer_comparisons)]
@@ -22,11 +24,8 @@ mod usqrt;
 mod utils;
 mod vcell;
 
-const CONFIG: cpu::CpuConfig = *cpu::CpuConfig::new(16000000)
-    .systick(systick_handler)
-    .adc_isrs()
-    .debug_isr()
-    .i2c_isr();
+const CONFIG: cpu::Config = *cpu::Config::new(16000000)
+    .systick(systick_handler).adc().debug().i2c();
 
 const ADC_CHANNELS: [u32; 3] = [9, 17, 18];
 

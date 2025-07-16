@@ -50,7 +50,7 @@ impl Debug {
         // twice in case there is a race condition where we read pending on an
         // enabled interrupt.
         let nvic = unsafe {&*cortex_m::peripheral::NVIC::PTR};
-        if nvic.ipr[0].read() & 1 != 0 && nvic.ipr[0].read() & 1 != 0 {
+        if nvic.ipr[0].read() & nvic.ipr[0].read() & 1 != 0 {
             unsafe {nvic.icpr[0].write(1)};
             debug_isr();
         }
@@ -58,6 +58,13 @@ impl Debug {
     fn enable(&self, w: u8) {
         barrier();
         self.w.write(w);
+        // Check for lazy enablement...
+        let rcc = unsafe {&*stm32u031::RCC::ptr()};
+        if crate::CONFIG.apb1_clocks & 1 << 20 == 0
+            && !rcc.APBENR1.read().LPUART1EN().bit() {
+            init();
+        }
+
         let uart  = unsafe {&*UART::ptr()};
         // Use the FIFO empty interrupt.  Normally we should be fast enough
         // to refill before the last byte finishes.
@@ -93,6 +100,13 @@ impl Debug {
 
 #[allow(dead_code)]
 pub fn drain() {
+    let rcc = unsafe {&*stm32u031::RCC::ptr()};
+    if crate::CONFIG.apb1_clocks & 1 << 20 == 0
+        && !rcc.APBENR1.read().LPUART1EN().bit() {
+        // Not initialized, nothing to do.
+        return;
+    }
+
     let uart  = unsafe {&*UART::ptr()};
     // Enable the TC interrupt.
     uart.CR1().modify(|_,w| w.TCIE().set_bit());
@@ -129,14 +143,16 @@ macro_rules! dbgln {
 
 pub fn init() {
     let gpioa = unsafe {&*stm32u031::GPIOA ::ptr()};
+    let rcc   = unsafe {&*stm32u031::RCC::ptr()};
     let uart  = unsafe {&*UART::ptr()};
+
+    if crate::CONFIG.apb1_clocks & 1 << 20 == 0 {
+        rcc.APBENR1.modify(|_, w| w.LPUART1EN().set_bit());
+    }
 
     // Configure UART lines.  sdbg! should now work.
     gpioa.AFRL.modify(|_, w| w.AFSEL2().B_0x8().AFSEL3().B_0x8());
     gpioa.MODER.modify(|_, w| w.MODE2().B_0x2().MODE3().B_0x2());
-
-    // Pullups on the UART RX pin.
-    gpioa.PUPDR.modify(|_, w| w.PUPD3().B_0x1());
 
     // Set-up the UART TX.  TODO - we should enable RX at some point.  The dbg*
     // macros will work after this.
@@ -152,16 +168,6 @@ pub fn init() {
     uart.PRESC.write(|w| w.bits(PRESC));
     uart.CR1.write(
         |w| w.FIFOEN().set_bit().TE().set_bit().UE().set_bit());
-
-    if false {
-        debug_isr();
-        // dbg!("Hello world!");
-        dbgln!();
-        dbgln!("Hello world!");
-        // sdbg!("Hello world!");
-        //sdbgln!();
-        //sdbgln!("Hello world!")
-    }
 }
 
 #[cfg(not(test))]
@@ -200,20 +206,19 @@ const fn prescale(bit_rate: u32) -> (u32, u32) {
     (presc as u32, calc(bit_rate, presc))
 }
 
-impl crate::cpu::CpuConfig {
-    pub const fn debug_isr(&mut self) -> &mut Self {
-        self.isr(UART_ISR, debug_isr);
-        self.clocks(0, 1 << 20, 0)
+impl crate::cpu::Config {
+    #[allow(dead_code)]
+    pub const fn debug(&mut self) -> &mut Self {
+        self.lazy_debug().clocks(0, 1 << 20, 0)
+    }
+    #[allow(dead_code)]
+    pub const fn lazy_debug(&mut self) -> &mut Self {
+        // self.pullup |= 1 << 3; // Pull-up on RX pin.
+        self.isr(UART_ISR, debug_isr)
     }
 }
 
 #[test]
 fn check_vtors() {
-    use crate::cpu::VECTORS;
-    use crate::CONFIG;
-
-    assert!(std::ptr::fn_addr_eq(VECTORS.isr[UART_ISR as usize],
-                                 debug_isr as fn()));
-    assert!(CONFIG.apb1_clocks & (1 << 20) != 0, "{:#x} {:#x}",
-            CONFIG.interrupts, CONFIG.apb1_clocks);
+    assert!(crate::cpu::VECTORS.isr[UART_ISR as usize] == debug_isr);
 }

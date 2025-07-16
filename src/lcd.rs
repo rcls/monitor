@@ -53,21 +53,12 @@ impl LCD {
     }
 }
 
-// We preserve the LCD control lines with pullups/pulldowns during standby.
-pub const STANDBY_PRESERVE: u64
-    = 1 << 0x0b | 1 << 0x0c | 1 << 0x0f
-    | 1 << 0x13 | 1 << 0x14 | 1 << 0x15 | 1 << 0x19;
-
 /// Initialize the I/O to the LCD.  This should be good when waking up from
 /// standby, as we leave the LCD high impedance until we write something to it.
 pub fn init() {
     let gpioa = unsafe {&*stm32u031::GPIOA::ptr()};
     let gpiob = unsafe {&*stm32u031::GPIOB::ptr()};
     let spi   = unsafe {&*stm32u031::SPI1 ::ptr()};
-    let rcc   = unsafe {&*stm32u031::RCC  ::ptr()};
-
-    // Enable SPI1 clock.
-    rcc.APBENR2.modify(|_, w| w.SPI1EN().set_bit());
 
     // OE pin A11, CP=B3, DAT=B5, STR=A15, COM = B9.
     // Set OE to output low.
@@ -160,7 +151,18 @@ fn rx_word(spi: &stm32u031::spi1::RegisterBlock) {
     spi.DR.read();
 }
 
+impl crate::cpu::Config {
+    pub const fn lcd(&mut self) -> &mut Self {
+        // Preserve the control lines.
+        self.standby_pu |= 1 << 11 | 1 << 0x14; // OE, DPWR.
+        self.standby_pd |= 1 << 15 | 1 << 0x13; // STR, CP
+        self.keep_pu    |= 1 << 12 | 1 << 0x15 | 1 << 0x19; // COL, DAT, COM.
+        self.keep_pd    |= 1 << 12 | 1 << 0x15 | 1 << 0x19; // COL, DAT, COM.
+        self.clocks(0, 0, 1 << 12)
+    }
+}
+
 #[test]
-fn check_preserve() {
-    assert_eq!(crate::STANDBY_PRESERVE & STANDBY_PRESERVE, STANDBY_PRESERVE);
+fn check_config() {
+    assert!(crate::CONFIG.apb2_clocks & 1 << 12 != 0);
 }

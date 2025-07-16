@@ -124,13 +124,6 @@ pub fn clear_screen() -> Result {
     Ok(())
 }
 
-trait MyType {
-    type Type;
-}
-impl<T> MyType for T {
-    type Type = Self;
-}
-
 #[macro_export]
 macro_rules! CHARS_MAP {
     ($s:expr) => (const {{

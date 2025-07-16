@@ -1,3 +1,4 @@
+use crate::CONFIG;
 
 pub fn rtc_enable() {
     let rcc = unsafe {&*stm32u031::RCC  ::ptr()};
@@ -11,7 +12,7 @@ pub fn rtc_enable() {
 
 #[allow(non_snake_case)]
 pub fn rtc_setup_20Hz() {
-    let rtc  = unsafe {&*stm32u031::RTC ::ptr()};
+    let rtc = unsafe {&*stm32u031::RTC::ptr()};
 
     // To wake up from Stop mode with an RTC alarm event, it is necessary to:
     // •Configure the EXTI Line 18 to be sensitive to rising edge
@@ -51,11 +52,10 @@ pub fn ensure_options() {
     let flash = unsafe {&*stm32u031::FLASH::ptr()};
 
     let options = flash.OPTR.read();
-    crate::dbgln!("Options = {:#010x}", options.bits());
     if options.NRST_MODE().bits() == 1 {
         return;
     }
-    crate::dbgln!("... needs to be rewritten!");
+    crate::dbgln!("Options = {:#x} ... needs to be rewritten", options.bits());
 
     // 1.Write KEY1 = 0x4567 0123 in the FLASH key register (FLASH_KEYR)
     // 2.Write KEY2 = 0xCDEF 89AB in the FLASH key register (FLASH_KEYR).
@@ -80,45 +80,55 @@ pub fn ensure_options() {
 }
 
 pub fn standby() -> ! {
+    let pwr   = unsafe {&*stm32u031::PWR::ptr()};
+    let rcc   = unsafe {&*stm32u031::RCC::ptr()};
+    let rtc   = unsafe {&*stm32u031::RTC::ptr()};
     let gpioa = unsafe {&*stm32u031::GPIOA::ptr()};
     let gpiob = unsafe {&*stm32u031::GPIOB::ptr()};
-    let pwr   = unsafe {&*stm32u031::PWR  ::ptr()};
-    let rcc   = unsafe {&*stm32u031::RCC  ::ptr()};
-    let rtc   = unsafe {&*stm32u031::RTC  ::ptr()};
-    let scb = unsafe {&*cortex_m::peripheral::SCB ::PTR};
+    let gpioc = unsafe {&*stm32u031::GPIOC::ptr()};
+    let scb   = unsafe {&*cortex_m::peripheral::SCB ::PTR};
 
     // Low power mode to use is standby...
     pwr.CR1.modify(|_,w| w.LPMS().bits(3)); // 3=Standby, 4=Shutdown.
 
     // Clear the reset causes & set restart MSI.
-    rcc.CSR.write(|w| w.RMVF().set_bit().MSISRANGE().bits(5));
+    rcc.CSR.write(|w| w.RMVF().set_bit().MSISRANGE().bits(crate::cpu::MSIRANGE));
+
+    fn pupd(shift: u32, gpio: &stm32u031::gpioa::RegisterBlock,
+            pucr: &stm32u031::pwr::PUCRA, pdcr: &stm32u031::pwr::PDCRA) {
+        let standby_pu = (CONFIG.standby_pu >> shift) as u32 & 0xffff;
+        let standby_pd = (CONFIG.standby_pd >> shift) as u32 & 0xffff;
+        let keep_up    = (CONFIG.keep_pu    >> shift) as u32 & 0xffff;
+        let keep_down  = (CONFIG.keep_pd    >> shift) as u32 & 0xffff;
+
+        let keep = keep_up | keep_down != 0;
+        let bits = if keep {gpio.IDR().read().bits()} else {0};
+        if standby_pu | keep_up != 0 {
+            pucr.write(|w| w.bits(bits & keep_up | standby_pu));
+        }
+        if standby_pd | keep_down != 0 {
+            pdcr.write(|w| w.bits(!bits & keep_down | standby_pd));
+        }
+    }
+
+    pupd( 0, gpioa, &pwr.PUCRA, &pwr.PDCRA);
+    pupd(16, gpiob, &pwr.PUCRB, &pwr.PDCRB);
+    pupd(32, gpioc, &pwr.PUCRC, &pwr.PDCRC);
+
+    if !crate::CONFIG.pupd_use_pwr {
+        // Enable the pullups.
+        pwr.CR3.modify(|_, w| w.APC().set_bit());
+    }
 
     crate::debug::drain();
 
-    let mask_a = crate::STANDBY_PRESERVE as u32 & 0xffff;
-    let mask_b = (crate::STANDBY_PRESERVE >> 16) as u32 & 0xffff;
-    if mask_a != 0 {
-        let bits_a = gpioa.IDR.read().bits();
-        // Pull down wins.
-        pwr.PUCRA.write(|w| w.bits(mask_a));
-        pwr.PDCRA.write(|w| w.bits(mask_a & !bits_a));
-    }
-    if mask_b != 0 {
-        let bits_b = gpiob.IDR.read().bits();
-        pwr.PDCRB.write(|w| w.bits(mask_b & !bits_b));
-        pwr.PUCRB.write(|w| w.bits(mask_b));
-    }
-    // Enable the pullups.
-    if crate::STANDBY_PRESERVE != 0 {
-        pwr.CR3.write(|w| w.EIWUL().set_bit().APC().set_bit());
-    }
-
-    // Deep sleep.
-    unsafe {scb.scr.write(4)};
-
-    // Clear the wake-up flags.  This seems to need to be some time after the
-    // wake-up!  Presumably a clock-tick of the RTC domain.
+    // Clear the RTC wake-up flags.  This seems to need to be some time after
+    // the wake-up!  Presumably a clock-tick of the RTC domain.
     rtc.SCR.write(|w| w.bits(!0));
+
+    // Deep sleep.  Note that if an interrupt does WFE after this we are liable
+    // to go into standby from the ISR!
+    unsafe {scb.scr.write(4)};
 
     loop {
         crate::cpu::WFE();

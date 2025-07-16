@@ -2,18 +2,21 @@
 #![cfg_attr(not(test), no_main)]
 #![deny(warnings)]
 #![allow(unpredictable_function_pointer_comparisons)]
+#![feature(const_default)]
+#![feature(const_trait_impl)]
 #![feature(format_args_nl)]
 #![feature(sync_unsafe_cell)]
 #![feature(str_from_raw_parts)]
 
 mod cpu;
 mod debug;
+mod utils;
 mod vcell;
 
 use vcell::nothing;
 
 type I2C = stm32u031::i2c1::RegisterBlock;
-const CONFIG: cpu::CpuConfig = *cpu::CpuConfig::new(16000000).debug_isr();
+const CONFIG: cpu::Config = *cpu::Config::new(16000000).debug();
 
 const TMP117: u8 = 0x92;
 

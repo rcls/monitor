@@ -1,5 +1,7 @@
 #![cfg_attr(not(test), no_std)]
 #![cfg_attr(not(test), no_main)]
+#![feature(const_default)]
+#![feature(const_trait_impl)]
 #![feature(format_args_nl)]
 #![feature(sync_unsafe_cell)]
 #![allow(unpredictable_function_pointer_comparisons)]
@@ -15,21 +17,18 @@ mod vcell;
 use cpu::WFE;
 use vcell::{UCell, VCell};
 
-const CONFIG: cpu::CpuConfig = *cpu::CpuConfig::new(2000000)
+const CONFIG: cpu::Config = *cpu::Config::new(2000000)
     .systick(systick_handler)
     .isr(stm32u031::Interrupt::TSC, tsc_isr)
     .clocks(1 << 24, 0, 0)
-    .debug_isr().i2c_isr();
+    .debug().i2c().lcd();
 
 type LcdBits = u64;
 const LCD_BITS: u32 = 48;
 const I2C_LINES: i2c::I2CLines = i2c::I2CLines::B6_B7;
 
-use lcd::STANDBY_PRESERVE;
-
 fn scrounge() -> i2c::Result {
     i2c::write(123, &[1u8,2]).wait()?;
-    let _ = STANDBY_PRESERVE;
     Ok(())
 }
 
