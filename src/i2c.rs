@@ -118,7 +118,6 @@ pub fn init() {
 
     if false {
         write_reg(0, 0, &0i16).defer();
-        // read_wait();
     }
 }
 
@@ -162,7 +161,7 @@ pub fn i2c_isr() {
     else {
         crate::dbgln!("Unexpected I2C ISR {:#x} {:#x}", status.bits(),
                       i2c.CR2.read().bits());
-        loop{}
+        loop {}
     }
 }
 

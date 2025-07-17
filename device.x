@@ -24,4 +24,7 @@ SECTIONS
      *(SORT_BY_ALIGNMENT(.bss*))
      __bss_end = .;
   } > RAM
+  .noinit (NOLOAD) : {
+     *(SORT_BY_ALIGNMENT(.noinit*))
+  } > RAM
 }

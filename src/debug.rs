@@ -11,6 +11,7 @@ pub struct DebugMarker;
 
 pub use stm32u031::Interrupt::USART3_LPUART1 as UART_ISR;
 
+#[unsafe(link_section = ".noinit")]
 pub static DEBUG: Debug = Debug::new();
 
 pub struct Debug {
@@ -31,6 +32,7 @@ impl Debug {
         }
     }
     fn write_bytes(&self, s: &[u8]) -> core::fmt::Result {
+        lazy_init();
         let mut w = self.w.read();
         for &b in s {
             while self.r.read().wrapping_sub(w) == 1 {
@@ -50,20 +52,15 @@ impl Debug {
         // twice in case there is a race condition where we read pending on an
         // enabled interrupt.
         let nvic = unsafe {&*cortex_m::peripheral::NVIC::PTR};
-        if nvic.ipr[0].read() & nvic.ipr[0].read() & 1 != 0 {
-            unsafe {nvic.icpr[0].write(1)};
+        let bit: u32 = 1 << stm32u031::Interrupt::USART3_LPUART1 as u32;
+        if nvic.icpr[0].read() & nvic.icpr[0].read() & bit != 0 {
+            unsafe {nvic.icpr[0].write(bit)};
             debug_isr();
         }
     }
     fn enable(&self, w: u8) {
         barrier();
         self.w.write(w);
-        // Check for lazy enablement...
-        let rcc = unsafe {&*stm32u031::RCC::ptr()};
-        if crate::CONFIG.apb1_clocks & 1 << 20 == 0
-            && !rcc.APBENR1.read().LPUART1EN().bit() {
-            init();
-        }
 
         let uart  = unsafe {&*UART::ptr()};
         // Use the FIFO empty interrupt.  Normally we should be fast enough
@@ -141,14 +138,26 @@ macro_rules! dbgln {
         &mut $crate::debug::DebugMarker, format_args_nl!($($tt)*));});
 }
 
+pub fn lazy_init() {
+    // Check for lazy enablement...
+    let rcc = unsafe {&*stm32u031::RCC::ptr()};
+    if crate::CONFIG.apb1_clocks & 1 << 20 == 0
+        && !rcc.APBENR1.read().LPUART1EN().bit() {
+        init();
+    }
+}
+
 pub fn init() {
     let gpioa = unsafe {&*stm32u031::GPIOA ::ptr()};
     let rcc   = unsafe {&*stm32u031::RCC::ptr()};
     let uart  = unsafe {&*UART::ptr()};
 
     if crate::CONFIG.apb1_clocks & 1 << 20 == 0 {
+        // Lazy initialization.
         rcc.APBENR1.modify(|_, w| w.LPUART1EN().set_bit());
     }
+    DEBUG.w.write(0);
+    DEBUG.r.write(0);
 
     // Configure UART lines.  sdbg! should now work.
     gpioa.AFRL.modify(|_, w| w.AFSEL2().B_0x8().AFSEL3().B_0x8());
