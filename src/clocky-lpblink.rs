@@ -17,8 +17,9 @@ mod low_power;
 mod utils;
 mod vcell;
 
-const LCD_BITS: u32 = 48;
 type LcdBits = u64;
+const LCD_BITS: u32
+    = match size_of::<LcdBits>() {4 => 32, 8 => 48, _ => panic!()};
 
 const I2C_LINES: i2c::I2CLines = i2c::I2CLines::B6_B7;
 
@@ -31,12 +32,6 @@ const CONFIG: cpu::Config = {
 };
 
 const MAGIC: u32 = 0xc6ea33e;
-
-const VERBOSE: bool = false;
-
-macro_rules!verbose {
-    ($($tt:tt)*) => {if VERBOSE {dbgln!($($tt)*);}}
-}
 
 fn cold_start() {
     let pwr  = unsafe {&*stm32u031::PWR ::ptr()};
@@ -60,25 +55,33 @@ fn cold_start() {
     pwr.SCR.write(|w| w.CWUF2().set_bit());
 }
 
-// Alert is on PB8
-fn display(temp: i32, seq: u32) {
-    let com = seq & 1 != 0;
-    let pos = seq / 8 % 6;
-
-    // Convert temp to centidegrees.
-    //sdbgln!("Counts = {} temp = {}", temp, (temp * 100 + 64) >> 7);
-    let temp = counts_to_temp(temp);
-    let neg = temp < 0;
-    let bcd = utils::to_bcd(if !neg {temp as u32} else {-temp as u32});
-    let mut segments: LcdBits = (lcd::DOT as u64) << 8;
-    // FIXME insert minus, remove trailing zeros.
-    for i in 0..4 {
-        let d = bcd >> 4 * i & 15;
-        segments |= (lcd::DIGITS[d as usize] as LcdBits) << 8 * i;
+fn segments(temp: i32) -> u32 {
+    let mut segs = lcd::DOT as u32 * 256;
+    let mut p = 0;
+    let mut quo = temp.unsigned_abs() as u16;
+    while p < 32 && quo != 0 || p < 16 {
+        let rem = quo % 10;
+        quo = quo / 10;
+        segs += (lcd::DIGITS[rem as usize] as u32) << p;
+        p += 8;
     }
-    let shift = pos * 8;
-    segments = segments << shift | segments >> 48 - shift;
-    lcd::update_lcd(segments, com);
+    if p < 32 && temp < 0 {
+        segs += (lcd::MINUS as u32) << p;
+    }
+    segs
+}
+
+fn display(segments: u32, seq: u32) {
+    let com = seq & 1 != 0;
+    if LCD_BITS == 48 {
+        let shift = seq as u16 % 48 & !7;
+        let segments = segments as LcdBits;
+        let segments = segments << shift | segments >> 48 - shift;
+        lcd::update_lcd(segments, com);
+    }
+    else {
+        lcd::update_lcd(segments as LcdBits, com);
+    }
 }
 
 fn alert() {
@@ -107,40 +110,37 @@ fn alert() {
     // display should give heaps of time for it to rise.
     pwr.PUCRC.write(|w| w.bits(1 << 13));
 
-    tamp.BKPR(2).write(|w| w.bits(counts as u32));
-    display(counts, tamp.BKPR(1).read().bits());
-    //dbgln!("Alert done...");
+    let segments = segments(temp);
+    tamp.BKPR(2).write(|w| w.bits(segments));
+    // Updating the display can wait for the next tick.
 }
 
 fn tick() {
     let tamp = unsafe {&*stm32u031::TAMP::ptr()};
     let seq = tamp.BKPR(1).read().bits();
-    // Divide by 32...
     let seq = seq.wrapping_add(1);
     tamp.BKPR(1).write(|w| w.bits(seq));
 
-    // On 0, command a one shot temperature conversion.  On 1 pick it up.
-    let mut temp = tamp.BKPR(2).read().bits() as i32;
+    // On /32, command a conversion.
+    let w;
     if seq & 31 == 0 {
         // Single shot conversion.
         // Alert reflects limits, active low.
         i2c::init();
-        let _ = i2c::write(i2c::TMP117, &[1u8, 0xc, 0]).wait().unwrap();
+        w = i2c::write(i2c::TMP117, &[1u8, 0xc, 0]);
     }
-    else if false && seq & 31 == 1 {
-        let mut countsbe = 0i16;
-        let _ = i2c::read_reg(i2c::TMP117, 0, &mut countsbe).wait().unwrap();
-        let counts = i16::from_be(countsbe) as i32;
-        tamp.BKPR(2).write(|w| w.bits(counts as u32));
-        temp = counts;
+    else {
+        w = i2c::Wait::new();
     }
-    display(temp, seq);
+    let segments = tamp.BKPR(2).read().bits();
+    display(segments, seq);
+    let _ = w.wait();
 }
 
 fn main() -> ! {
-    let pwr   = unsafe {&*stm32u031::PWR  ::ptr()};
-    let rcc   = unsafe {&*stm32u031::RCC  ::ptr()};
-    let tamp  = unsafe {&*stm32u031::TAMP ::ptr()};
+    let pwr  = unsafe {&*stm32u031::PWR ::ptr()};
+    let rcc  = unsafe {&*stm32u031::RCC ::ptr()};
+    let tamp = unsafe {&*stm32u031::TAMP::ptr()};
 
     // TODO - lazy set up of all the clocks!
     // Enable IO clocks.
@@ -158,18 +158,11 @@ fn main() -> ! {
 
     cpu::init1();
 
-    // We use lazy debug!
-    verbose!("Debug up");
-
-    verbose!("CPU init2");
     cpu::init2();
 
     let rcc_csr = rcc.CSR.read().bits();
-    verbose!("RCC CSR {rcc_csr:08x}");
 
     low_power::rtc_enable();
-
-    //i2c::init();
 
     lcd::init();
 
@@ -190,8 +183,6 @@ fn main() -> ! {
         tick();
     }
 
-    verbose!("Sleeping...");
-
     // FIXME handling of PC13.
     low_power::standby();
 }
@@ -200,14 +191,12 @@ fn counts_to_temp(c: i32) -> i32 {
     (c * 5 + 32) >> 6
 }
 
-#[allow(dead_code)]
 fn next_temp(t: i32) -> i32 {
     let nm = t * 64 + 32 + 4;
     let nm = if nm >= 0 {nm} else {nm - 4};
     nm / 5
 }
 
-#[allow(dead_code)]
 fn prev_temp(t: i32) -> i32 {
     let pm = t * 64 - 32 - 1;
     let pm = if pm >= 0 {pm} else {pm - 4};
@@ -229,5 +218,23 @@ fn check_prev_temp() {
         let p = prev_temp(t);
         assert_eq!(counts_to_temp(p), t - 1);
         assert_eq!(counts_to_temp(p + 1), t);
+    }
+}
+
+#[test]
+fn test_segments() {
+    for i in 0 ..= 9999 {
+        let text = format!("{i:02}");
+        let mut segs = 0;
+        let mut minus = lcd::MINUS as u32;
+        for c in text.chars() {
+            segs = segs * 256 + lcd::DIGITS[c as usize - 48] as u32;
+            minus <<= 8;
+        }
+        segs += lcd::DOT as u32 * 256;
+        assert_eq!(segments(i), segs, "{i} {:x} {segs:x}", segments(i));
+        if 0 < i && i <= 999 {
+            assert_eq!(segments(-i), segs + minus);
+        }
     }
 }

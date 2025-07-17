@@ -2,7 +2,7 @@
 
 use crate::cpu::WFE;
 
-use super::{LCD_BITS, LcdBits};
+use crate::{LCD_BITS, LcdBits};
 
 pub static LCD: crate::vcell::UCell<LCD> = crate::vcell::UCell::new(LCD::new());
 
@@ -107,7 +107,7 @@ pub fn update_lcd(bits: LcdBits, comm: bool) {
     // If we have have a third word to write, wait for one RX word then send it.
     if LCD_BITS > 32 {
         rx_word(spi);
-        spi.DR.write(|w| w.bits((bits >> 32) as u16));
+        spi.DR.write(|w| w.bits((bits >> 16 >> 16) as u16));
     }
     // Wait for 2 words RX.
     rx_word(spi);
@@ -115,7 +115,7 @@ pub fn update_lcd(bits: LcdBits, comm: bool) {
 
     // Set STR (A15) high.  Set col1 (A12), it's not driven yet.  (If both S and
     // R are set, then S wins.)
-    let col1 = if LCD_BITS > 32 {bits & 1 << 48 != 0} else {false};
+    let col1 = if LCD_BITS > 32 {bits as u64 & 1 << 48 != 0} else {comm};
     gpioa.BSRR.write(|w|
         w.BS15().set_bit().BS12().bit(col1).BR12().set_bit());
 

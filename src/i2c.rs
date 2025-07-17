@@ -242,6 +242,7 @@ impl I2cContext {
 }
 
 impl Wait<'_> {
+    pub fn new() -> Self {Wait(PhantomData)}
     pub fn defer(self) {core::mem::forget(self);}
     pub fn wait(self) -> Result {CONTEXT.wait()}
 }
@@ -251,7 +252,7 @@ impl Drop for Wait<'_> {
 }
 
 pub fn waiter<'a, T: ?Sized>(_: &'a T) ->Wait<'a> {
-    Wait(PhantomData)
+    Wait::new()
 }
 
 pub fn write<'a, T: Flat + ?Sized>(addr: u8, data: &'a T) -> Wait<'a> {
@@ -266,10 +267,8 @@ pub fn write_reg<'a, T: Flat + ?Sized>(addr: u8, reg: u8, data: &'a T) -> Wait<'
 }
 
 pub fn read_reg<'a, T: Flat + ?Sized>(addr: u8, reg: u8, data: &'a mut T) -> Wait<'a> {
-    // Should only be called while I2C idle...
-    //let context = unsafe {CONTEXT.as_mut()};
     CONTEXT.read_reg_start(addr | 1, reg, data.addr(), size_of_val(data));
-    Wait(PhantomData)
+    Wait::new()
 }
 
 impl crate::cpu::Config {
