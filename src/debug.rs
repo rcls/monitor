@@ -11,6 +11,8 @@ pub struct DebugMarker;
 
 pub use stm32u031::Interrupt::USART3_LPUART1 as UART_ISR;
 
+/// State for debug logging.  We mark this as no-init and initialize the cells
+/// ourselves, to avoid putting the buffer into BSS.
 #[unsafe(link_section = ".noinit")]
 pub static DEBUG: Debug = Debug::new();
 
@@ -21,7 +23,9 @@ pub struct Debug {
 }
 
 pub fn debug_isr() {
-    DEBUG.isr();
+    if !crate::CONFIG.no_debug {
+        DEBUG.isr();
+    }
 }
 
 impl Debug {
@@ -36,7 +40,8 @@ impl Debug {
         let mut w = self.w.read();
         for &b in s {
             while self.r.read().wrapping_sub(w) == 1 {
-                self.push(w);
+                self.enable(w);
+                self.push();
             }
             // The ISR won't access the array element in question.
             unsafe {*self.buf[w as usize].as_mut() = b};
@@ -45,8 +50,7 @@ impl Debug {
         self.enable(w);
         Ok(())
     }
-    fn push(&self, w: u8) {
-        self.enable(w);
+    fn push(&self) {
         WFE();
         // If the interrupt is pending, call the ISR ourselves.  Read the bit
         // twice in case there is a race condition where we read pending on an
@@ -98,8 +102,8 @@ impl Debug {
 #[allow(dead_code)]
 pub fn drain() {
     let rcc = unsafe {&*stm32u031::RCC::ptr()};
-    if crate::CONFIG.apb1_clocks & 1 << 20 == 0
-        && !rcc.APBENR1.read().LPUART1EN().bit() {
+    if crate::CONFIG.no_debug ||
+        crate::CONFIG.is_lazy_debug() && !rcc.APBENR1.read().LPUART1EN().bit() {
         // Not initialized, nothing to do.
         return;
     }
@@ -109,7 +113,7 @@ pub fn drain() {
     uart.CR1().modify(|_,w| w.TCIE().set_bit());
     // Wait for the TC bit.
     while !uart.ISR().read().TC().bit() {
-        WFE();
+        DEBUG.push();
     }
 }
 
@@ -125,23 +129,30 @@ impl Write for DebugMarker {
 
 #[macro_export]
 macro_rules! dbg {
-    ($($tt:tt)*) => (
-        let _ = core::fmt::Write::write_fmt(
-            &mut $crate::debug::DebugMarker, format_args!($($tt)*)););
+    ($($tt:tt)*) => {
+        if !crate::CONFIG.no_debug {
+            let _ = core::fmt::Write::write_fmt(
+                &mut $crate::debug::DebugMarker, format_args!($($tt)*));
+        }
+    }
 }
 
 #[macro_export]
 macro_rules! dbgln {
-    () => ({let _ = core::fmt::Write::write_str(
-        &mut $crate::debug::DebugMarker, "\n");});
-    ($($tt:tt)*) => ({let _ = core::fmt::Write::write_fmt(
-        &mut $crate::debug::DebugMarker, format_args_nl!($($tt)*));});
+    () => {if !crate::CONFIG::no_debug {
+        let _ = core::fmt::Write.write_str(
+            &mut $crate::debug::DebugMarker, "\n");
+        }};
+    ($($tt:tt)*) => {if !crate::CONFIG.no_debug {
+        let _ = core::fmt::Write::write_fmt(
+            &mut $crate::debug::DebugMarker, format_args_nl!($($tt)*));
+        }};
 }
 
 pub fn lazy_init() {
     // Check for lazy enablement...
     let rcc = unsafe {&*stm32u031::RCC::ptr()};
-    if crate::CONFIG.apb1_clocks & 1 << 20 == 0
+    if crate::CONFIG.is_lazy_debug()
         && !rcc.APBENR1.read().LPUART1EN().bit() {
         init();
     }
@@ -152,7 +163,7 @@ pub fn init() {
     let rcc   = unsafe {&*stm32u031::RCC::ptr()};
     let uart  = unsafe {&*UART::ptr()};
 
-    if crate::CONFIG.apb1_clocks & 1 << 20 == 0 {
+    if crate::CONFIG.is_lazy_debug() {
         // Lazy initialization.
         rcc.APBENR1.modify(|_, w| w.LPUART1EN().set_bit());
     }
@@ -179,7 +190,7 @@ pub fn init() {
         |w| w.FIFOEN().set_bit().TE().set_bit().UE().set_bit());
 }
 
-#[cfg(not(test))]
+#[cfg(target_os = "none")]
 #[panic_handler]
 fn ph(info: &core::panic::PanicInfo) -> ! {
     dbgln!("{info}");
@@ -206,7 +217,7 @@ const fn prescale(bit_rate: u32) -> (u32, u32) {
     }
     const fn ok(bit_rate: u32, presc: usize) -> bool {
         let brr = calc(bit_rate, presc);
-        brr >= 0x300 && brr < 1<<20
+        brr >= 0x300 && brr < 1<<20 && (brr >= 0x800 || presc == 0)
     }
     let mut presc = 11;
     while !ok(bit_rate, presc) {
@@ -225,9 +236,22 @@ impl crate::cpu::Config {
         // self.pullup |= 1 << 3; // Pull-up on RX pin.
         self.isr(UART_ISR, debug_isr)
     }
+    #[allow(dead_code)]
+    pub const fn no_debug(&mut self) -> &mut Self {
+        self.no_debug = true;
+        self
+    }
+    pub const fn is_lazy_debug(&self) -> bool {
+        self.apb1_clocks & 1 << 20 == 0
+    }
 }
 
 #[test]
 fn check_vtors() {
-    assert!(crate::cpu::VECTORS.isr[UART_ISR as usize] == debug_isr);
+    if !crate::CONFIG.no_debug {
+        assert!(crate::cpu::VECTORS.isr[UART_ISR as usize] == debug_isr);
+    }
+    else {
+        assert!(crate::cpu::VECTORS.isr[UART_ISR as usize] != debug_isr);
+    }
 }

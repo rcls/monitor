@@ -24,13 +24,12 @@ pub struct Config {
     /// GPIO bits that should be pulled down in standby if already lo.
     #[allow(dead_code)]
     pub keep_pd: u64,
-    /// GPIO bits that should have PU/PD preserved on wake-up.
-    /// FIXME - we can get rid of this.
-    pub wakeup_pupd: u64,
     /// Use PWR for pull-up/pull-down rather than GPIOs.
     pub pupd_use_pwr: bool,
     /// Enable the MSI FLL.
     pub fll: bool,
+    /// Turn off debug...
+    pub no_debug: bool,
 }
 
 #[used]
@@ -50,23 +49,23 @@ pub const MSIRANGE: u8 = const {
     }
 };
 
-// TODO - cut the Geordian knot and leave PUPD set-up to after init.
-// Or runtime parameters.
-// Or set in init1, release standby-only in init2?
+// Any preexisting PU/PD from standby we preserve.
 fn pupd_via_pwr() {
     let pwr = unsafe {&*stm32u031::PWR::ptr()};
     #[inline]
     fn setup(shift: u32, pucr: &stm32u031::pwr::PUCRA, pdcr: &stm32u031::pwr::PDCRA) {
-        let pullup   = (CONFIG.pullup      >> shift & 0xffff) as u32;
-        let pulldown = (CONFIG.pulldown    >> shift & 0xffff) as u32;
-        let wakeup   = (CONFIG.wakeup_pupd >> shift & 0xffff) as u32;
-        //let sb = CONFIG.standby_io  >> shift & 0xffff;
-        if pullup != 0 || wakeup != 0 {
-            let pp = if wakeup != 0 {pucr.read().bits() & wakeup} else {0};
+        let xtract = |x| (x >> shift & 0xffff) as u32;
+        let pullup   = xtract(CONFIG.pullup);
+        let keepup   = xtract(CONFIG.keep_pu | CONFIG.standby_pu);
+        let pulldown = xtract(CONFIG.pulldown);
+        let keepdown = xtract(CONFIG.keep_pd | CONFIG.standby_pd);
+
+        if pullup != 0 {
+            let pp = if keepup == 0 {0} else {pucr.read().bits() & keepup};
             pucr.write(|w| w.bits(pullup | pp));
         }
-        if pulldown != 0 || wakeup != 0 {
-            let pp = if wakeup != 0 {pdcr.read().bits() & wakeup} else {0};
+        if pulldown != 0 {
+            let pp = if keepdown == 0 {0} else {pdcr.read().bits() & keepdown};
             pdcr.write(|w| w.bits(pulldown | pp));
         }
     }
@@ -161,7 +160,8 @@ pub fn init2() {
     // Enable the LSE interrupt, wait for it and then enable the MSI FLL.
     rcc.CIER.write(|w| w.LSERDYIE().set_bit());
 
-    // Wait for LSE.
+    // Wait for LSE.  FIXME - this hangs if the interrupt is asserted for some
+    // other reason.
     while !rcc.BDCR.read().LSERDY().bit() {
         WFE();
     }
@@ -177,7 +177,7 @@ pub fn init2() {
     // Reduce drive strength.  (Lowest drive strength appears unreliable).
     rcc.BDCR.write(|w| w.LSEON().set_bit().LSEDRV().B_0x1());
 
-    // Enable interrupts.  reserved1 has been abused to track what to enable.
+    // Enable interrupts.
     unsafe {
         nvic.iser[0].write(CONFIG.interrupts);
     }
@@ -192,8 +192,7 @@ impl Config {
             interrupts: 0,
             pullup: 1 << 13, pulldown: 1 << 14,
             standby_pu: 0, standby_pd: 0, keep_pu: 0, keep_pd: 0,
-            wakeup_pupd: 0,
-            fll: true, pupd_use_pwr: false}
+            fll: true, pupd_use_pwr: false, no_debug: false}
     }
     pub const fn isr(&mut self,
                      isr: stm32u031::Interrupt, handler: fn()) -> &mut Self {
@@ -212,11 +211,35 @@ impl Config {
         self.apb2_clocks |= pb2;
         self
     }
+    /// GPIO PUPD register value.
     pub const fn pupd(&self, port: u32) -> u32 {
         let up   = (self.pullup   >> port * 16) as u16;
         let down = (self.pulldown >> port * 16) as u16;
         crate::utils::spread16(up) + crate::utils::spread16(down) * 2
     }
+
+    /// Clear any standby pull up/down in the config.
+    #[allow(dead_code)]
+    #[inline(always)]
+    pub fn clear(&self) {
+        let pwr = unsafe {&*stm32u031::PWR::ptr()};
+        fn do1(me: &Config, shift: u32, pucr: &stm32u031::pwr::PUCRA,
+               pdcr: &stm32u031::pwr::PDCRA) {
+            let xtract = |b| (b >> shift & 0xffff) as u32;
+            let clear_up   = xtract(me.standby_pu | me.keep_pu);
+            let clear_down = xtract(me.standby_pd | me.keep_pd);
+            if clear_up != 0 {
+                pucr.modify(|r,w| w.bits(r.bits() & !clear_up));
+            }
+            if clear_down != 0 {
+                pdcr.modify(|r,w| w.bits(r.bits() & !clear_down));
+            }
+        }
+        do1(self,  0, &pwr.PUCRA, &pwr.PDCRA);
+        do1(self, 16, &pwr.PUCRB, &pwr.PDCRB);
+        do1(self, 32, &pwr.PUCRC, &pwr.PDCRC);
+    }
+
 }
 
 #[derive(Clone, Copy)]

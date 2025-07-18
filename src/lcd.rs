@@ -60,6 +60,9 @@ pub fn init() {
     let gpiob = unsafe {&*stm32u031::GPIOB::ptr()};
     let spi   = unsafe {&*stm32u031::SPI1 ::ptr()};
 
+    const PULLS: crate::cpu::Config = *crate::cpu::Config::new(0).lcd();
+    PULLS.clear();
+
     // OE pin A11, CP=B3, DAT=B5, STR=A15, COM = B9.
     // Set OE to output low.
     // Set PWR=PB4 to be high.

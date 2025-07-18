@@ -1,5 +1,5 @@
-#![cfg_attr(not(test), no_std)]
-#![cfg_attr(not(test), no_main)]
+#![cfg_attr(target_os = "none", no_std)]
+#![cfg_attr(target_os = "none", no_main)]
 #![feature(const_default)]
 #![feature(const_trait_impl)]
 #![feature(format_args_nl)]
@@ -7,7 +7,6 @@
 #![allow(unpredictable_function_pointer_comparisons)]
 
 mod cpu;
-//#[path = "nodebug.rs"]
 mod debug;
 mod dma;
 mod i2c;
@@ -34,7 +33,7 @@ const CONFIG: cpu::Config = {
 const MAGIC: u32 = 0xc6ea33e;
 
 fn cold_start() {
-    let pwr  = unsafe {&*stm32u031::PWR ::ptr()};
+    let pwr = unsafe {&*stm32u031::PWR::ptr()};
 
     dbgln!("**** RESTART ****");
     let tamp = unsafe {&*stm32u031::TAMP::ptr()};
@@ -106,26 +105,29 @@ fn alert() {
     let _ = i2c::write(i2c::TMP117, &[2u8, (upper >> 8) as u8, upper as u8]);
     let _ = i2c::write(i2c::TMP117, &[3u8, (lower >> 8) as u8, lower as u8]);
 
-    // The alert pin should be released.  Reenable the pull-up.  Writing the
-    // display should give heaps of time for it to rise.
+    // The alert pin should be released.  Reenable the pull-up.
     pwr.PUCRC.write(|w| w.bits(1 << 13));
 
     let segments = segments(temp);
     tamp.BKPR(2).write(|w| w.bits(segments));
-    // Updating the display can wait for the next tick.
+    // Updating the display can wait for the next tick.  Disable the wake-up.
+    pwr.CR3.modify(|_,w| w.EIWUL().set_bit().EWUP2().clear_bit());
 }
 
 fn tick() {
+    let pwr  = unsafe {&*stm32u031::PWR ::ptr()};
     let tamp = unsafe {&*stm32u031::TAMP::ptr()};
-    let seq = tamp.BKPR(1).read().bits();
-    let seq = seq.wrapping_add(1);
+
+    let seq = tamp.BKPR(1).read().bits().wrapping_add(1);
     tamp.BKPR(1).write(|w| w.bits(seq));
 
     // On /32, command a conversion.
     let w;
     if seq & 31 == 0 {
-        // Single shot conversion.
-        // Alert reflects limits, active low.
+        // Single shot conversion.  Arm and clear the wake-up flag.
+        pwr.CR3.modify(|_,w| w.EIWUL().set_bit().EWUP2().set_bit());
+        pwr.SCR.write(|w| w.CWUF2().set_bit());
+
         i2c::init();
         w = i2c::write(i2c::TMP117, &[1u8, 0xc, 0]);
     }
@@ -133,6 +135,7 @@ fn tick() {
         w = i2c::Wait::new();
     }
     let segments = tamp.BKPR(2).read().bits();
+    lcd::init();
     display(segments, seq);
     let _ = w.wait();
 }
@@ -164,16 +167,15 @@ fn main() -> ! {
 
     low_power::rtc_enable();
 
-    lcd::init();
-
     let sr1 = pwr.SR1.read();
 
     // If all of the reset reason, the magic number, and the woke-from-standby
-    // flag agree, treat this as a restart.  Else do a cold-start.
+    // flag agree, treat this as a normal restart.  Else do a cold-start.
     if rcc_csr & 0xfe000000 != 0 || tamp.BKPR(0).read().bits() != MAGIC
         || !sr1.SBF().bit() {
         cold_start();
     }
+
     if sr1.WUF2().bit() {
         alert();
         // Processing alert() should give the pin time to rise.
@@ -183,7 +185,6 @@ fn main() -> ! {
         tick();
     }
 
-    // FIXME handling of PC13.
     low_power::standby();
 }
 

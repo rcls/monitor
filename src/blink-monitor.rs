@@ -1,5 +1,5 @@
-#![cfg_attr(not(test), no_std)]
-#![cfg_attr(not(test), no_main)]
+#![cfg_attr(target_os = "none", no_std)]
+#![cfg_attr(target_os = "none", no_main)]
 #![deny(warnings)]
 #![allow(unpredictable_function_pointer_comparisons)]
 #![feature(const_default)]

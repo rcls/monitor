@@ -130,7 +130,12 @@ pub fn standby() -> ! {
     // to go into standby from the ISR!
     unsafe {scb.scr.write(4)};
 
+    // It looks like, if we do have wake-up bits set, then we reset immediately,
+    // instead of ignoring the WFE completely.  The event flag is probably set
+    // when we get here.
     loop {
-        crate::cpu::WFE();
+        #[cfg(target_os = "none")]
+        cortex_m::asm::wfi();
+        unsafe {(*cortex_m::peripheral::SCB::PTR).aircr.write(0x05fa0004)};
     }
 }
