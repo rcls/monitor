@@ -120,10 +120,11 @@ pub fn standby() -> ! {
         pwr.CR3.modify(|_, w| w.APC().set_bit());
     }
 
-    crate::debug::drain();
+    crate::debug::flush();
 
     // Clear the RTC wake-up flags.  This seems to need to be some time after
     // the wake-up!  Presumably a clock-tick of the RTC domain.
+    // FIXME - do this individually!
     rtc.SCR.write(|w| w.bits(!0));
 
     // Deep sleep.  Note that if an interrupt does WFE after this we are liable

@@ -1,10 +1,12 @@
 #![cfg_attr(target_os = "none", no_std)]
 #![cfg_attr(target_os = "none", no_main)]
 #![deny(warnings)]
+#![allow(internal_features)]
 #![allow(unpredictable_function_pointer_comparisons)]
 #![feature(const_default)]
 #![feature(const_trait_impl)]
 #![feature(format_args_nl)]
+#![feature(link_llvm_intrinsics)]
 #![feature(sync_unsafe_cell)]
 #![feature(str_from_raw_parts)]
 

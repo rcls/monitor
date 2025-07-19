@@ -24,7 +24,8 @@ pub struct Config {
     /// GPIO bits that should be pulled down in standby if already lo.
     #[allow(dead_code)]
     pub keep_pd: u64,
-    /// Use PWR for pull-up/pull-down rather than GPIOs.
+    /// Use PWR for pull-up/pull-down rather than GPIOs.  This is required for
+    /// the standby processing to work.
     pub pupd_use_pwr: bool,
     /// Enable the MSI FLL.
     pub fll: bool,
@@ -133,7 +134,7 @@ pub fn init1() {
         crate::vcell::barrier();
     }
 
-    // We use sev-on-pending to avoid trivial interrupt handlers.
+    // We use sev-on-pend to avoid trivial interrupt handlers.
     unsafe {scb.scr.write(16)};
 
     // Enable the LSE.  Set high drive strength for crystal start-up.
@@ -221,7 +222,11 @@ impl Config {
     /// Clear any standby pull up/down in the config.
     #[allow(dead_code)]
     #[inline(always)]
-    pub fn clear(&self) {
+    pub fn clear_pupd(&self) {
+        // This is only relevant when the main program is using PWR for PUPD.
+        if !crate::CONFIG.pupd_use_pwr {
+            return;
+        }
         let pwr = unsafe {&*stm32u031::PWR::ptr()};
         fn do1(me: &Config, shift: u32, pucr: &stm32u031::pwr::PUCRA,
                pdcr: &stm32u031::pwr::PDCRA) {
@@ -273,8 +278,19 @@ impl const Default for VectorTable {
     }
 }
 
+unsafe extern "C" {
+    #[link_name = "llvm.frameaddress"]
+    fn frameaddress(level: i32) -> *const u8;
+}
+
 fn bugger() {
-    panic!("Unexpected interrupt");
+    let fp = unsafe {frameaddress(0)};
+    // The exception PC is at +0x18, but then LLVM pushes an additional 8
+    // bytes to form the frame.
+    let pcp = fp.wrapping_add(0x20);
+    let pc = unsafe {*(pcp as *const u32)};
+    crate::dbgln!("Bugger @ {pc:#x}");
+    crate::debug::flush_and_reboot();
 }
 
 #[inline(always)]

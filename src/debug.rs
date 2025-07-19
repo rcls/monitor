@@ -57,7 +57,12 @@ impl Debug {
         // enabled interrupt.
         let nvic = unsafe {&*cortex_m::peripheral::NVIC::PTR};
         let bit: u32 = 1 << stm32u031::Interrupt::USART3_LPUART1 as u32;
-        if nvic.icpr[0].read() & nvic.icpr[0].read() & bit != 0 {
+        if nvic.icpr[0].read() & bit == 0 {
+            return;
+        }
+        // It might take a couple of goes for the pending state to clear, so
+        // loop.
+        while nvic.icpr[0].read() & bit != 0 {
             unsafe {nvic.icpr[0].write(bit)};
             debug_isr();
         }
@@ -66,7 +71,7 @@ impl Debug {
         barrier();
         self.w.write(w);
 
-        let uart  = unsafe {&*UART::ptr()};
+        let uart = unsafe {&*UART::ptr()};
         // Use the FIFO empty interrupt.  Normally we should be fast enough
         // to refill before the last byte finishes.
         uart.CR1.write(
@@ -74,7 +79,7 @@ impl Debug {
                 . TXFEIE().set_bit());
     }
     fn isr(&self) {
-        let uart  = unsafe {&*UART::ptr()};
+        let uart = unsafe {&*UART::ptr()};
         let sr = uart.ISR.read();
         if sr.TC().bit() {
             uart.CR1.modify(|_,w| w.TCIE().clear_bit());
@@ -100,19 +105,23 @@ impl Debug {
 }
 
 #[allow(dead_code)]
-pub fn drain() {
+pub fn flush() {
     let rcc = unsafe {&*stm32u031::RCC::ptr()};
     if crate::CONFIG.no_debug ||
         crate::CONFIG.is_lazy_debug() && !rcc.APBENR1.read().LPUART1EN().bit() {
-        // Not initialized, nothing to do.
-        return;
+        return;                        // Not initialized, nothing to do.
     }
 
     let uart  = unsafe {&*UART::ptr()};
     // Enable the TC interrupt.
     uart.CR1().modify(|_,w| w.TCIE().set_bit());
     // Wait for the TC bit.
-    while !uart.ISR().read().TC().bit() {
+    loop {
+        let isr = uart.ISR().read();
+        if DEBUG.r.read() == DEBUG.w.read()
+            && isr.TC().bit() && isr.TXFE().bit() {
+            break;
+        }
         DEBUG.push();
     }
 }
@@ -190,24 +199,21 @@ pub fn init() {
         |w| w.FIFOEN().set_bit().TE().set_bit().UE().set_bit());
 }
 
-#[cfg(target_os = "none")]
-#[panic_handler]
-fn ph(info: &core::panic::PanicInfo) -> ! {
-    dbgln!("{info}");
-    // Let the TX FIFO drain.
-    let uart = unsafe { &*UART::ptr() };
-    while !uart.ISR().read().TXFE().bit() {
-        let isr = uart.ISR().read();
-        if isr.TXFE().bit() && isr.TC().bit() {
-            break;
-        }
-    }
+pub fn flush_and_reboot() -> ! {
+    flush();
     loop {
         unsafe {(*cortex_m::peripheral::SCB::PTR).aircr.write(0x05fa0004)};
     }
 }
 
-// Returns prescaler (prescaler index, BRR value).
+#[cfg(target_os = "none")]
+#[panic_handler]
+fn ph(info: &core::panic::PanicInfo) -> ! {
+    dbgln!("{info}");
+    flush_and_reboot();
+}
+
+/// Returns prescaler (prescaler index, BRR value).
 const fn prescale(bit_rate: u32) -> (u32, u32) {
     const fn calc(bit_rate: u32, presc: usize) -> u32 {
         let divs = [1, 2, 4, 6, 8, 10, 12, 16, 32, 64, 128, 256];
@@ -226,17 +232,15 @@ const fn prescale(bit_rate: u32) -> (u32, u32) {
     (presc as u32, calc(bit_rate, presc))
 }
 
+#[allow(dead_code)]
 impl crate::cpu::Config {
-    #[allow(dead_code)]
     pub const fn debug(&mut self) -> &mut Self {
         self.lazy_debug().clocks(0, 1 << 20, 0)
     }
-    #[allow(dead_code)]
     pub const fn lazy_debug(&mut self) -> &mut Self {
         // self.pullup |= 1 << 3; // Pull-up on RX pin.
         self.isr(UART_ISR, debug_isr)
     }
-    #[allow(dead_code)]
     pub const fn no_debug(&mut self) -> &mut Self {
         self.no_debug = true;
         self

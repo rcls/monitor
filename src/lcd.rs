@@ -53,15 +53,14 @@ impl LCD {
     }
 }
 
-/// Initialize the I/O to the LCD.  This should be good when waking up from
-/// standby, as we leave the LCD high impedance until we write something to it.
+/// Initialize the I/O to the LCD.
 pub fn init() {
     let gpioa = unsafe {&*stm32u031::GPIOA::ptr()};
     let gpiob = unsafe {&*stm32u031::GPIOB::ptr()};
     let spi   = unsafe {&*stm32u031::SPI1 ::ptr()};
 
-    const PULLS: crate::cpu::Config = *crate::cpu::Config::new(0).lcd();
-    PULLS.clear();
+    // Remove any standby pull-up/pull-downs.
+    crate::cpu::Config::new(0).lcd().clear_pupd();
 
     // OE pin A11, CP=B3, DAT=B5, STR=A15, COM = B9.
     // Set OE to output low.
