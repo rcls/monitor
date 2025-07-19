@@ -1,23 +1,27 @@
 #![allow(dead_code)]
 
-use core::cell::SyncUnsafeCell;
+use core::cell::UnsafeCell;
 
 /// Interrupt safe volatile cell, has read/write for scalar types.
 #[repr(transparent)]
-pub struct VCell<T>(SyncUnsafeCell<T>);
+pub struct VCell<T>(UnsafeCell<T>);
+
 /// A basic cell for storage.  Shared access is safe, mutable access is
 /// unsafe.
 #[repr(transparent)]
-pub struct UCell<T>(SyncUnsafeCell<T>);
+pub struct UCell<T>(UnsafeCell<T>);
+
+unsafe impl<T> Sync for VCell<T> {}
+unsafe impl<T> Sync for UCell<T> {}
 
 impl<T: Sync> VCell<T> {
-    pub const fn new(v: T) -> Self {Self(SyncUnsafeCell::new(v))}
+    pub const fn new(v: T) -> Self {Self(UnsafeCell::new(v))}
     pub fn as_ptr(&self) -> *mut T {self.0.get()}
     pub fn as_mut(&mut self) -> &mut T {self.0.get_mut()}
 }
 
 impl<T: Sync> UCell<T> {
-    pub const fn new(v: T) -> Self {Self(SyncUnsafeCell::new(v))}
+    pub const fn new(v: T) -> Self {Self(UnsafeCell::new(v))}
     pub fn as_ref(&self) -> &T {unsafe{&*(self.0.get() as *const T)}}
     pub fn as_ptr(&self) -> *mut T {self.0.get()}
     /// We are naughty and use this in interrupts, using barriers.

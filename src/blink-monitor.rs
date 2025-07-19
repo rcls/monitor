@@ -7,7 +7,6 @@
 #![feature(const_trait_impl)]
 #![feature(format_args_nl)]
 #![feature(link_llvm_intrinsics)]
-#![feature(sync_unsafe_cell)]
 #![feature(str_from_raw_parts)]
 
 mod cpu;
