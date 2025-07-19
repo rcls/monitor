@@ -4,6 +4,7 @@
 #![allow(unpredictable_function_pointer_comparisons)]
 #![feature(const_default)]
 #![feature(const_trait_impl)]
+#![feature(derive_const)]
 #![feature(format_args_nl)]
 #![feature(link_llvm_intrinsics)]
 

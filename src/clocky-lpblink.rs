@@ -4,6 +4,7 @@
 #![allow(unpredictable_function_pointer_comparisons)]
 #![feature(const_default)]
 #![feature(const_trait_impl)]
+#![feature(derive_const)]
 #![feature(format_args_nl)]
 #![feature(link_llvm_intrinsics)]
 
@@ -38,7 +39,7 @@ fn cold_start() {
 
     dbgln!("**** RESTART ****");
     let tamp = unsafe {&*stm32u031::TAMP::ptr()};
-    tamp.BKPR(0).write(|w| w.bits(MAGIC));
+    tamp.BKPR[0].write(|w| w.bits(MAGIC));
     low_power::ensure_options();
     low_power::rtc_setup_20Hz();
 
@@ -99,7 +100,7 @@ fn alert() {
     let _ = i2c::read_reg(i2c::TMP117, 1, &mut 0i16).wait();
     let counts = i16::from_be(countsbe) as i32;
     let temp = counts_to_temp(counts);
-    //dbgln!("Alert! {} {}", temp, tamp.BKPR(1).read().bits());
+    //dbgln!("Alert! {} {}", temp, tamp.BKPR[1].read().bits());
     // Write the alert high and low registers.
     let upper = next_temp(temp).max(counts + 3).min( 0x7fff);
     let lower = prev_temp(temp).min(counts - 3).max(-0x8000);
@@ -110,7 +111,7 @@ fn alert() {
     pwr.PUCRC.write(|w| w.bits(1 << 13));
 
     let segments = segments(temp);
-    tamp.BKPR(2).write(|w| w.bits(segments));
+    tamp.BKPR[2].write(|w| w.bits(segments));
     // Updating the display can wait for the next tick.  Disable the wake-up.
     pwr.CR3.modify(|_,w| w.EIWUL().set_bit().EWUP2().clear_bit());
 }
@@ -119,8 +120,8 @@ fn tick() {
     let pwr  = unsafe {&*stm32u031::PWR ::ptr()};
     let tamp = unsafe {&*stm32u031::TAMP::ptr()};
 
-    let seq = tamp.BKPR(1).read().bits().wrapping_add(1);
-    tamp.BKPR(1).write(|w| w.bits(seq));
+    let seq = tamp.BKPR[1].read().bits().wrapping_add(1);
+    tamp.BKPR[1].write(|w| w.bits(seq));
 
     // On /32, command a conversion.
     let w;
@@ -135,7 +136,7 @@ fn tick() {
     else {
         w = i2c::Wait::new();
     }
-    let segments = tamp.BKPR(2).read().bits();
+    let segments = tamp.BKPR[2].read().bits();
     lcd::init();
     display(segments, seq);
     let _ = w.wait();
@@ -172,7 +173,7 @@ fn main() -> ! {
 
     // If all of the reset reason, the magic number, and the woke-from-standby
     // flag agree, treat this as a normal restart.  Else do a cold-start.
-    if rcc_csr & 0xfe000000 != 0 || tamp.BKPR(0).read().bits() != MAGIC
+    if rcc_csr & 0xfe000000 != 0 || tamp.BKPR[0].read().bits() != MAGIC
         || !sr1.SBF().bit() {
         cold_start();
     }

@@ -1,6 +1,7 @@
 use crate::{link_assert, CONFIG};
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy)]
+#[derive_const(Default)]
 pub struct Config {
     pub clk: u32,
     pub vectors: VectorTable,
@@ -189,11 +190,9 @@ impl Config {
         Config{
             clk, vectors: VectorTable::default(),
             // Always enable PWR clock.
-            ahb_clocks: 0, apb1_clocks: 1 << 28, apb2_clocks: 0,
-            interrupts: 0,
+            apb1_clocks: 1 << 28,
             pullup: 1 << 13, pulldown: 1 << 14,
-            standby_pu: 0, standby_pd: 0, keep_pu: 0, keep_pd: 0,
-            fll: true, pupd_use_pwr: false, no_debug: false}
+            fll: true, .. Config::default()}
     }
     pub const fn isr(&mut self,
                      isr: stm32u031::Interrupt, handler: fn()) -> &mut Self {
