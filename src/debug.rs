@@ -199,18 +199,12 @@ pub fn init() {
         |w| w.FIFOEN().set_bit().TE().set_bit().UE().set_bit());
 }
 
-pub fn flush_and_reboot() -> ! {
-    flush();
-    loop {
-        unsafe {(*cortex_m::peripheral::SCB::PTR).aircr.write(0x05fa0004)};
-    }
-}
-
 #[cfg(target_os = "none")]
 #[panic_handler]
 fn ph(info: &core::panic::PanicInfo) -> ! {
     dbgln!("{info}");
-    flush_and_reboot();
+    flush();
+    crate::cpu::reboot();
 }
 
 /// Returns prescaler (prescaler index, BRR value).

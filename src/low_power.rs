@@ -115,7 +115,9 @@ pub fn standby() -> ! {
     pupd(16, gpiob, &pwr.PUCRB, &pwr.PDCRB);
     pupd(32, gpioc, &pwr.PUCRC, &pwr.PDCRC);
 
-    if !crate::CONFIG.pupd_use_pwr {
+    if !crate::CONFIG.low_power {
+        // Special case, set the NRST pull-up.  Is this needed?
+        pwr.PUCRF.write(|w| w.PU2().set_bit());
         // Enable the pullups.
         pwr.CR3.modify(|_, w| w.APC().set_bit());
     }

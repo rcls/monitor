@@ -28,7 +28,7 @@ const CONFIG: cpu::Config = {
     let mut cfg = cpu::Config::new(2000000);
     cfg.pullup |= 1 << 0x2d;
     cfg.standby_pu |= 1 << 0x2d; // PC13.
-    cfg.pupd_use_pwr = true;
+    cfg.low_power = true;
     *cfg.lazy_debug().lazy_i2c().lcd()
 };
 
@@ -36,8 +36,9 @@ const MAGIC: u32 = 0xc6ea33e;
 
 fn cold_start() {
     let pwr = unsafe {&*stm32u031::PWR::ptr()};
+    let tamp = unsafe {&*stm32u031::TAMP::ptr()};
 
-    dbgln!("**** RESTART ****");
+    dbgln!("**** RESTART {:#x} ****", tamp.BKPR[8].read().bits());
     let tamp = unsafe {&*stm32u031::TAMP::ptr()};
     tamp.BKPR[0].write(|w| w.bits(MAGIC));
     low_power::ensure_options();

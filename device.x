@@ -27,4 +27,7 @@ SECTIONS
   .noinit (NOLOAD) : {
      *(SORT_BY_ALIGNMENT(.noinit*))
   } > RAM
+  .stack_sizes (INFO): {
+     KEEP(*(.stack_sizes));
+  }
 }

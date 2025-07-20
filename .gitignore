@@ -1,7 +1,9 @@
 *-backups/
 *-bak
+*.gz
 *.kicad_prl
 *.pdf
+__pycache__
 _autosave-*
 fp-info-cache
 out/

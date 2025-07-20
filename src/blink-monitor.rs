@@ -88,7 +88,6 @@ pub fn main() -> ! {
 
     rcc.IOPENR.write(|w| w.GPIOAEN().set_bit());
 
-    // Go to 16MHz.
     cpu::init1();
 
     // Pullups on I2C and UART RX pin.

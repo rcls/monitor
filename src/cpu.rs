@@ -27,7 +27,7 @@ pub struct Config {
     pub keep_pd: u64,
     /// Use PWR for pull-up/pull-down rather than GPIOs.  This is required for
     /// the standby processing to work.
-    pub pupd_use_pwr: bool,
+    pub low_power: bool,
     /// Enable the MSI FLL.
     pub fll: bool,
     /// Turn off debug...
@@ -113,7 +113,7 @@ pub fn init1() {
     let low_power = CONFIG.clk <= 2000000;
     pwr.CR1.write(|w| w.LPR().bit(low_power).DBP().set_bit());
 
-    if CONFIG.pupd_use_pwr {
+    if CONFIG.low_power {
         pupd_via_pwr();
     }
     else {
@@ -223,7 +223,7 @@ impl Config {
     #[inline(always)]
     pub fn clear_pupd(&self) {
         // This is only relevant when the main program is using PWR for PUPD.
-        if !crate::CONFIG.pupd_use_pwr {
+        if !crate::CONFIG.low_power {
             return;
         }
         let pwr = unsafe {&*stm32u031::PWR::ptr()};
@@ -283,13 +283,14 @@ unsafe extern "C" {
 }
 
 fn bugger() {
+    let tamp = unsafe {&*stm32u031::TAMP::ptr()};
     let fp = unsafe {frameaddress(0)};
     // The exception PC is at +0x18, but then LLVM pushes an additional 8
     // bytes to form the frame.
     let pcp = fp.wrapping_add(0x20);
     let pc = unsafe {*(pcp as *const u32)};
-    crate::dbgln!("Bugger @ {pc:#x}");
-    crate::debug::flush_and_reboot();
+    tamp.BKPR[8].write(|w| w.bits(pc));
+    reboot();
 }
 
 #[inline(always)]
@@ -301,6 +302,12 @@ pub fn WFE() {
     }
     else {
         panic!("wfe!");
+    }
+}
+
+pub fn reboot() -> ! {
+    loop {
+        unsafe {(*cortex_m::peripheral::SCB::PTR).aircr.write(0x05fa0004)};
     }
 }
 
