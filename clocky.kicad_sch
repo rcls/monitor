@@ -6956,16 +6956,6 @@
 			(embedded_fonts no)
 		)
 	)
-	(text "TODO: 15n or 10n"
-		(exclude_from_sim no)
-		(at 246.38 156.21 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-		)
-		(uuid "72ae76b8-58a5-418e-ad0a-20c8e51e1637")
-	)
 	(text "Use 5P for COL."
 		(exclude_from_sim no)
 		(at 192.532 153.924 0)
@@ -6975,6 +6965,17 @@
 			)
 		)
 		(uuid "bfec857a-9fff-4e1e-a562-414014df261e")
+	)
+	(text "Alert got hot wired to PC13\nwith R4 removed."
+		(exclude_from_sim no)
+		(at 216.408 72.39 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "c194e096-efe9-4936-a561-ced60b28a0d4")
 	)
 	(junction
 		(at 121.92 69.85)
@@ -17458,7 +17459,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 143.51 120.65 0)
+			(at 138.43 120.65 0)
 			(effects
 				(font
 					(size 1.27 1.27)
