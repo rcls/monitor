@@ -29,7 +29,7 @@ const CONFIG: cpu::Config = {
     cfg.pullup |= 1 << 0x2d;
     cfg.standby_pu |= 1 << 0x2d; // PC13.
     cfg.low_power = true;
-    *cfg.lazy_debug().lazy_i2c().lcd()
+    *cfg.lazy_debug().lazy_i2c().lcd().rtc()
 };
 
 const MAGIC: u32 = 0xc6ea33e;
@@ -63,7 +63,7 @@ fn segments(temp: i32) -> u32 {
     let mut quo = temp.unsigned_abs() as u16;
     while p < 32 && quo != 0 || p < 16 {
         let rem = quo % 10;
-        quo = quo / 10;
+        quo /= 10;
         segs += (lcd::DIGITS[rem as usize] as u32) << p;
         p += 8;
     }
@@ -101,7 +101,7 @@ fn alert() {
     let _ = i2c::read_reg(i2c::TMP117, 1, &mut 0i16).wait();
     let counts = i16::from_be(countsbe) as i32;
     let temp = counts_to_temp(counts);
-    //dbgln!("Alert! {} {}", temp, tamp.BKPR[1].read().bits());
+
     // Write the alert high and low registers.
     let upper = next_temp(temp).max(counts + 3).min( 0x7fff);
     let lower = prev_temp(temp).min(counts - 3).max(-0x8000);
@@ -148,27 +148,13 @@ fn main() -> ! {
     let rcc  = unsafe {&*stm32u031::RCC ::ptr()};
     let tamp = unsafe {&*stm32u031::TAMP::ptr()};
 
-    // TODO - lazy set up of all the clocks!
     // Enable IO clocks.
     rcc.IOPENR.write(|w| w.GPIOAEN().set_bit().GPIOBEN().set_bit());
 
-    // LED is on PA1.
-    // let gpioa = unsafe {&*stm32u031::GPIOA::ptr()};
-    // gpioa.MODER.write(|w| w.MODE1().B_0x1());
-    // gpioa.BSRR.write(|w| w.BS1().set_bit());
-
-    // Enable PWR before CPU init for now, so we get pristine values of
-    // registers.
-    // FIXME - work out what is needed now!
-    rcc.APBENR1.modify(|_, w| w.PWREN().set_bit().RTCAPBEN().set_bit());
-
     cpu::init1();
-
     cpu::init2();
 
     let rcc_csr = rcc.CSR.read().bits();
-
-    low_power::rtc_enable();
 
     let sr1 = pwr.SR1.read();
 
@@ -181,7 +167,6 @@ fn main() -> ! {
 
     if sr1.WUF2().bit() {
         alert();
-        // Processing alert() should give the pin time to rise.
         pwr.SCR.write(|w| w.CWUF2().set_bit());
     }
     if sr1.WUFI().bit() {

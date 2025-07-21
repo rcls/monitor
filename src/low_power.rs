@@ -1,18 +1,12 @@
 use crate::CONFIG;
 
-pub fn rtc_enable() {
-    let rcc = unsafe {&*stm32u031::RCC  ::ptr()};
-
-    // APB clock to RTC, clock RTC with LSE.
-    rcc.APBENR1.modify(|_, w| w.PWREN().set_bit().RTCAPBEN().set_bit());
+#[allow(non_snake_case)]
+pub fn rtc_setup_20Hz() {
+    let rcc = unsafe {&*stm32u031::RCC::ptr()};
+    let rtc = unsafe {&*stm32u031::RTC::ptr()};
 
     // RTC enabled and clocked with LSE.
     rcc.BDCR.modify(|_,w| w.RTCEN().set_bit().RTCSEL().B_0x1());
-}
-
-#[allow(non_snake_case)]
-pub fn rtc_setup_20Hz() {
-    let rtc = unsafe {&*stm32u031::RTC::ptr()};
 
     // To wake up from Stop mode with an RTC alarm event, it is necessary to:
     // •Configure the EXTI Line 18 to be sensitive to rising edge
@@ -115,18 +109,16 @@ pub fn standby() -> ! {
     pupd(16, gpiob, &pwr.PUCRB, &pwr.PDCRB);
     pupd(32, gpioc, &pwr.PUCRC, &pwr.PDCRC);
 
-    if !crate::CONFIG.low_power {
-        // Special case, set the NRST pull-up.  Is this needed?
-        pwr.PUCRF.write(|w| w.PU2().set_bit());
-        // Enable the pullups.
-        pwr.CR3.modify(|_, w| w.APC().set_bit());
-    }
+    // Special case, set the NRST pull-up.  Is this needed?
+    pwr.PUCRF.write(|w| w.PU2().set_bit());
+    // Enable the pullups.
+    pwr.CR3.modify(|_, w| w.APC().set_bit());
 
     crate::debug::flush();
 
     // Clear the RTC wake-up flags.  This seems to need to be some time after
     // the wake-up!  Presumably a clock-tick of the RTC domain.
-    // FIXME - do this individually!
+    // FIXME - do this individually?
     rtc.SCR.write(|w| w.bits(!0));
 
     // Deep sleep.  Note that if an interrupt does WFE after this we are liable
@@ -141,4 +133,17 @@ pub fn standby() -> ! {
         cortex_m::asm::wfi();
         unsafe {(*cortex_m::peripheral::SCB::PTR).aircr.write(0x05fa0004)};
     }
+}
+
+impl crate::cpu::Config {
+    pub const fn rtc(&mut self) -> &mut Self {
+        self.apb1_clocks |= 1 << 10;
+        self
+    }
+}
+
+#[test]
+fn check_rtc_clocks() {
+    assert_eq!(!crate::CONFIG.apb1_clocks & 1 << 10, 0);
+    assert!(crate::CONFIG.low_power);
 }
