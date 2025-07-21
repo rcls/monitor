@@ -148,8 +148,8 @@ macro_rules! dbg {
 
 #[macro_export]
 macro_rules! dbgln {
-    () => {if !crate::CONFIG::no_debug {
-        let _ = core::fmt::Write.write_str(
+    () => {if !crate::CONFIG.no_debug {
+        let _ = core::fmt::Write::write_str(
             &mut $crate::debug::DebugMarker, "\n");
         }};
     ($($tt:tt)*) => {if !crate::CONFIG.no_debug {

@@ -12,7 +12,6 @@ mod cpu;
 mod debug;
 mod dma;
 mod i2c;
-#[allow(dead_code)]
 mod lcd;
 mod low_power;
 mod utils;
@@ -28,7 +27,6 @@ const CONFIG: cpu::Config = {
     let mut cfg = cpu::Config::new(2000000);
     cfg.pullup |= 1 << 0x2d;
     cfg.standby_pu |= 1 << 0x2d; // PC13.
-    cfg.low_power = true;
     *cfg.lazy_debug().lazy_i2c().lcd().rtc()
 };
 
@@ -42,7 +40,7 @@ fn cold_start() {
     let tamp = unsafe {&*stm32u031::TAMP::ptr()};
     tamp.BKPR[0].write(|w| w.bits(MAGIC));
     low_power::ensure_options();
-    low_power::rtc_setup_20Hz();
+    rtc_setup_20Hz();
 
     // Initialize the TMP117 by requesting a conversion.
     i2c::init();
@@ -55,6 +53,22 @@ fn cold_start() {
     pwr.CR3.modify(|_,w| w.EIWUL().set_bit().EWUP2().set_bit());
     // Clear the wake-up pin as it has probably gotten set during start-up.
     pwr.SCR.write(|w| w.CWUF2().set_bit());
+}
+
+#[allow(non_snake_case)]
+fn rtc_setup_20Hz() {
+    low_power::rtc_setup_start();
+
+    // Clock input to WUT is LSE / {2,4,8,16}.
+    // 32768 / 20 = 1638.4 ≈ 16 * 102.
+    low_power::rtc_set_wakeup(101);
+
+    let rtc = unsafe {&*stm32u031::RTC::ptr()};
+    rtc.CR.write(
+        |w| w.WUTE().set_bit().WUTIE().set_bit().WUCKSEL().B_0x0()
+            . BYPSHAD().set_bit());
+
+    low_power::rtc_setup_end();
 }
 
 fn segments(temp: i32) -> u32 {
@@ -173,7 +187,7 @@ fn main() -> ! {
         tick();
     }
 
-    low_power::standby();
+    low_power::standby(sr1.WUFI().bit());
 }
 
 fn counts_to_temp(c: i32) -> i32 {

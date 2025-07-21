@@ -22,9 +22,10 @@ name = 'monitor'
 filename = 'monitor.elf'
 path = 'src/monitor.rs'
 
-#[[bin]]
-#name = 'clocky'
-#path = 'src/clocky.rs'
+[[bin]]
+name = 'clocky'
+filename = 'clocky.elf'
+path = 'src/clocky.rs'
 
 [[bin]]
 name = 'blink-monitor'

@@ -57,7 +57,8 @@ pub const MSIRANGE: u8 = const {
     }
 };
 
-// Any preexisting PU/PD from standby we preserve.
+/// Use the PWR configuration for PU/PD instead of the GPIO.  This enables
+/// consistent PU/PD handling between runtime and standby.
 fn pupd_via_pwr() {
     let pwr = unsafe {&*stm32u031::PWR::ptr()};
     #[inline]
@@ -68,19 +69,23 @@ fn pupd_via_pwr() {
         let pulldown = xtract(CONFIG.pulldown);
         let keepdown = xtract(CONFIG.keep_pd | CONFIG.standby_pd);
 
-        if pullup != 0 {
-            let pp = if keepup == 0 {0} else {pucr.read().bits() & keepup};
-            pucr.write(|w| w.bits(pullup | pp));
-        }
-        if pulldown != 0 {
-            let pp = if keepdown == 0 {0} else {pdcr.read().bits() & keepdown};
-            pdcr.write(|w| w.bits(pulldown | pp));
-        }
+        // Always write all the PUCR, even if the flags don't indicate it is
+        // needed.  This should keep us in a consistent state even over software
+        // upgrades etc.
+        let pp = if keepup == 0 {0} else {pucr.read().bits() & keepup};
+        pucr.write(|w| w.bits(pullup | pp));
+
+        let pp = if keepdown == 0 {0} else {pdcr.read().bits() & keepdown};
+        pdcr.write(|w| w.bits(pulldown | pp));
     }
     setup( 0, &pwr.PUCRA, &pwr.PDCRA);
     setup(16, &pwr.PUCRB, &pwr.PDCRB);
     setup(32, &pwr.PUCRC, &pwr.PDCRC);
 
+    // Special case, set the NRST pull-up.  Is this needed?
+    pwr.PUCRF.write(|w| w.PU2().set_bit());
+
+    // Apply the PU/PD config.
     pwr.CR3.modify(|_,w| w.APC().set_bit());
 }
 

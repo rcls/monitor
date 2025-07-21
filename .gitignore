@@ -12,5 +12,6 @@ stm32u031/raw/
 stm32u031/src/
 target/
 temp.*
+*.jlink
 temp/
 ~*.lck

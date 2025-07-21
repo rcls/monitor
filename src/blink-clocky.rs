@@ -29,6 +29,22 @@ type LcdBits = u64;
 const LCD_BITS: u32 = 48;
 const I2C_LINES: i2c::I2CLines = i2c::I2CLines::B6_B7;
 
+pub static LCD: crate::vcell::UCell<LCD> = crate::vcell::UCell::new(LCD::new());
+
+pub struct LCD {
+    comm: bool,
+    pub segments: LcdBits,
+}
+
+impl LCD {
+    pub const fn new() -> LCD {LCD{comm: false, segments: 0}}
+
+    pub fn tick(&mut self) {
+        self.comm = !self.comm;
+        lcd::update_lcd(self.segments, self.comm);
+    }
+}
+
 fn scrounge() -> i2c::Result {
     i2c::write(123, &[1u8,2]).wait()?;
     Ok(())
@@ -40,7 +56,7 @@ fn systick_handler() {
     let i = unsafe{I.as_mut()};
     *i = i.wrapping_add(1);
 
-    let lcd = unsafe{lcd::LCD.as_mut()};
+    let lcd = unsafe{LCD.as_mut()};
     if *i & 7 == 0 {
         advance(lcd, *i >> 3);
     }
@@ -51,8 +67,8 @@ fn systick_handler() {
     }
 }
 
-fn advance(lcd: &mut lcd::LCD, num: u32) {
-    let mut segments = (lcd::DOT as u64) << 8;
+fn advance(lcd: &mut LCD, num: u32) {
+    let mut segments = lcd::DOT << 8;
     let mut temp: i16 = 0;
     let _ = i2c::read_reg(i2c::TMP117, 0, &mut temp);
 
@@ -69,7 +85,7 @@ fn advance(lcd: &mut lcd::LCD, num: u32) {
         }
     }
     if temp < 0 {
-        segments |= (lcd::MINUS as u64) << n;
+        segments |= lcd::MINUS << n;
     }
 
     segments |= 255 << 32;

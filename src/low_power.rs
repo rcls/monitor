@@ -1,28 +1,27 @@
 use crate::CONFIG;
 
-#[allow(non_snake_case)]
-pub fn rtc_setup_20Hz() {
+/// Make sure RTC is on, and disable RTC write protect.
+pub fn rtc_setup_start() {
     let rcc = unsafe {&*stm32u031::RCC::ptr()};
     let rtc = unsafe {&*stm32u031::RTC::ptr()};
 
     // RTC enabled and clocked with LSE.
     rcc.BDCR.modify(|_,w| w.RTCEN().set_bit().RTCSEL().B_0x1());
 
-    // To wake up from Stop mode with an RTC alarm event, it is necessary to:
-    // •Configure the EXTI Line 18 to be sensitive to rising edge
-    // •Configure the RTC to generate the RTC alarm
-    // To wake up from Standby mode, there is no need to configure the EXTI Line 18.
-    //
-    // To wake up from Stop mode with an RTC wake-up event, it is necessary to:
-    // •Configure the EXTI Line 20 to be sensitive to rising edge
-    // •Configure the RTC to generate the RTC alarm
-    //
-    // .... bit that doesn't match the docs, its EXTI line 28.
-    //exti.RTSR1.write(|w| w.RT28().set_bit());
-    // None of these needed from standby or shutdown?
-
+    // Unlock the RTC write-protection.
     rtc.WPR.write(|w| w.bits(0xca));
     rtc.WPR.write(|w| w.bits(0x53));
+}
+
+/// Re-enable RTC write protect.
+pub fn rtc_setup_end() {
+    let rtc = unsafe {&*stm32u031::RTC::ptr()};
+    rtc.WPR.write(|w| w.bits(0));
+    rtc.WPR.write(|w| w.bits(0));
+}
+
+pub fn rtc_set_wakeup(div: u16) {
+    let rtc = unsafe {&*stm32u031::RTC::ptr()};
 
     rtc.CR.write(|w| w.WUTE().clear_bit());
     // This shouldn't take long and there appears to be nothing other than
@@ -32,13 +31,7 @@ pub fn rtc_setup_20Hz() {
 
     // Clock input to WUT is LSE / {2,4,8,16}.
     // 32768 / 20 = 1638.4 ≈ 16 * 102.
-    rtc.WUTR.write(|w| w.WUT().bits(101));
-
-    rtc.CR.write(|w| w.WUTE().set_bit().WUTIE().set_bit().WUCKSEL().B_0x0());
-
-    // Reprotect.
-    rtc.WPR.write(|w| w.bits(0));
-    rtc.WPR.write(|w| w.bits(0));
+    rtc.WUTR.write(|w| w.WUT().bits(div));
 }
 
 /// Make sure reset is output only.
@@ -73,7 +66,8 @@ pub fn ensure_options() {
     crate::dbgln!("Options written!");
 }
 
-pub fn standby() -> ! {
+pub fn standby(update_pupd: bool) -> ! {
+    crate::link_assert!(crate::CONFIG.low_power);
     let pwr   = unsafe {&*stm32u031::PWR::ptr()};
     let rcc   = unsafe {&*stm32u031::RCC::ptr()};
     let rtc   = unsafe {&*stm32u031::RTC::ptr()};
@@ -96,6 +90,8 @@ pub fn standby() -> ! {
         let keep_down  = (CONFIG.keep_pd    >> shift) as u32 & 0xffff;
 
         let keep = keep_up | keep_down != 0;
+        // Not that if we haven't bought the pin out of default mode then IDR
+        // doesn't reflect the pin.
         let bits = if keep {gpio.IDR().read().bits()} else {0};
         if standby_pu | keep_up != 0 {
             pucr.write(|w| w.bits(bits & keep_up | standby_pu));
@@ -105,14 +101,11 @@ pub fn standby() -> ! {
         }
     }
 
-    pupd( 0, gpioa, &pwr.PUCRA, &pwr.PDCRA);
-    pupd(16, gpiob, &pwr.PUCRB, &pwr.PDCRB);
-    pupd(32, gpioc, &pwr.PUCRC, &pwr.PDCRC);
-
-    // Special case, set the NRST pull-up.  Is this needed?
-    pwr.PUCRF.write(|w| w.PU2().set_bit());
-    // Enable the pullups.
-    pwr.CR3.modify(|_, w| w.APC().set_bit());
+    if update_pupd {
+        pupd( 0, gpioa, &pwr.PUCRA, &pwr.PDCRA);
+        pupd(16, gpiob, &pwr.PUCRB, &pwr.PDCRB);
+        pupd(32, gpioc, &pwr.PUCRC, &pwr.PDCRC);
+    }
 
     crate::debug::flush();
 
@@ -137,6 +130,7 @@ pub fn standby() -> ! {
 
 impl crate::cpu::Config {
     pub const fn rtc(&mut self) -> &mut Self {
+        self.low_power = true;
         self.apb1_clocks |= 1 << 10;
         self
     }

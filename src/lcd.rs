@@ -4,13 +4,6 @@ use crate::cpu::WFE;
 
 use crate::{LCD_BITS, LcdBits};
 
-pub static LCD: crate::vcell::UCell<LCD> = crate::vcell::UCell::new(LCD::new());
-
-pub struct LCD {
-    comm: bool,
-    pub segments: LcdBits,
-}
-
 pub const SEG_A: u8 = 32;
 pub const SEG_B: u8 = 16;
 pub const SEG_C: u8 = 2;
@@ -18,7 +11,7 @@ pub const SEG_D: u8 = 4;
 pub const SEG_E: u8 = 8;
 pub const SEG_F: u8 = 64;
 pub const SEG_G: u8 = 128;
-pub const DOT: u8 = 1;
+pub const DOT: LcdBits = 1;
 
 pub const D0: u8 = D8 & !SEG_G;
 pub const D1: u8 = SEG_B | SEG_C;
@@ -39,19 +32,11 @@ pub const Dd: u8 = Dc | SEG_B | SEG_C;
 pub const DE: u8 = D6 & !SEG_C;
 pub const DF: u8 = DE & !SEG_D;
 
-pub const MINUS: u8 = SEG_G;
+#[allow(unused)]
+pub const MINUS: LcdBits = SEG_G as LcdBits;
 
 pub static DIGITS: [u8; 16] = [
     D0, D1, D2, D3, D4, D5, D6, D7, D8, D9, DA, Db, Dc, Dd, DE, DF];
-
-impl LCD {
-    pub const fn new() -> LCD {LCD{comm: false, segments: 0}}
-
-    pub fn tick(&mut self) {
-        self.comm = !self.comm;
-        update_lcd(self.segments, self.comm);
-    }
-}
 
 /// Initialize the I/O to the LCD.
 pub fn init() {
