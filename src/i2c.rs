@@ -113,8 +113,8 @@ pub fn init() {
     // I2C1_TX to DMA2 channel 3.
     tx_channel().PAR.write(|w| w.bits(i2c.TXDR.as_ptr().addr() as u32));
 
-    dmamux.CCR(RX_CHANNEL).write(|w| w.bits(RX_MUXIN));
-    dmamux.CCR(TX_CHANNEL).write(|w| w.bits(TX_MUXIN));
+    dmamux.CCR[RX_CHANNEL].write(|w| w.bits(RX_MUXIN));
+    dmamux.CCR[TX_CHANNEL].write(|w| w.bits(TX_MUXIN));
 
     if false {
         write_reg(0, 0, &0i16).defer();
@@ -127,25 +127,14 @@ pub fn i2c_isr() {
 
     let status = i2c.ISR.read();
     // dbgln!("I2C ISR {status:#x}");
-    let pl = *context.pending_len.as_mut();
-    let todo = pl.min(255);
-    let pl = pl - todo;
-    *context.pending_len.as_mut() = pl;
-    let more = false && pl != 0;        // We don't need this yet.
+    let todo = *context.pending_len.as_mut();
+    *context.pending_len.as_mut() = 0;
 
     if todo != 0 && status.TC().bit() {
         // Assume write -> read transition.
         i2c.CR2.modify(
-            |_, w| w.NBYTES().bits(todo as u8).RELOAD().bit(more)
+            |_, w| w.NBYTES().bits(todo as u8)
                 .START().set_bit().AUTOEND().set_bit().RD_WRN().set_bit());
-    }
-    else if false && todo != 0 && status.TCR().bit() {
-        // Continuation.  No start, just more data.
-        let cr2 = i2c.CR2.read();
-        i2c.CR2.write(
-            |w| w.bits(cr2.bits()).RELOAD().bit(more).NBYTES()
-                .bits(todo as u8));
-        crate::dbgln!("Reload {todo} {:#x} {:#x}", status.bits(), cr2.bits());
     }
     else if status.STOPF().bit() {
         i2c.ICR.write(|w| w.STOPCF().set_bit());
@@ -159,9 +148,8 @@ pub fn i2c_isr() {
         rx_channel().CR.write(|w| w);
     }
     else {
-        crate::dbgln!("Unexpected I2C ISR {:#x} {:#x}", status.bits(),
-                      i2c.CR2.read().bits());
-        loop {}
+        panic!("Unexpected I2C ISR {:#x} {:#x}", status.bits(),
+               i2c.CR2.read().bits());
     }
 }
 
@@ -212,13 +200,12 @@ impl I2cContext {
         interrupt::enable();
     }
     #[inline(never)]
-    fn write_start(&self, addr: u8, data: usize, len: usize,
-                   last: bool, reload: bool) {
+    fn write_start(&self, addr: u8, data: usize, len: usize, last: bool) {
         let i2c = unsafe {&*I2C::ptr()};
 
         interrupt::disable();
         i2c.CR2.write(
-            |w| w.START().set_bit().AUTOEND().bit(last).RELOAD().bit(reload)
+            |w| w.START().set_bit().AUTOEND().bit(last)
                 . SADD().bits(addr as u16).NBYTES().bits(len as u8));
         // Do the DMA set-up in the shadow of the address handling.  In case
         // we manage to get an I2C error before the DMA set-up is done, we have
@@ -256,8 +243,7 @@ pub fn waiter<'a, T: ?Sized>(_: &'a T) ->Wait<'a> {
 }
 
 pub fn write<'a, T: Flat + ?Sized>(addr: u8, data: &'a T) -> Wait<'a> {
-    CONTEXT.write_start(addr & !1, data.addr(), size_of_val(data),
-                        true, false);
+    CONTEXT.write_start(addr & !1, data.addr(), size_of_val(data), true);
     waiter(data)
 }
 

@@ -186,7 +186,7 @@ fn main() -> ! {
     //     |w| w.G7_IO1().set_bit().G7_IO2().set_bit().G7_IO3().set_bit()
     //         . G5_IO2().set_bit().G5_IO4().set_bit());
     // Sampling caps.
-    tsc.IOSCR().write(|w| w.G7_IO2().set_bit().G5_IO2().set_bit());
+    tsc.IOSCR.write(|w| w.G7_IO2().set_bit().G5_IO2().set_bit());
     // Channels.  TODO - do we just leave all set, or do we toggle?
     tsc.IOCCR.write(
         |w| w.G7_IO1().set_bit().G7_IO3().set_bit().G5_IO4().set_bit());

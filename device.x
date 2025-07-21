@@ -23,8 +23,6 @@ SECTIONS
      __bss_start = .;
      *(SORT_BY_ALIGNMENT(.bss*))
      __bss_end = .;
-  } > RAM
-  .noinit (NOLOAD) : {
      *(SORT_BY_ALIGNMENT(.noinit*))
   } > RAM
   .stack_sizes (INFO): {

@@ -36,7 +36,7 @@ pub fn init1() {
 
     // DMAMUX mapping.  Note the zero-based v. one-based f**kup in the
     // datasheet.  By changing these to arrays we have both zero-based.
-    dmamux.CCR(0).write(|w| w.bits(ADC_MUXIN));
+    dmamux.CCR[0].write(|w| w.bits(ADC_MUXIN));
     dma.CH(0).PAR.write(|w| w.bits(adc.DR.as_ptr().addr() as u32));
 
     // Wait for LDO ready... ≈20µs.

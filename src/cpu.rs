@@ -41,7 +41,13 @@ pub static VECTORS: VectorTable = CONFIG.vectors;
 unsafe extern "C" {
     static mut __bss_start: u8;
     static mut __bss_end: u8;
+    #[cfg(target_os = "none")]
+    static end_of_ram: u8;
 }
+
+#[cfg(not(target_os = "none"))]
+#[allow(non_upper_case_globals)]
+static end_of_ram: u8 = 0;
 
 pub const MSIRANGE: u8 = const {
     match CONFIG.clk {
@@ -249,7 +255,7 @@ impl Config {
 #[derive(Clone, Copy)]
 #[repr(C)]
 pub struct VectorTable {
-    pub stack     : u32,
+    pub stack     : *const u8,
     pub reset     : fn() -> !,
     pub nmi       : fn(),
     pub hard_fault: fn(),
@@ -261,10 +267,13 @@ pub struct VectorTable {
     pub isr       : [fn(); 32],
 }
 
+/// !@#$!@$#
+unsafe impl Sync for VectorTable {}
+
 impl const Default for VectorTable {
     fn default() -> Self {
         VectorTable{
-            stack     : 0x20000000 + 12 * 1024,
+            stack     : &raw const end_of_ram,
             reset     : crate::main,
             nmi       : bugger,
             hard_fault: bugger,

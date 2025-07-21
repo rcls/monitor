@@ -59,7 +59,10 @@ pub const fn spread16(v: u16) -> u32 {
 #[test]
 fn test_spread() {
     for i in 0..16 {
-           assert_eq!(spread16(1 << i), 1 << 2 * i);
+        assert_eq!(spread16(1 << i), 1 << 2 * i);
+        for j in 0..16 {
+            assert_eq!(spread16(1 << i | 1 << j), 1 << 2 * i | 1 << 2 * j);
+        }
     }
 }
 

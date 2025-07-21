@@ -163,7 +163,6 @@ pub const fn chars_map<const N: usize>(s: &str) -> [u8; N] {
     let mut iter = konst::string::chars(s);
     let mut index = 0;
     while let Some((c, i)) = iter.next() {
-        let c: char = c; // WTF is this needed?
         iter = i;
         result[index] = char_map(c);
         index += 1;
