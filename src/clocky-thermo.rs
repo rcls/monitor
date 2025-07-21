@@ -13,7 +13,7 @@ mod debug;
 mod dma;
 mod i2c;
 mod lcd;
-mod low_power;
+mod rtc;
 mod utils;
 mod vcell;
 
@@ -39,7 +39,7 @@ fn cold_start() {
     dbgln!("**** RESTART {:#x} ****", tamp.BKPR[8].read().bits());
     let tamp = unsafe {&*stm32u031::TAMP::ptr()};
     tamp.BKPR[0].write(|w| w.bits(MAGIC));
-    low_power::ensure_options();
+    rtc::ensure_options();
     rtc_setup_20Hz();
 
     // Initialize the TMP117 by requesting a conversion.
@@ -57,18 +57,18 @@ fn cold_start() {
 
 #[allow(non_snake_case)]
 fn rtc_setup_20Hz() {
-    low_power::rtc_setup_start();
+    rtc::setup_start();
 
     // Clock input to WUT is LSE / {2,4,8,16}.
     // 32768 / 20 = 1638.4 ≈ 16 * 102.
-    low_power::rtc_set_wakeup(101);
+    rtc::set_wakeup(101);
 
     let rtc = unsafe {&*stm32u031::RTC::ptr()};
     rtc.CR.write(
         |w| w.WUTE().set_bit().WUTIE().set_bit().WUCKSEL().B_0x0()
             . BYPSHAD().set_bit());
 
-    low_power::rtc_setup_end();
+    rtc::rtc_setup_end();
 }
 
 fn segments(temp: i32) -> u32 {
@@ -187,7 +187,7 @@ fn main() -> ! {
         tick();
     }
 
-    low_power::standby(sr1.WUFI().bit());
+    rtc::standby(sr1.WUFI().bit());
 }
 
 fn counts_to_temp(c: i32) -> i32 {

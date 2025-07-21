@@ -11,7 +11,7 @@
 mod cpu;
 mod debug;
 mod lcd;
-mod low_power;
+mod rtc;
 mod utils;
 mod vcell;
 
@@ -29,7 +29,7 @@ fn cold_start() {
     dbgln!("**** CLOCKY {:#x} ****", tamp.BKPR[8].read().bits());
     let tamp = unsafe {&*stm32u031::TAMP::ptr()};
     tamp.BKPR[0].write(|w| w.bits(MAGIC));
-    low_power::ensure_options();
+    rtc::ensure_options();
     rtc_setup_20Hz_plus_1Hz();
 
     // TODO - send the TMP117 into shutdown.
@@ -37,8 +37,8 @@ fn cold_start() {
 
 #[allow(non_snake_case)]
 pub fn rtc_setup_20Hz_plus_1Hz() {
-    low_power::rtc_setup_start();
-    low_power::rtc_set_wakeup(101);                // ≈20.07 Hz
+    rtc::setup_start();
+    rtc::set_wakeup(101);                // ≈20.07 Hz
     // Set the alarm A to fire once / sec.
     let rtc = unsafe {&*stm32u031::RTC::ptr()};
     rtc.ALRMAR.write(|w| w.bits(!0));
@@ -46,7 +46,7 @@ pub fn rtc_setup_20Hz_plus_1Hz() {
     rtc.CR.write(
         |w| w.WUTE().set_bit().WUTIE().set_bit().WUCKSEL().B_0x0()
             . ALRAE().set_bit().ALRAIE().set_bit().BYPSHAD().set_bit());
-    low_power::rtc_setup_end();
+    rtc::rtc_setup_end();
 }
 
 fn main() -> ! {
@@ -103,5 +103,5 @@ fn main() -> ! {
                rtc.SSR().read().bits());
     }
 
-    low_power::standby(true);
+    rtc::standby(true);
 }

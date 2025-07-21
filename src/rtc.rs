@@ -1,7 +1,7 @@
 use crate::CONFIG;
 
 /// Make sure RTC is on, and disable RTC write protect.
-pub fn rtc_setup_start() {
+pub fn setup_start() {
     let rcc = unsafe {&*stm32u031::RCC::ptr()};
     let rtc = unsafe {&*stm32u031::RTC::ptr()};
 
@@ -20,7 +20,7 @@ pub fn rtc_setup_end() {
     rtc.WPR.write(|w| w.bits(0));
 }
 
-pub fn rtc_set_wakeup(div: u16) {
+pub fn set_wakeup(div: u16) {
     let rtc = unsafe {&*stm32u031::RTC::ptr()};
 
     rtc.CR.write(|w| w.WUTE().clear_bit());
