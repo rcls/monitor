@@ -20,6 +20,7 @@ pub fn rtc_setup_end() {
     rtc.WPR.write(|w| w.bits(0));
 }
 
+#[allow(dead_code)]
 pub fn set_wakeup(div: u16) {
     let rtc = unsafe {&*stm32u031::RTC::ptr()};
 
@@ -70,7 +71,6 @@ pub fn standby(update_pupd: bool) -> ! {
     crate::link_assert!(crate::CONFIG.low_power);
     let pwr   = unsafe {&*stm32u031::PWR::ptr()};
     let rcc   = unsafe {&*stm32u031::RCC::ptr()};
-    let rtc   = unsafe {&*stm32u031::RTC::ptr()};
     let gpioa = unsafe {&*stm32u031::GPIOA::ptr()};
     let gpiob = unsafe {&*stm32u031::GPIOB::ptr()};
     let gpioc = unsafe {&*stm32u031::GPIOC::ptr()};
@@ -108,11 +108,6 @@ pub fn standby(update_pupd: bool) -> ! {
     }
 
     crate::debug::flush();
-
-    // Clear the RTC wake-up flags.  This seems to need to be some time after
-    // the wake-up!  Presumably a clock-tick of the RTC domain.
-    // FIXME - do this individually?
-    rtc.SCR.write(|w| w.bits(!0));
 
     // Deep sleep.  Note that if an interrupt does WFE after this we are liable
     // to go into standby from the ISR!

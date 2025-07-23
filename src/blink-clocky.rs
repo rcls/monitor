@@ -25,15 +25,14 @@ const CONFIG: cpu::Config = *cpu::Config::new(2000000)
     .clocks(1 << 24, 0, 0)
     .debug().i2c().lcd();
 
-type LcdBits = u64;
-const LCD_BITS: u32 = 48;
+const LCD_BITS: usize = 48;
 const I2C_LINES: i2c::I2CLines = i2c::I2CLines::B6_B7;
 
 pub static LCD: crate::vcell::UCell<LCD> = crate::vcell::UCell::new(LCD::new());
 
 pub struct LCD {
     comm: bool,
-    pub segments: LcdBits,
+    pub segments: lcd::Segments,
 }
 
 impl LCD {
@@ -68,7 +67,7 @@ fn systick_handler() {
 }
 
 fn advance(lcd: &mut LCD, num: u32) {
-    let mut segments = lcd::DOT << 8;
+    let mut segments = (lcd::DOT as u64) << 8;
     let mut temp: i16 = 0;
     let _ = i2c::read_reg(i2c::TMP117, 0, &mut temp);
 
@@ -85,7 +84,7 @@ fn advance(lcd: &mut LCD, num: u32) {
         }
     }
     if temp < 0 {
-        segments |= lcd::MINUS << n;
+        segments |= (lcd::MINUS as u64) << n;
     }
 
     segments |= 255 << 32;

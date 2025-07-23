@@ -17,9 +17,7 @@ mod rtc;
 mod utils;
 mod vcell;
 
-type LcdBits = u64;
-const LCD_BITS: u32
-    = match size_of::<LcdBits>() {4 => 32, 8 => 48, _ => panic!()};
+const LCD_BITS: usize = 32;
 
 const I2C_LINES: i2c::I2CLines = i2c::I2CLines::B6_B7;
 
@@ -84,6 +82,9 @@ fn segments(temp: i32) -> u32 {
     if p < 32 && temp < 0 {
         segs += (lcd::MINUS as u32) << p;
     }
+    if segs < 1 << 24 {
+        segs = segs << 8 | lcd::DEG as u32
+    }
     segs
 }
 
@@ -91,12 +92,12 @@ fn display(segments: u32, seq: u32) {
     let com = seq & 1 != 0;
     if LCD_BITS == 48 {
         let shift = seq as u16 % 48 & !7;
-        let segments = segments as LcdBits;
+        let segments = segments as lcd::Segments;
         let segments = segments << shift | segments >> 48 - shift;
         lcd::update_lcd(segments, com);
     }
     else {
-        lcd::update_lcd(segments as LcdBits, com);
+        lcd::update_lcd(segments as lcd::Segments, com);
     }
 }
 
@@ -133,7 +134,9 @@ fn alert() {
 
 fn tick() {
     let pwr  = unsafe {&*stm32u031::PWR ::ptr()};
+    let rtc  = unsafe {&*stm32u031::RTC ::ptr()};
     let tamp = unsafe {&*stm32u031::TAMP::ptr()};
+    rtc.SCR.write(|w| w.bits(!0));
 
     let seq = tamp.BKPR[1].read().bits().wrapping_add(1);
     tamp.BKPR[1].write(|w| w.bits(seq));
@@ -235,9 +238,12 @@ fn test_segments() {
             minus <<= 8;
         }
         segs += lcd::DOT as u32 * 256;
-        assert_eq!(segments(i), segs, "{i} {:x} {segs:x}", segments(i));
+        let plus = if i <= 999 {segs * 256 + lcd::DEG as u32} else {segs};
+        assert_eq!(segments(i), plus, "{i} {:x} {plus:x}", segments(i));
         if 0 < i && i <= 999 {
-            assert_eq!(segments(-i), segs + minus);
+            let neg = segs + minus;
+            let neg = if i <= 99 {neg * 256 + lcd::DEG as u32} else {neg};
+            assert_eq!(segments(-i), neg);
         }
     }
 }

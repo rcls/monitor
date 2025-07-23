@@ -297,13 +297,19 @@ unsafe extern "C" {
 }
 
 fn bugger() {
-    let tamp = unsafe {&*stm32u031::TAMP::ptr()};
     let fp = unsafe {frameaddress(0)};
     // The exception PC is at +0x18, but then LLVM pushes an additional 8
     // bytes to form the frame.
     let pcp = fp.wrapping_add(0x20);
     let pc = unsafe {*(pcp as *const u32)};
-    tamp.BKPR[8].write(|w| w.bits(pc));
+    if crate::CONFIG.low_power {
+        let tamp = unsafe {&*stm32u031::TAMP::ptr()};
+        tamp.BKPR[8].write(|w| w.bits(pc));
+    }
+    else {
+        crate::dbgln!("Crash @ {:#x}", pc);
+        crate::debug::flush();
+    }
     reboot();
 }
 

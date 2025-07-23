@@ -2,7 +2,7 @@
 
 use crate::cpu::WFE;
 
-use crate::{LCD_BITS, LcdBits};
+use crate::LCD_BITS;
 
 pub const SEG_A: u8 = 32;
 pub const SEG_B: u8 = 16;
@@ -11,32 +11,37 @@ pub const SEG_D: u8 = 4;
 pub const SEG_E: u8 = 8;
 pub const SEG_F: u8 = 64;
 pub const SEG_G: u8 = 128;
-pub const DOT: LcdBits = 1;
+pub const DOT: u8 = 1;
 
 pub const D0: u8 = D8 & !SEG_G;
 pub const D1: u8 = SEG_B | SEG_C;
 pub const D2: u8 = D8 & !SEG_C & !SEG_F;
 pub const D3: u8 = D9 & !SEG_F;
 pub const D4: u8 = D1 | SEG_F | SEG_G;
-pub const D5: u8 = SEG_A | SEG_C | SEG_D | SEG_F | SEG_G;
+pub const D5: u8 = D9 & !SEG_B;
 pub const D6: u8 = D5 | SEG_E;
 pub const D7: u8 = D1 | SEG_A;
-pub const D8: u8 = D6 | SEG_B;
+pub const D8: u8 = !DOT;
 pub const D9: u8 = D8 & !SEG_E;
 
-// Hex!
-pub const DA: u8 = D8 & !SEG_D;
+pub const DEG: u8 = SEG_A | SEG_B | SEG_F | SEG_G;
 pub const Db: u8 = D6 & !SEG_A;
 pub const Dc: u8 = SEG_D | SEG_E | SEG_G;
 pub const Dd: u8 = Dc | SEG_B | SEG_C;
-pub const DE: u8 = D6 & !SEG_C;
-pub const DF: u8 = DE & !SEG_D;
 
+pub const MINUS: u8 = SEG_G;
 #[allow(unused)]
-pub const MINUS: LcdBits = SEG_G as LcdBits;
+pub const COL1: Segments = 1;
+#[allow(unused)]
+pub const COL2: Segments = if LCD_BITS >= 48 {1 << 48} else {0};
+
+pub trait SegmentsTrait<const N: usize> {type Segments;}
+impl SegmentsTrait<48> for () {type Segments = u64;}
+impl SegmentsTrait<32> for () {type Segments = u32;}
+pub type Segments = <() as SegmentsTrait<{crate::LCD_BITS}>>::Segments;
 
 pub static DIGITS: [u8; 16] = [
-    D0, D1, D2, D3, D4, D5, D6, D7, D8, D9, DA, Db, Dc, Dd, DE, DF];
+    D0, D1, D2, D3, D4, D5, D6, D7, D8, D9, DEG, Db, Dc, Dd, DOT, MINUS];
 
 /// Initialize the I/O to the LCD.
 pub fn init() {
@@ -68,7 +73,7 @@ pub fn init() {
             .MSTR().set_bit());
 }
 
-pub fn update_lcd(bits: LcdBits, comm: bool) {
+pub fn update_lcd(bits: Segments, comm: bool) {
     // Invert segment bits if comm is high.
     let bits = if comm {!bits} else {bits};
 
