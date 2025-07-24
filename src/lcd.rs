@@ -154,7 +154,4 @@ impl crate::cpu::Config {
     }
 }
 
-#[test]
-fn check_config() {
-    assert!(crate::CONFIG.apb2_clocks & 1 << 12 != 0);
-}
+static_assertions::const_assert!(crate::CONFIG.apb2_clocks & 1 << 12 != 0);

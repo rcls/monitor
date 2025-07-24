@@ -35,7 +35,8 @@ impl Debug {
             buf: [const {UCell::new(0)}; 256]
         }
     }
-    fn write_bytes(&self, s: &[u8]) -> core::fmt::Result {
+    fn write_bytes(&self, s: &[u8]) {
+        check_vtors();
         lazy_init();
         let mut w = self.w.read();
         for &b in s {
@@ -48,7 +49,6 @@ impl Debug {
             w = w.wrapping_add(1);
         }
         self.enable(w);
-        Ok(())
     }
     fn push(&self) {
         WFE();
@@ -106,6 +106,7 @@ impl Debug {
 
 #[allow(dead_code)]
 pub fn flush() {
+    check_vtors();
     let rcc = unsafe {&*stm32u031::RCC::ptr()};
     if crate::CONFIG.no_debug ||
         crate::CONFIG.is_lazy_debug() && !rcc.APBENR1.read().LPUART1EN().bit() {
@@ -126,13 +127,32 @@ pub fn flush() {
     }
 }
 
+/// The code gen for formats is so awful that we do this!
+#[allow(dead_code)]
+pub fn banner(s: &str, v: u32, t: &str) {
+    write_str(s);
+    let mut hex = [0; 8];
+    for i in 0..8 {
+        let d = (v >> i * 4) as u8 & 15;
+        hex[i] = if d < 10 {d + b'0'} else {d + b'a'};
+    }
+    DEBUG.write_bytes(&hex);
+    write_str(t);
+}
+
+pub fn write_str(s: &str) {
+    DEBUG.write_bytes(s.as_bytes());
+}
+
 impl Write for DebugMarker {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        DEBUG.write_bytes(s.as_bytes())
+        write_str(s);
+        Ok(())
     }
     fn write_char(&mut self, c: char) -> core::fmt::Result {
         let cc = [c as u8];
-        DEBUG.write_bytes(&cc)
+        DEBUG.write_bytes(&cc);
+        Ok(())
     }
 }
 
@@ -168,6 +188,7 @@ pub fn lazy_init() {
 }
 
 pub fn init() {
+    check_vtors();
     let gpioa = unsafe {&*stm32u031::GPIOA ::ptr()};
     let rcc   = unsafe {&*stm32u031::RCC::ptr()};
     let uart  = unsafe {&*UART::ptr()};
@@ -244,12 +265,14 @@ impl crate::cpu::Config {
     }
 }
 
-#[test]
+#[inline(always)]
+#[cfg_attr(test, test)]
 fn check_vtors() {
+    use crate::link_assert;
     if !crate::CONFIG.no_debug {
-        assert!(crate::cpu::VECTORS.isr[UART_ISR as usize] == debug_isr);
+        link_assert!(crate::cpu::VECTORS.isr[UART_ISR as usize] == debug_isr);
     }
     else {
-        assert!(crate::cpu::VECTORS.isr[UART_ISR as usize] != debug_isr);
+        link_assert!(crate::cpu::VECTORS.isr[UART_ISR as usize] != debug_isr);
     }
 }

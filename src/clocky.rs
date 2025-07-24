@@ -1,50 +1,45 @@
-#![cfg_attr(target_os = "none", no_std)]
-#![cfg_attr(target_os = "none", no_main)]
-#![allow(internal_features)]
-#![allow(unpredictable_function_pointer_comparisons)]
-#![feature(const_default)]
-#![feature(const_trait_impl)]
-#![feature(derive_const)]
-#![feature(format_args_nl)]
-#![feature(link_llvm_intrinsics)]
-
-mod cpu;
-mod debug;
-#[allow(dead_code)]
-mod dma;
-#[allow(dead_code)]
-mod i2c;
-mod lcd;
-mod rtc;
-mod tsc;
-mod utils;
-mod vcell;
+use crate::*;
 
 use lcd::Segments;
 
-const LCD_BITS: usize = 32;
-
-const CONFIG: cpu::Config = *cpu::Config::new(2000000)
-    .lazy_debug().lazy_i2c().lcd().rtc().lazy_tsc();
+pub const CONFIG: cpu::Config = {
+    let mut cfg = cpu::Config::new(2000000);
+    cfg.pullup |= 1 << 0x2d;
+    cfg.standby_pu |= 1 << 0x2d; // PC13.
+    cfg.fll = false;
+    *cfg.lazy_debug().lazy_i2c().lcd().rtc().lazy_tsc()};
 
 const MAGIC: u32 = 0xd6ea33e;
 
-const I2C_LINES: i2c::I2CLines = i2c::I2CLines::B6_B7;
+pub const I2C_LINES: i2c::I2CLines = i2c::I2CLines::B6_B7;
 
+/// Power of two divider of the 256 RTC clock to use for the main software tick.
+const ALARM_BITS: u8 = 5;
+
+/// The overall system state, taking just 9 32-bit words.
 #[repr(C)]
 struct System {
+    /// Magic number.
     magic: u32,
+    /// State enumeration.
     state: u32,
+    /// Temperature in tenths of °C in low 16 bits.  High bit indicates
+    /// measurement outstanding.
+    temp: u32,
+    /// Sub-state - which field is active when updating date or time.
     sub_state: u32,
+    /// State to return to on time-out.
     main_state: u32,
+    /// Timer, counting ticks.
     timer: u32,
-    temp: i32,
-    _unused: [u32; 4],
+    _unused: [u32; 2],
+    /// Stored address before crash & reboot.
     crash: u32,
 }
+static_assertions::const_assert!(size_of::<System>() == 9 * 4);
 
 #[allow(dead_code)]
-#[repr(u8)]
+#[repr(u32)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum State {
     Time = 0,
@@ -57,7 +52,7 @@ enum State {
 impl From<u32> for State {
     fn from(v: u32) -> State {
         if v <= State::SetDate as u32 {
-            unsafe{core::mem::transmute(v as u8)}
+            unsafe{core::mem::transmute(v)}
         }
         else {
             State::Time
@@ -71,8 +66,6 @@ impl State {
         match self {Time|Date|Temp => self, _ => Time}
     }
 }
-
-const ALARM_BITS: u8 = 5;
 
 impl System {
     unsafe fn get() -> &'static mut Self {
@@ -121,19 +114,34 @@ impl System {
         self.timer += 1;
         false
     }
+    fn temp(&self) -> i32 {self.temp as i16 as i32}
+    /// Also clears pending.
+    fn set_temp(&mut self, temp: i16) {self.temp = temp as u16 as u32}
+    fn set_temp_pending(&mut self, pending: bool) {
+        if pending {
+            self.temp |= 1 << 31;
+        }
+        else {
+            self.temp &= !(1 << 31);
+        }
+    }
+    fn is_temp_pending(&self) -> bool {self.temp & 1 << 31 != 0}
 }
 
-fn cold_start(state: &mut System) {
-    dbgln!("**** CLOCKY {:#x} ****", state.crash);
-    i2c::init();
-    // Power down the TMP117.
-    let wait = i2c::write(i2c::TMP117, &[1u8, 0, 4]);
-    state.magic = MAGIC;
+fn cold_start(sys: &mut System) {
+    debug::banner("**** CLOCKY 0x", sys.crash, " ****");
+    let state = sys.main_state();
+    sys.set_state(state);
+
+
+    sys.magic = MAGIC;
     rtc::ensure_options();
     rtc_setup_tick();
 
-    state.set_state(state.main_state());
-    let _ = wait.wait();
+    let state = sys.main_state();
+    sys.set_state(state);
+
+    tmp117::init(state == State::Temp);
 }
 
 fn rtc_setup_tick() {
@@ -152,33 +160,37 @@ fn rtc_setup_tick() {
     rtc::rtc_setup_end();
 }
 
-fn date_time_to_segments(t: u32, dots: Segments) -> Segments {
+fn date_time_to_segments(mut t: u32, dots: Segments, kill3: bool) -> Segments {
     let mut result = [0; size_of::<Segments>()];
-    let mut t = t;
     for p in 0 .. LCD_BITS / 8 {
         let d = t as usize & 15;
         t >>= 4;
         result[p] = lcd::DIGITS[d];
     }
-    if result[LCD_BITS / 8 - 1] == lcd::DIGITS[0] {
-        result[LCD_BITS / 8 - 1] = 0;
+    if LCD_BITS == 48 && result[5] == lcd::DIGITS[0] {
+        result[5] = 0;
+    }
+    if (kill3 || LCD_BITS == 32) && result[3] == lcd::DIGITS[0] {
+        result[3] = 0;
+    }
+    if kill3 && LCD_BITS == 32 && result[1] == lcd::DIGITS[0] {
+        result[1] = 0;
     }
     Segments::from_le_bytes(result) | dots
 }
 
 fn time_to_segments(t: u32) -> Segments {
-    date_time_to_segments(t, lcd::COL1 | lcd::COL2)
+    let t = if LCD_BITS == 32 {t >> 8} else {t};
+    date_time_to_segments(t, lcd::COL1 | lcd::COL2, false)
 }
 
 fn date_to_segments(d: u32) -> Segments {
-    let dots = lcd::DOT as Segments * 0x10000;
-    let dots = if LCD_BITS <= 32 {dots} else {dots * 0x10001};
+    let mult = if LCD_BITS <= 32 {1} else {0x10001};
+    let dots = mult * 0x10000 + lcd::COL1 + lcd::COL2;
     // Mask off day-of-week.
-    let d = d & !0xe000;
-    // Byte swap.
-    let d = d.swap_bytes() >> 8;
-    let d = if LCD_BITS == 32 {d >> 8} else {d};
-    date_time_to_segments(d, dots)
+    let d = (d & !0xe000).swap_bytes();
+    let d = if LCD_BITS == 32 {d >> 16} else {d >> 8};
+    date_time_to_segments(d, dots, true)
 }
 
 fn temp_to_segments(temp: i32) -> Segments {
@@ -212,7 +224,7 @@ fn get_segments(sys: &System) -> Segments {
     let segments = match sys.state() {
         Time|SetTime => time_to_segments(rtc.TR().read().bits()),
         Date|SetDate => date_to_segments(rtc.DR().read().bits()),
-        Temp => temp_to_segments(sys.temp)
+        Temp => temp_to_segments(sys.temp())
     };
     match sys.state() {
         Time|Date|Temp => return segments,
@@ -230,11 +242,58 @@ fn get_segments(sys: &System) -> Segments {
     }
 }
 
-fn main() -> ! {
+fn tick(sys: &mut System) {
+    let rtc = unsafe {&*stm32u031::RTC::ptr()};
+
+    let sr = rtc.MISR.read();
+    rtc.SCR.write(|w| w.bits(sr.bits()));
+
+    let segments = get_segments(sys);
+    let ssr = rtc.SSR.read().bits();
+
+    let mut tacquire = false;
+    
+    // If we're displaying the temperature, trigger a conversion every second.
+    // If we're not displaying it, then grab it every minute.
+    if ssr >= 0xfc {
+        tacquire = sys.state() == State::Temp
+            || rtc.TR.read().bits() & 0xff == 0;
+    }
+    if sys.is_temp_pending() {
+        tacquire = false;
+        sys.set_temp_pending(false);
+    }
+
+    let wait = if tacquire {tmp117::acquire()} else {i2c::Wait::new()};
+
+    lcd::init();
+
+    lcd::update_lcd(segments, ssr & 1 << ALARM_BITS != 0);
+
+    let _ = wait.wait();
+
+    if false {
+        let time1 = rtc.TR.read().bits() as usize;
+        let date = rtc.DR.read().bits();
+        let time = rtc.TR.read().bits() as usize;
+        let date = if time == time1 {date} else {rtc.DR.read().bits()};
+        dbgln!("{:02x} {:02x} {:02x} ({:x}) {:02x} {:02x} {:02x}",
+               date >> 16 & 0xff, date >> 8 & 0x1f, date & 0xff,
+               date >> 13 & 7,
+               time >> 16 & 0xff, time >> 8 & 0xff, time & 0xff);
+    }
+//    rtc.SCR.write(|w| w.bits(sr.bits()));
+}
+
+fn temp_alert(sys: &mut System) {
+    let temp = tmp117::alert();
+    sys.set_temp(temp as i16);
+}
+
+pub fn main() -> ! {
     let pwr = unsafe {&*stm32u031::PWR::ptr()};
     let rcc = unsafe {&*stm32u031::RCC::ptr()};
-    let rtc = unsafe {&*stm32u031::RTC::ptr()};
-    let state = unsafe {System::get()};
+    let sys = unsafe {System::get()};
 
     // Enable IO clocks.
     rcc.IOPENR.write(|w| w.GPIOAEN().set_bit().GPIOBEN().set_bit());
@@ -248,35 +307,24 @@ fn main() -> ! {
 
     // If all of the reset reason, the magic number, and the woke-from-standby
     // flag agree, treat this as a normal restart.  Else do a cold-start.
-    if rcc_csr & 0xfe000000 != 0 || state.magic != MAGIC
+    if rcc_csr & 0xfe000000 != 0 || sys.magic != MAGIC
         || !sr1.SBF().bit() {
-        cold_start(state);
+        cold_start(sys);
     }
 
     if false {
         tsc::init();
     }
 
-    let sr = rtc.MISR.read();
-    rtc.SCR.write(|w| w.bits(sr.bits()));
-
-    let segments = get_segments(state);
-    lcd::init();
-
-    let ssr = rtc.SSR.read().bits();
-    lcd::update_lcd(segments, ssr & 1 << ALARM_BITS != 0);
-
-    if ssr > 0xff {
-        let time1 = rtc.TR.read().bits() as usize;
-        let date = rtc.DR.read().bits();
-        let time = rtc.TR.read().bits() as usize;
-        let date = if time == time1 {date} else {rtc.DR.read().bits()};
-        dbgln!("{:02x} {:02x} {:02x} ({:x}) {:02x} {:02x} {:02x}",
-               date >> 16 & 0xff, date >> 8 & 0x1f, date & 0xff,
-               date >> 13 & 7,
-               time >> 16 & 0xff, time >> 8 & 0xff, time & 0xff);
+    // Wake-up 2 is the TMP117 alert.
+    if sr1.WUF2().bit() {
+        pwr.SCR.write(|w| w.CWUF2().set_bit());
+        temp_alert(sys);
     }
-//    rtc.SCR.write(|w| w.bits(sr.bits()));
+
+    if sr1.WUFI().bit() {
+        tick(sys);
+    }
 
     rtc::standby(true);
 }
@@ -284,9 +332,9 @@ fn main() -> ! {
 #[cfg(test)]
 fn segments_to_str(s: Segments) -> String {
     let mut result = Vec::<char>::new();
-    let N = LCD_BITS / 8 as usize;
+    let n = LCD_BITS / 8 as usize;
     use lcd::DOT;
-    for b in &s.to_le_bytes()[0..N] {
+    for b in &s.to_le_bytes()[0..n] {
         let b = b & !DOT;
         let c = match b {
             lcd::DEG => '°',
@@ -298,7 +346,7 @@ fn segments_to_str(s: Segments) -> String {
         };
         result.push(c);
     }
-    for (i, b) in s.to_le_bytes()[0..N].iter().enumerate().skip(1).rev() {
+    for (i, b) in s.to_le_bytes()[0..n].iter().enumerate().skip(1).rev() {
         let colon = match i {
             2 => s & lcd::COL1 != 0,
             4 => s & lcd::COL2 != 0,
@@ -332,11 +380,26 @@ fn temp_segment_checks() {
 #[test]
 fn date_segment_checks() {
     let checks = [
-        (0x691206, " 6.12", " 6.12.69"),
-        (0x690616, "16.06", "16.06.69"),
+        (0x691206, " 6⋮12", " 6⋮12⋮69"),
+        (0x690616, "16⋮ 6", "16⋮ 6⋮69"),
+        (0x010101, " 1⋮ 1", " 1⋮ 1⋮01"),
+        (0x01f101, " 1⋮11", " 1⋮11⋮01"),
     ];
     for (d, s, w) in checks {
         assert_eq!(segments_to_str(date_to_segments(d)),
+                   if LCD_BITS == 32 {s} else {w});
+    }
+}
+
+#[test]
+fn time_segment_checks() {
+    let checks = [
+        (0x010203, " 1:02", " 1:02:03"),
+        (0x160659, "16:06", "16:06:59"),
+        (0x010101, " 1:01", " 1:01:01"),
+    ];
+    for (d, s, w) in checks {
+        assert_eq!(segments_to_str(time_to_segments(d)),
                    if LCD_BITS == 32 {s} else {w});
     }
 }

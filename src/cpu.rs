@@ -198,12 +198,13 @@ pub fn init2() {
 
 impl Config {
     pub const fn new(clk: u32) -> Config {
-        Config{
+        Config {
             clk, vectors: VectorTable::default(),
             // Always enable PWR clock.
             apb1_clocks: 1 << 28,
             pullup: 1 << 13, pulldown: 1 << 14,
-            fll: true, .. Config::default()}
+            fll: true, .. Config::default()
+        }
     }
     pub const fn isr(&mut self,
                      isr: stm32u031::Interrupt, handler: fn()) -> &mut Self {

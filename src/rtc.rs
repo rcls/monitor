@@ -1,5 +1,8 @@
 use crate::CONFIG;
 
+static_assertions::const_assert!(crate::CONFIG.apb1_clocks & 1 << 10 != 0);
+static_assertions::const_assert!(crate::CONFIG.low_power);
+
 /// Make sure RTC is on, and disable RTC write protect.
 pub fn setup_start() {
     let rcc = unsafe {&*stm32u031::RCC::ptr()};
@@ -43,7 +46,8 @@ pub fn ensure_options() {
     if options.NRST_MODE().bits() == 1 {
         return;
     }
-    crate::dbgln!("Options = {:#x} ... needs to be rewritten", options.bits());
+    crate::debug::banner(
+        "Options = 0x", options.bits(), " ... needs to be rewritten");
 
     // 1.Write KEY1 = 0x4567 0123 in the FLASH key register (FLASH_KEYR)
     // 2.Write KEY2 = 0xCDEF 89AB in the FLASH key register (FLASH_KEYR).
@@ -64,11 +68,11 @@ pub fn ensure_options() {
     while flash.SR.read().BSY1().bit() {}
     flash.CR.write(|w| w.OPTSTRT().set_bit());
     while flash.SR.read().BSY1().bit() {}
-    crate::dbgln!("Options written!");
+
+    crate::debug::write_str("Options written!\n");
 }
 
 pub fn standby(update_pupd: bool) -> ! {
-    crate::link_assert!(crate::CONFIG.low_power);
     let pwr   = unsafe {&*stm32u031::PWR::ptr()};
     let rcc   = unsafe {&*stm32u031::RCC::ptr()};
     let gpioa = unsafe {&*stm32u031::GPIOA::ptr()};
@@ -129,10 +133,4 @@ impl crate::cpu::Config {
         self.apb1_clocks |= 1 << 10;
         self
     }
-}
-
-#[test]
-fn check_rtc_clocks() {
-    assert_eq!(!crate::CONFIG.apb1_clocks & 1 << 10, 0);
-    assert!(crate::CONFIG.low_power);
 }

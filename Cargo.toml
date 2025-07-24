@@ -23,9 +23,14 @@ filename = 'monitor.elf'
 path = 'src/monitor.rs'
 
 [[bin]]
-name = 'clocky'
-filename = 'clocky.elf'
-path = 'src/clocky.rs'
+name = 'clocky32'
+filename = 'clocky32.elf'
+path = 'src/clocky32.rs'
+
+[[bin]]
+name = 'clocky48'
+filename = 'clocky48.elf'
+path = 'src/clocky48.rs'
 
 [[bin]]
 name = 'blink-monitor'

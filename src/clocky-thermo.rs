@@ -14,10 +14,11 @@ mod dma;
 mod i2c;
 mod lcd;
 mod rtc;
+mod tmp117;
 mod utils;
 mod vcell;
 
-const LCD_BITS: usize = 32;
+const LCD_BITS: usize = 48;
 
 const I2C_LINES: i2c::I2CLines = i2c::I2CLines::B6_B7;
 
@@ -25,32 +26,22 @@ const CONFIG: cpu::Config = {
     let mut cfg = cpu::Config::new(2000000);
     cfg.pullup |= 1 << 0x2d;
     cfg.standby_pu |= 1 << 0x2d; // PC13.
+    cfg.fll = false;
     *cfg.lazy_debug().lazy_i2c().lcd().rtc()
 };
 
 const MAGIC: u32 = 0xc6ea33e;
 
 fn cold_start() {
-    let pwr = unsafe {&*stm32u031::PWR::ptr()};
     let tamp = unsafe {&*stm32u031::TAMP::ptr()};
 
-    dbgln!("**** RESTART {:#x} ****", tamp.BKPR[8].read().bits());
+    debug::banner("**** RESTART 0x", tamp.BKPR[8].read().bits(), " ****\n");
     let tamp = unsafe {&*stm32u031::TAMP::ptr()};
     tamp.BKPR[0].write(|w| w.bits(MAGIC));
     rtc::ensure_options();
     rtc_setup_20Hz();
 
-    // Initialize the TMP117 by requesting a conversion.
-    i2c::init();
-    const CONFIG: u16 = 0x0c04; // One shot, alert when ready.
-    let _ = i2c::write(i2c::TMP117, &[1u8, (CONFIG >> 8) as u8, CONFIG as u8])
-        .wait();
-
-    // Alert is hot-wired to PC13, WKUP2.  Set it to falling edge triggered.
-    pwr.CR4.write(|w| w.WP2().set_bit());
-    pwr.CR3.modify(|_,w| w.EIWUL().set_bit().EWUP2().set_bit());
-    // Clear the wake-up pin as it has probably gotten set during start-up.
-    pwr.SCR.write(|w| w.CWUF2().set_bit());
+    tmp117::init(true);
 }
 
 #[allow(non_snake_case)]
@@ -102,38 +93,15 @@ fn display(segments: u32, seq: u32) {
 }
 
 fn alert() {
-    let pwr = unsafe {&*stm32u031::PWR::ptr()};
     let tamp = unsafe {&*stm32u031::TAMP::ptr()};
 
-    // Disable the pullup on PC13 while we do the I2C.
-    pwr.PUCRC.write(|w| w.bits(0));
-    i2c::init();
-
-    // Read the temperature...
-    let mut countsbe = 0i16;
-    let _ = i2c::read_reg(i2c::TMP117, 0, &mut countsbe).wait();
-    // The docs say we need a read of config to clear the alert.
-    let _ = i2c::read_reg(i2c::TMP117, 1, &mut 0i16).wait();
-    let counts = i16::from_be(countsbe) as i32;
-    let temp = counts_to_temp(counts);
-
-    // Write the alert high and low registers.
-    let upper = next_temp(temp).max(counts + 3).min( 0x7fff);
-    let lower = prev_temp(temp).min(counts - 3).max(-0x8000);
-    let _ = i2c::write(i2c::TMP117, &[2u8, (upper >> 8) as u8, upper as u8]);
-    let _ = i2c::write(i2c::TMP117, &[3u8, (lower >> 8) as u8, lower as u8]);
-
-    // The alert pin should be released.  Reenable the pull-up.
-    pwr.PUCRC.write(|w| w.bits(1 << 13));
-
+    let temp = tmp117::alert();
     let segments = segments(temp);
     tamp.BKPR[2].write(|w| w.bits(segments));
-    // Updating the display can wait for the next tick.  Disable the wake-up.
-    pwr.CR3.modify(|_,w| w.EIWUL().set_bit().EWUP2().clear_bit());
+    // Updating the display can wait for the next tick.
 }
 
 fn tick() {
-    let pwr  = unsafe {&*stm32u031::PWR ::ptr()};
     let rtc  = unsafe {&*stm32u031::RTC ::ptr()};
     let tamp = unsafe {&*stm32u031::TAMP::ptr()};
     rtc.SCR.write(|w| w.bits(!0));
@@ -144,12 +112,7 @@ fn tick() {
     // On /32, command a conversion.
     let w;
     if seq & 31 == 0 {
-        // Single shot conversion.  Arm and clear the wake-up flag.
-        pwr.CR3.modify(|_,w| w.EIWUL().set_bit().EWUP2().set_bit());
-        pwr.SCR.write(|w| w.CWUF2().set_bit());
-
-        i2c::init();
-        w = i2c::write(i2c::TMP117, &[1u8, 0xc, 0]);
+        w = tmp117::acquire();
     }
     else {
         w = i2c::Wait::new();
@@ -191,40 +154,6 @@ fn main() -> ! {
     }
 
     rtc::standby(sr1.WUFI().bit());
-}
-
-fn counts_to_temp(c: i32) -> i32 {
-    (c * 5 + 32) >> 6
-}
-
-fn next_temp(t: i32) -> i32 {
-    let nm = t * 64 + 32 + 4;
-    let nm = if nm >= 0 {nm} else {nm - 4};
-    nm / 5
-}
-
-fn prev_temp(t: i32) -> i32 {
-    let pm = t * 64 - 32 - 1;
-    let pm = if pm >= 0 {pm} else {pm - 4};
-    pm / 5
-}
-
-#[test]
-fn check_next_temp() {
-    for t in -999 ..= 1499 {
-        let n = next_temp(t);
-        assert_eq!(counts_to_temp(n), t + 1);
-        assert_eq!(counts_to_temp(n - 1), t);
-    }
-}
-
-#[test]
-fn check_prev_temp() {
-    for t in -999 ..= 1499 {
-        let p = prev_temp(t);
-        assert_eq!(counts_to_temp(p), t - 1);
-        assert_eq!(counts_to_temp(p + 1), t);
-    }
 }
 
 #[test]
