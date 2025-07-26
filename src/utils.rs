@@ -52,8 +52,7 @@ pub const fn spread16(v: u16) -> u32 {
     let v = v + (v & 0xff00) * 0xff;
     let v = v + (v & 0x00f000f0) * 0xf;
     let v = v + (v & 0x0c0c0c0c) * 3;
-    let v = v + (v & 0x22222222);
-    v
+    v + (v & 0x22222222)
 }
 
 #[test]

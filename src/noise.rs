@@ -1,6 +1,7 @@
 use crate::usqrt::usqrt;
 
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone)]
+#[derive_const(Default)]
 pub struct Noise {
     pub last: u32,
     pub count: u8,
@@ -8,8 +9,6 @@ pub struct Noise {
 }
 
 impl Noise {
-    pub const fn new() -> Noise {Noise{last: 0, count: 0, noise: 0}}
-
     pub fn update(&mut self, value: u32) {
         let last = self.last;
         let count = self.count;
@@ -35,7 +34,7 @@ impl Noise {
 
 #[test]
 fn noise1() {
-    let mut noise = Noise::new();
+    let mut noise = Noise::default();
     noise.update(11);
     for i in 0..10000 {
         noise.update(10 + (i & 1));
@@ -46,7 +45,7 @@ fn noise1() {
 
 #[test]
 fn noise2() {
-    let mut noise = Noise::new();
+    let mut noise = Noise::default();
     noise.update(10);
     noise.update(10);
     noise.update(11);
@@ -56,7 +55,7 @@ fn noise2() {
 
 #[test]
 fn noise4() {
-    let mut noise = Noise::new();
+    let mut noise = Noise::default();
     [10, 10, 10, 10, 11].into_iter().for_each(|x| noise.update(x));
     assert_eq!(noise.noise, 16384);
     assert_eq!(noise.decimal(), 50);

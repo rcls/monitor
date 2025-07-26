@@ -112,8 +112,8 @@ pub fn retrieve() -> u32 {
     // Find the lowest line...
     let mut min_line = 0;
     let mut min_val = VALUES[0].read();
-    for i in 1..=2 {
-        let val = VALUES[i].read();
+    for (i, val) in VALUES.iter().enumerate().skip(1) {
+        let val = val.read();
         if val < min_val {
             min_val = val;
             min_line = i as u32;

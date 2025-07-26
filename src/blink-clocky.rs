@@ -29,16 +29,15 @@ const CONFIG: cpu::Config = *cpu::Config::new(2000000)
 const LCD_WIDTH: usize = 6;
 const I2C_LINES: i2c::I2CLines = i2c::I2CLines::B6_B7;
 
-pub static LCD: crate::vcell::UCell<LCD> = crate::vcell::UCell::new(LCD::new());
+pub static LCD: crate::vcell::UCell<LCD> = Default::default();
 
+#[derive_const(Default)]
 pub struct LCD {
     comm: bool,
     pub segments: lcd::Segments,
 }
 
 impl LCD {
-    pub const fn new() -> LCD {LCD{comm: false, segments: 0}}
-
     pub fn tick(&mut self) {
         self.comm = !self.comm;
         lcd::update_lcd(self.segments, self.comm);
@@ -75,11 +74,11 @@ fn advance(lcd: &mut LCD, num: u32) {
     let temp = i16::from_be(temp);
 
     let mut n = 0;
-    let mut abs: usize = temp.abs() as usize * 10 / 128;
+    let mut abs: usize = temp.unsigned_abs() as usize * 10 / 128;
     while n < 24 || abs != 0 {
         segments |= (lcd::DIGITS[abs % 10] as u64) << n;
         n += 8;
-        abs = abs / 10;
+        abs /= 10;
         if abs == 0 {
             break;
         }

@@ -27,6 +27,7 @@ const TX_CHANNEL: usize = 2;
 fn rx_channel() -> &'static Channel {crate::dma::dma().CH(RX_CHANNEL)}
 fn tx_channel() -> &'static Channel {crate::dma::dma().CH(TX_CHANNEL)}
 
+#[derive_const(Default)]
 pub struct I2cContext {
     outstanding: VCell<u8>,
     error: VCell<u8>,
@@ -36,12 +37,7 @@ pub struct I2cContext {
 #[must_use]
 pub struct Wait<'a>(PhantomData<&'a()>);
 
-//pub static I2C_DONE: VCell<bool> = VCell::new(false);
-pub static CONTEXT: UCell<I2cContext> = UCell::new(I2cContext{
-    outstanding: VCell::new(0),
-    error      : VCell::new(0),
-    pending_len: VCell::new(0),
-});
+pub static CONTEXT: UCell<I2cContext> = UCell::default();
 
 const F_I2C: u8 = 1;
 const F_DMA: u8 = 2;
@@ -260,11 +256,10 @@ pub fn read_reg<'a, T: Flat + ?Sized>(addr: u8, reg: u8, data: &'a mut T) -> Wai
 impl crate::cpu::Config {
     pub const fn lazy_i2c(&mut self) -> &mut Self {
         use stm32u031::Interrupt::*;
-        let pullup;
-        match crate::I2C_LINES {
-            I2CLines::B6_B7  => pullup = 1 << 6 + 16 | 1 << 7 + 16,
-            I2CLines::A9_A10 => pullup = 1 << 9      | 1 << 10,
-        }
+        let pullup = match crate::I2C_LINES {
+            I2CLines::B6_B7  => 1 << 6 + 16 | 1 << 7 + 16,
+            I2CLines::A9_A10 => 1 << 9      | 1 << 10,
+        };
         self.pullup |= pullup;
         self.standby_pu |= pullup;
         self.isr(I2C1, i2c_isr).isr(DMA1_CHANNEL2_3, dma23_isr)

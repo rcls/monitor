@@ -112,13 +112,12 @@ fn tick() {
     tamp.BKPR[1].write(|w| w.bits(seq));
 
     // On /32, command a conversion.
-    let w;
-    if seq & 31 == 0 {
-        w = tmp117::acquire();
+    let w = if seq & 31 == 0 {
+        tmp117::acquire()
     }
     else {
-        w = i2c::Wait::new();
-    }
+        i2c::Wait::new()
+    };
     let segments = tamp.BKPR[2].read().bits();
     lcd::init();
     display(segments, seq);

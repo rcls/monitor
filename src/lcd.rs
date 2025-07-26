@@ -147,10 +147,10 @@ fn rx_word(spi: &stm32u031::spi1::RegisterBlock) {
 
 pub fn date_time_to_segments(mut t: u32, dots: Segments, kill3: bool) -> Segments {
     let mut result = [0; size_of::<Segments>()];
-    for p in 0 .. WIDTH {
+    for p in result.iter_mut().take(WIDTH) {
         let d = t as usize & 15;
         t >>= 4;
-        result[p] = DIGITS[d];
+        *p = DIGITS[d];
     }
     if WIDTH == 6 && result[5] == DIGITS[0] {
         result[5] = 0;

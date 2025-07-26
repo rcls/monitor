@@ -14,10 +14,12 @@ const MAGIC: u32 = 0xd6ea33e;
 
 pub const I2C_LINES: i2c::I2CLines = i2c::I2CLines::B6_B7;
 
-/// Power of two divider of the 256 RTC clock to use for the main software tick.
-const ALARM_BITS: u8 = 5;
+/// Power of two divider of the 256Hz RTC clock to use for the main tick.
+const TICKS_PER_SEC: u32 = 8;
+const ALARM_BITS: u8 = 8 - TICKS_PER_SEC.ilog2() as u8;
 
-const TICKS_PER_SEC: u32 = 1 << (8 - ALARM_BITS);
+static_assertions::const_assert_eq!(TICKS_PER_SEC, 1 << 8 - ALARM_BITS);
+
 const TOUCH_TIME_OUT: u32 = 10 * TICKS_PER_SEC;
 const REPEAT_FIRST: u32 = TICKS_PER_SEC;
 const REPEAT_AGAIN: u32 = TICKS_PER_SEC / 2;
@@ -36,8 +38,8 @@ struct System {
     sub_state: u32,
     /// Current touch state. 0:None, 1:+, 2:-, 3:≡
     touch: u32,
-    /// Timer, counting ticks.  Negative numbers count up to zero to timeout,
-    /// positive numbers count upwards during touch holds.
+    /// Timer, counting ticks.  Down counter running while touch system
+    /// activated.
     timer: u32,
     _unused: [u32; 2],
     /// Stored address before crash & reboot.
@@ -54,20 +56,9 @@ enum State {
     Temp = 2,
 }
 
-impl From<u32> for State {
-    fn from(v: u32) -> State {
-        if v <= State::MAX as u32 {
-            unsafe{core::mem::transmute(v)}
-        }
-        else {
-            State::Time
-        }
-    }
-}
-
 impl State {
-    const MAX: State = State::Temp;
     const MIN: State = State::Time;
+    const MAX: State = State::Temp;
 }
 
 impl System {
@@ -76,7 +67,9 @@ impl System {
         let p = tamp.BKPR[0].as_ptr() as *const crate::vcell::UCell<System>;
         let sys = unsafe {(&*p).as_mut()};
         // Validate fields.
-        sys.state = State::from(sys.state) as u32;
+        if sys.state > State::MAX as u32 {
+            sys.state = State::Time as u32;
+        }
         sys
     }
     fn reset(&mut self) {
@@ -87,10 +80,8 @@ impl System {
         self.timer = 0;
     }
     fn state(&self) -> State {
-        self.state.into()
-    }
-    fn set_state(&mut self, s: State) {
-        self.state = s as u32;
+        // SAFTEY: We sanitize this at each start-up.
+        unsafe {core::mem::transmute(self.state)}
     }
     fn sub_state(&self) -> u32 {
         self.sub_state
@@ -163,26 +154,11 @@ fn get_segments(sys: &System) -> Segments {
     }
 }
 
-fn per_second(_sys: &mut System) {
-    let rtc = unsafe {&*stm32u031::RTC::ptr()};
-
-    if false {
-        let time1 = rtc.TR.read().bits() as usize;
-        let date = rtc.DR.read().bits();
-        let time = rtc.TR.read().bits() as usize;
-        let date = if time == time1 {date} else {rtc.DR.read().bits()};
-        dbgln!("{:02x} {:02x} {:02x} ({:x}) {:02x} {:02x} {:02x}",
-               date >> 16 & 0xff, date >> 8 & 0x1f, date & 0xff,
-               date >> 13 & 7,
-               time >> 16 & 0xff, time >> 8 & 0xff, time & 0xff);
-    }
-}
-
 fn touch_state(sys: &mut System, pad: u32) -> bool {
     let previous = sys.touch;
     sys.touch = pad;
     if pad != previous {
-        sys.timer = if pad != 0 {REPEAT_FIRST} else {TOUCH_TIME_OUT};
+        sys.timer = if pad != pad::NONE {REPEAT_FIRST} else {TOUCH_TIME_OUT};
         pad != 0
     }
     else {
@@ -208,20 +184,15 @@ fn touch_process(sys: &mut System) {
     }
     if pad == pad::MENU {
         // If sub-state is 0, then rotate state.  Else rotate sub-state.
-        // FIXME - make sure sub_state is zero when it should be!
         let ss = sys.sub_state();
         if ss != 0 {
-            let max = WIDTH as u32 / 2;
-            sys.set_sub_state(if ss < max {ss + 1} else {0});
+            sys.set_sub_state(if ss < WIDTH as u32 / 2 {ss + 1} else {0});
+        }
+        else if sys.state < State::MAX as u32 {
+            sys.state += 1;
         }
         else {
-            let s = sys.state();
-            if s < State::MAX {
-                sys.set_state((s as u32 + 1).into());
-            }
-            else {
-                sys.set_state(State::MIN);
-            }
+            sys.state = State::MIN as u32
         }
         return;
     }
@@ -258,20 +229,21 @@ fn tick(sys: &mut System) {
 
     let ssr = rtc.SSR.read().bits();
 
-    let mut tacquire = false;
-
-    // If we're displaying the temperature, trigger a conversion every second.
-    // If we're not displaying it, then grab it every minute.
-    if ssr >= 0xfc {
-        per_second(sys);
+    let tacquire;
+    if sys.is_temp_pending() {
+        // Override tacquire if we already have one pending, don't request
+        // another.
+        sys.set_temp_pending(false);
+        tacquire = false;
+    }
+    else if ssr >= 0xfc {
+        // If we're displaying the temperature, trigger a conversion every second.
+        // If we're not displaying it, then grab it every minute.
         tacquire = sys.state() == State::Temp
             || rtc.TR.read().bits() & 0xff == 0;
     }
-
-    // Override tacquire if we already have one pending.
-    if sys.is_temp_pending() {
+    else {
         tacquire = false;
-        sys.set_temp_pending(false);
     }
 
     let wait = if tacquire {tmp117::acquire()} else {i2c::Wait::new()};
@@ -291,8 +263,6 @@ fn tick(sys: &mut System) {
     if do_touch {
         touch_process(sys);
     }
-
-//    rtc.SCR.write(|w| w.bits(sr.bits()));
 }
 
 fn temp_alert(sys: &mut System) {

@@ -15,8 +15,8 @@ pub fn init() {
     pwr.SCR.write(|w| w.CWUF2().set_bit());
 
     // Trigger an initial conversion, interrupt on data ready.
-    let config = [1u8, 12, 4];
-    let _ = i2c::write(i2c::TMP117, &config).wait();
+    const COMMAND: [u8; 3] = [1u8, 12, 4];
+    let _ = i2c::write(i2c::TMP117, &COMMAND).wait();
 }
 
 pub fn acquire() -> i2c::Wait<'static> {
@@ -27,7 +27,7 @@ pub fn acquire() -> i2c::Wait<'static> {
     pwr.SCR.write(|w| w.CWUF2().set_bit());
 
     i2c::init();
-    static COMMAND: [u8; 3] = [1, 12, 0];
+    const COMMAND: [u8; 3] = [1, 12, 0];
     i2c::write(i2c::TMP117, &COMMAND)
 }
 
@@ -72,8 +72,6 @@ fn next_temp(t: i32) -> i32 {
 
 fn prev_temp(t: i32) -> i32 {
     let pm = t * 64 - 32 - 1;
-//    let pm = if pm >= 0 {pm} else {pm - 4};
-//    pm / 5
     div5floor(pm)
 }
 

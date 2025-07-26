@@ -51,7 +51,7 @@ struct Monitor {
 static MONITOR: UCell<Monitor> = UCell::new(Monitor::new());
 
 fn systick_handler() {
-    let _ = unsafe{MONITOR.as_mut().systick_handler()};
+    unsafe{MONITOR.as_mut().systick_handler()};
 }
 
 impl Monitor {
@@ -62,7 +62,7 @@ impl Monitor {
             cycle_arrow: 0,
             temp: 0,
             isense: 0,
-            noise: [Noise::new(); _],
+            noise: [Noise::default(); _],
             frame: [[0; _]; _]
         }
     }
