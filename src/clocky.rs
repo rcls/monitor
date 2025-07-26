@@ -52,8 +52,6 @@ enum State {
     Time = 0,
     Date = 1,
     Temp = 2,
-    SetTime = 3,
-    SetDate = 4,
 }
 
 impl From<u32> for State {
@@ -68,11 +66,8 @@ impl From<u32> for State {
 }
 
 impl State {
-    const MAX: State = State::SetDate;
+    const MAX: State = State::Temp;
     const MIN: State = State::Time;
-    fn is_transient(self) -> bool {
-        self > State::Temp
-    }
 }
 
 impl System {
@@ -87,9 +82,6 @@ impl System {
     fn reset(&mut self) {
         self.magic = MAGIC;
         self.temp = self.temp.clamp(-1999, 1999);
-        if self.state().is_transient() {
-            self.set_state(State::Time);
-        }
         self.sub_state = 0;
         self.touch = 0;
         self.timer = 0;
@@ -100,9 +92,6 @@ impl System {
     fn set_state(&mut self, s: State) {
         self.state = s as u32;
     }
-//    fn main_state(&self) -> State {
-//        State::from(self.state).main()
-//    }
     fn sub_state(&self) -> u32 {
         self.sub_state
     }
@@ -110,16 +99,12 @@ impl System {
         self.sub_state = v as u32;
     }
     fn blink_mask(&self) -> Segments {
-        let s = self.state();
-        if s != State::SetTime && s != State::SetDate {
-            return 0;
-        }
         let dd = lcd::D8 as Segments * 0x101;
         match self.sub_state() as usize {
             1 => dd << WIDTH * 8 - 16,
             2 => dd << WIDTH * 8 - 32,
             3 if WIDTH == 6 => dd,
-            _ => dd | dd << 16 | dd << if WIDTH == 6 {32} else {0}
+            _ => 0,
         }
     }
     fn temp(&self) -> i32 {self.temp as i16 as i32}
@@ -166,13 +151,9 @@ fn get_segments(sys: &System) -> Segments {
     let rtc = unsafe {&*stm32u031::RTC::ptr()};
     use State::*;
     let segments = match sys.state() {
-        Time|SetTime => lcd::time_to_segments(rtc.TR().read().bits()),
-        Date|SetDate => lcd::date_to_segments(rtc.DR().read().bits()),
+        Time => lcd::time_to_segments(rtc.TR().read().bits()),
+        Date => lcd::date_to_segments(rtc.DR().read().bits()),
         Temp => lcd::temp_to_segments(sys.temp())
-    };
-    match sys.state() {
-        Time|Date|Temp => return segments,
-        SetTime|SetDate => (),
     };
     if rtc.SSR.read().bits() & 0x40 == 0 {
         segments
@@ -222,11 +203,6 @@ fn touch_process(sys: &mut System) {
     }
     if pad == pad::NONE {
         // Cancel any blinky stuff.
-        match sys.state() {
-            State::SetDate => sys.set_state(State::Date),
-            State::SetTime => sys.set_state(State::Time),
-            _ => (),
-        }
         sys.set_sub_state(0);
         return;
     }
@@ -250,7 +226,7 @@ fn touch_process(sys: &mut System) {
         return;
     }
     // + or -.
-    if sys.state() != State::SetTime && sys.state() != State::SetDate {
+    if sys.state() != State::Time && sys.state() != State::Date {
         return;
     }
     if sys.sub_state() == 0 {
@@ -259,7 +235,7 @@ fn touch_process(sys: &mut System) {
     }
 
     let item;
-    if sys.state() == State::SetTime {
+    if sys.state() == State::Time {
         item = 3 - sys.sub_state();
     }
     else {
