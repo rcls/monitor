@@ -145,20 +145,20 @@ fn rx_word(spi: &stm32u031::spi1::RegisterBlock) {
     spi.DR.read();
 }
 
-pub fn date_time_to_segments(mut t: u32, dots: Segments, kill3: bool) -> Segments {
+pub fn date_time_to_segments(mut t: u32, dots: Segments, kz: bool) -> Segments {
     let mut result = [0; size_of::<Segments>()];
     for p in result.iter_mut().take(WIDTH) {
         let d = t as usize & 15;
         t >>= 4;
         *p = DIGITS[d];
     }
-    if WIDTH == 6 && result[5] == DIGITS[0] {
-        result[5] = 0;
+    if WIDTH == 6 && result[WIDTH - 1] == DIGITS[0] {
+        result[WIDTH - 1] = 0;
     }
-    if (kill3 || WIDTH == 4) && result[3] == DIGITS[0] {
+    if (kz || WIDTH == 4) && result[3] == DIGITS[0] {
         result[3] = 0;
     }
-    if kill3 && WIDTH == 4 && result[1] == DIGITS[0] {
+    if kz && WIDTH == 4 && result[1] == DIGITS[0] {
         result[1] = 0;
     }
     Segments::from_le_bytes(result) | dots

@@ -87,11 +87,11 @@ impl System {
         self.sub_state
     }
     fn set_sub_state(&mut self, v: u32) {
-        self.sub_state = v as u32;
+        self.sub_state = v;
     }
     fn blink_mask(&self) -> Segments {
         let dd = lcd::D8 as Segments * 0x101;
-        match self.sub_state() as usize {
+        match self.sub_state() {
             1 => dd << WIDTH * 8 - 16,
             2 => dd << WIDTH * 8 - 32,
             3 if WIDTH == 6 => dd,

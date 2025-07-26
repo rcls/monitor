@@ -257,8 +257,8 @@ impl crate::cpu::Config {
     pub const fn lazy_i2c(&mut self) -> &mut Self {
         use stm32u031::Interrupt::*;
         let pullup = match crate::I2C_LINES {
-            I2CLines::B6_B7  => 1 << 6 + 16 | 1 << 7 + 16,
-            I2CLines::A9_A10 => 1 << 9      | 1 << 10,
+            I2CLines::B6_B7  => 1 << 0x16 | 1 << 0x17,
+            I2CLines::A9_A10 => 1 << 9    | 1 << 10,
         };
         self.pullup |= pullup;
         self.standby_pu |= pullup;
