@@ -12,13 +12,15 @@ mod cpu;
 mod debug;
 mod dma;
 mod i2c;
+#[allow(unused)]
 mod lcd;
+#[allow(unused)]
 mod rtc;
 mod tmp117;
 mod utils;
 mod vcell;
 
-const LCD_BITS: usize = 48;
+const LCD_WIDTH: usize = 6;
 
 const I2C_LINES: i2c::I2CLines = i2c::I2CLines::B6_B7;
 
@@ -41,7 +43,7 @@ fn cold_start() {
     rtc::ensure_options();
     rtc_setup_20Hz();
 
-    tmp117::init(true);
+    tmp117::init();
 }
 
 #[allow(non_snake_case)]
@@ -57,7 +59,7 @@ fn rtc_setup_20Hz() {
         |w| w.WUTE().set_bit().WUTIE().set_bit().WUCKSEL().B_0x0()
             . BYPSHAD().set_bit());
 
-    rtc::rtc_setup_end();
+    rtc::relock();
 }
 
 fn segments(temp: i32) -> u32 {
@@ -81,7 +83,7 @@ fn segments(temp: i32) -> u32 {
 
 fn display(segments: u32, seq: u32) {
     let com = seq & 1 != 0;
-    if LCD_BITS == 48 {
+    if LCD_WIDTH == 6 {
         let shift = seq as u16 % 48 & !7;
         let segments = segments as lcd::Segments;
         let segments = segments << shift | segments >> 48 - shift;

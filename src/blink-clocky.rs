@@ -12,6 +12,7 @@ mod cpu;
 mod debug;
 mod dma;
 mod i2c;
+#[allow(unused)]
 mod lcd;
 mod utils;
 mod vcell;
@@ -25,7 +26,7 @@ const CONFIG: cpu::Config = *cpu::Config::new(2000000)
     .clocks(1 << 24, 0, 0)
     .debug().i2c().lcd();
 
-const LCD_BITS: usize = 48;
+const LCD_WIDTH: usize = 6;
 const I2C_LINES: i2c::I2CLines = i2c::I2CLines::B6_B7;
 
 pub static LCD: crate::vcell::UCell<LCD> = crate::vcell::UCell::new(LCD::new());
@@ -133,7 +134,7 @@ fn tsc_isr() {
 }
 
 fn tsc_start() {
-    let tsc   = unsafe {&*stm32u031::TSC  ::ptr()};
+    let tsc = unsafe {&*stm32u031::TSC::ptr()};
     if TSC_BUSY.read() == 0 {
         TSC_BUSY.write(1);
         tsc.CR.modify(|_,w| w.START().set_bit());

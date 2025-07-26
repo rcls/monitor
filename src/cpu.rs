@@ -308,7 +308,7 @@ fn bugger() {
         tamp.BKPR[8].write(|w| w.bits(pc));
     }
     else {
-        crate::dbgln!("Crash @ {:#x}", pc);
+        crate::debug::banner("Crash @ 0x", pc, "\n");
         crate::debug::flush();
     }
     reboot();

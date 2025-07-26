@@ -104,7 +104,6 @@ impl Debug {
     }
 }
 
-#[allow(dead_code)]
 pub fn flush() {
     check_vtors();
     let rcc = unsafe {&*stm32u031::RCC::ptr()};
@@ -128,13 +127,16 @@ pub fn flush() {
 }
 
 /// The code gen for formats is so awful that we do this!
-#[allow(dead_code)]
-pub fn banner(s: &str, v: u32, t: &str) {
+pub fn banner(s: &str, mut v: u32, t: &str) {
     write_str(s);
     let mut hex = [0; 8];
-    for i in 0..8 {
-        let d = (v >> i * 4) as u8 & 15;
-        hex[i] = if d < 10 {d + b'0'} else {d + b'a'};
+    for p in hex.iter_mut().rev() {
+        let d = v as u8 & 15;
+        v >>= 4;
+        *p = d + b'0';
+        if *p > b'9' {
+            *p += b'a' - 10 - b'0';
+        };
     }
     DEBUG.write_bytes(&hex);
     write_str(t);
@@ -218,6 +220,11 @@ pub fn init() {
     uart.PRESC.write(|w| w.bits(PRESC));
     uart.CR1.write(
         |w| w.FIFOEN().set_bit().TE().set_bit().UE().set_bit());
+
+    if false {
+        dbg!("");
+        dbgln!("");
+    }
 }
 
 #[cfg(target_os = "none")]

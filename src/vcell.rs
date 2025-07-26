@@ -6,9 +6,14 @@ use core::cell::UnsafeCell;
 #[repr(transparent)]
 pub struct VCell<T>(UnsafeCell<T>);
 
+impl<T: Sync + const Default> const Default for VCell<T> {
+    fn default() -> Self {Self::new(T::default())}
+}
+
 /// A basic cell for storage.  Shared access is safe, mutable access is
 /// unsafe.
 #[repr(transparent)]
+#[derive_const(Default)]
 pub struct UCell<T>(UnsafeCell<T>);
 
 unsafe impl<T> Sync for VCell<T> {}

@@ -3,19 +3,19 @@ use crate::i2c;
 
 /// Initialize the TMP117.  Trigger a conversion if trigger is true, else
 /// just put it into shutdown.
-pub fn init(trigger: bool) {
+pub fn init() {
     let pwr = unsafe {&*stm32u031::PWR::ptr()};
 
     crate::i2c::init();
 
     // Alert is hot-wired to PC13, WKUP2.  Set it to falling edge triggered.
     pwr.CR4.write(|w| w.WP2().set_bit());
-    pwr.CR3.modify(|_,w| w.EIWUL().set_bit().EWUP2().bit(trigger));
+    pwr.CR3.modify(|_,w| w.EIWUL().set_bit().EWUP2().set_bit());
     // Clear the wake-up pin as it has probably gotten set during start-up.
     pwr.SCR.write(|w| w.CWUF2().set_bit());
 
-    // FIXME.  What is the 4?  FIXME - use static and return waiter?
-    let config = [1u8, if trigger {12} else {0}, 4];
+    // Trigger an initial conversion, interrupt on data ready.
+    let config = [1u8, 12, 4];
     let _ = i2c::write(i2c::TMP117, &config).wait();
 }
 
@@ -35,7 +35,7 @@ pub fn alert() -> i32 {
     let pwr = unsafe {&*stm32u031::PWR::ptr()};
 
     // Disable the pullup on PC13 while we do the I2C.
-    pwr.PUCRC.write(|w| w.bits(0));
+    pwr.PUCRC.write(|w| w.PU13().clear_bit());
     i2c::init();
 
     // Read the temperature...
@@ -53,7 +53,7 @@ pub fn alert() -> i32 {
     let _ = i2c::write(i2c::TMP117, &[3u8, (lower >> 8) as u8, lower as u8]);
 
     // The alert pin should be released.  Reenable the pull-up.
-    pwr.PUCRC.write(|w| w.bits(1 << 13));
+    pwr.PUCRC.write(|w| w.PU13().set_bit());
 
     // Updating the display can wait for the next tick.  Disable the wake-up.
     pwr.CR3.modify(|_,w| w.EIWUL().set_bit().EWUP2().clear_bit());
