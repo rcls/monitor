@@ -150,7 +150,11 @@ pub fn init1() {
     unsafe {scb.scr.write(16)};
 
     // Enable the LSE.  Set high drive strength for crystal start-up.
-    rcc.BDCR.write(|w| w.LSEON().set_bit().LSEDRV().B_0x3());
+    let bdcr = rcc.BDCR.read();
+    if !bdcr.LSEON().bit() || !bdcr.LSERDY().bit() {
+        rcc.BDCR.write(
+            |w| w.bits(bdcr.bits()).LSEON().set_bit().LSEDRV().B_0x3());
+    }
 }
 
 pub fn init2() {
@@ -188,7 +192,7 @@ pub fn init2() {
     }
 
     // Reduce drive strength.  (Lowest drive strength appears unreliable).
-    rcc.BDCR.write(|w| w.LSEON().set_bit().LSEDRV().B_0x1());
+    rcc.BDCR.modify(|_,w| w.LSEDRV().B_0x1());
 
     // Enable interrupts.
     unsafe {

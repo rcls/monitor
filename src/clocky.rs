@@ -54,11 +54,12 @@ enum State {
     Time = 0,
     Date = 1,
     Temp = 2,
+    Cal  = 3,
 }
 
 impl State {
     const MIN: State = State::Time;
-    const MAX: State = State::Temp;
+    const MAX: State = State::Cal;
 }
 
 impl System {
@@ -91,7 +92,10 @@ impl System {
     }
     fn blink_mask(&self) -> Segments {
         let dd = lcd::D8 as Segments * 0x101;
-        match self.sub_state() {
+        if self.state() == State::Cal {
+            return (1 << WIDTH * 8 - 8) - 1;
+        }
+        match self.sub_state() {        // Date or time.
             1 => dd << WIDTH * 8 - 16,
             2 => dd << WIDTH * 8 - 32,
             3 if WIDTH == 6 => dd,
@@ -138,15 +142,27 @@ fn rtc_setup_tick() {
     rtc::relock();
 }
 
+fn cal_segments(sys: &System) -> Segments {
+    use lcd::{DC, DA, DL};
+    if sys.sub_state() == 0 {
+        (DC as Segments * 65536 + DA as Segments * 256 + DL as Segments)
+            << WIDTH * 8 - 24
+    }
+    else {
+        lcd::cal_to_segments(rtc::get_cal()) | (DC as Segments) << WIDTH * 8 - 8
+    }
+}
+
 fn get_segments(sys: &System) -> Segments {
     let rtc = unsafe {&*stm32u031::RTC::ptr()};
     use State::*;
     let segments = match sys.state() {
         Time => lcd::time_to_segments(rtc.TR().read().bits()),
         Date => lcd::date_to_segments(rtc.DR().read().bits()),
-        Temp => lcd::temp_to_segments(sys.temp())
+        Temp => lcd::temp_to_segments(sys.temp()),
+        Cal  => cal_segments(sys),
     };
-    if rtc.SSR.read().bits() & 0x40 == 0 {
+    if sys.sub_state() == 0 || rtc.SSR.read().bits() & 0x40 != 0 {
         segments
     }
     else {
@@ -182,37 +198,48 @@ fn touch_process(sys: &mut System) {
         sys.set_sub_state(0);
         return;
     }
+
+    let s = sys.state();
+    let ss = sys.sub_state();
+
     if pad == pad::MENU {
-        // If sub-state is 0, then rotate state.  Else rotate sub-state.
-        let ss = sys.sub_state();
-        if ss != 0 {
-            sys.set_sub_state(if ss < WIDTH as u32 / 2 {ss + 1} else {0});
-        }
-        else if sys.state < State::MAX as u32 {
-            sys.state += 1;
-        }
-        else {
-            sys.state = State::MIN as u32
-        }
-        return;
-    }
-    // + or -.
-    if sys.state() != State::Time && sys.state() != State::Date {
-        return;
-    }
-    if sys.sub_state() == 0 {
-        sys.set_sub_state(1);
+        // Rotate sub-state.
+        let max = match s {State::Temp => 0, State::Cal => 1, _ => 3};
+        sys.sub_state = if ss == max {0} else {ss + 1};
         return;
     }
 
+    // + or -.  If sub-state is 0 then rotate state.  Else adjust.
+    if ss == 0 {
+        if pad == pad::PLUS {
+            sys.state = if s >= State::MAX {State::MIN as u32} else {s as u32 + 1};
+        }
+        else {
+            sys.state = if s <= State::MIN {State::MAX as u32} else {s as u32 - 1};
+        }
+        return;
+    }
+
+    // Adjust...
+    if s == State::Cal {
+        let cal = rtc::get_cal();
+        rtc::set_cal(
+            if pad == pad::PLUS {cal.min(98) + 1} else {cal.max(-98) - 1});
+        return;
+    }
+
+    if s == State::Temp {
+        return; // Nothing to do (should have ss==0 anyway).
+    }
+
+    // Date or Time.
     let item;
-    if sys.state() == State::Time {
+    if s == State::Time {
         item = 3 - sys.sub_state();
     }
     else {
         item = 5 - WIDTH as u32 / 2 + sys.sub_state();
     }
-
     if pad == pad::PLUS {
         rtc::forwards(item);
     }

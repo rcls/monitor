@@ -13,7 +13,7 @@ pub const SEG_F: u8 = 64;
 pub const SEG_G: u8 = 128;
 pub const DOT: u8 = 1;
 
-pub const D0: u8 = D8 & !SEG_G;
+pub const D0: u8 = D8 & !MINUS;
 pub const D1: u8 = SEG_B | SEG_C;
 pub const D2: u8 = D8 & !SEG_C & !SEG_F;
 pub const D3: u8 = D9 & !SEG_F;
@@ -25,9 +25,9 @@ pub const D8: u8 = !DOT;
 pub const D9: u8 = D8 & !SEG_E;
 
 pub const DEG: u8 = SEG_A | SEG_B | SEG_F | SEG_G;
-pub const Db: u8 = D6 & !SEG_A;
-pub const Dc: u8 = SEG_D | SEG_E | SEG_G;
-pub const Dd: u8 = Dc | SEG_B | SEG_C;
+pub const DC: u8 = D0 & !SEG_B & !SEG_C;
+pub const DA: u8 = D8 & !SEG_D;
+pub const DL: u8 = DC & !SEG_A;
 
 pub const MINUS: u8 = SEG_G;
 /// Right or only colon.
@@ -41,9 +41,10 @@ pub trait SegmentsTrait<const N: usize> {type Segments;}
 impl SegmentsTrait<6> for () {type Segments = u64;}
 impl SegmentsTrait<4> for () {type Segments = u32;}
 pub type Segments = <() as SegmentsTrait<{WIDTH}>>::Segments;
+type SegArray = [u8; size_of::<Segments>()];
 
 pub static DIGITS: [u8; 16] = [
-    D0, D1, D2, D3, D4, D5, D6, D7, D8, D9, DEG, Db, Dc, Dd, DOT, MINUS];
+    D0, D1, D2, D3, D4, D5, D6, D7, D8, D9, 0, 0, 0, 0, 0, 0];
 
 /// Initialize the I/O to the LCD.
 pub fn init() {
@@ -179,19 +180,8 @@ pub fn date_to_segments(d: u32) -> Segments {
 }
 
 pub fn temp_to_segments(temp: i32) -> Segments {
-    let mut segs = [0; size_of::<Segments>()];
-    let mut p = 0;
-    let mut quo = temp.unsigned_abs() as u16; // u16 is better on Cortex-M0.
-    while p < WIDTH && quo != 0 || p < 2 {
-        let rem = quo % 10;
-        quo /= 10;
-        segs[p] = DIGITS[rem as usize];
-        p += 1;
-    }
-    if p < WIDTH && temp < 0 {
-        segs[p] = MINUS;
-        p += 1;
-    }
+    let mut segs = SegArray::default();
+    let p = decimal_to_segments(&mut segs, temp, 2);
     let mut segs = Segments::from_le_bytes(segs) | DOT as Segments * 256;
     if p < WIDTH {
         segs = segs * 256 + DEG as Segments;
@@ -200,6 +190,34 @@ pub fn temp_to_segments(temp: i32) -> Segments {
         segs *= 256;
     }
     segs
+}
+
+/// Works on 17 bit signed, -65535 ..= 65535.
+pub fn decimal_to_segments(segs: &mut SegArray, v: i32, min: usize) -> usize {
+    let mut i = segs.iter_mut();
+    let mut count = 0;
+    let mut quo = v.unsigned_abs() as u16;
+    loop {
+        let rem = quo % 10;
+        quo /= 10;
+        let Some(p) = i.next() else {return count};
+        *p = DIGITS[rem as usize];
+        count += 1;
+        if quo == 0 && count >= min {
+            break;
+        }
+    }
+    if v < 0 && let Some(p) = i.next() {
+        *p = MINUS;
+        count += 1;
+    }
+    return count;
+}
+
+pub fn cal_to_segments(cal: i32) -> Segments {
+    let mut segs = SegArray::default();
+    decimal_to_segments(&mut segs, cal, 0);
+    Segments::from_le_bytes(segs) | (DC as Segments) << WIDTH * 8 - 8
 }
 
 impl crate::cpu::Config {
@@ -223,6 +241,7 @@ fn segments_to_str(s: Segments) -> String {
         let c = match b {
             DEG => '°',
             MINUS => '-',
+            DC => 'C',
             0 => ' ',
             _ => char::from_u32(
                 48 + DIGITS.iter().position(|x| *x == b).unwrap() as u32)
@@ -277,13 +296,52 @@ fn date_segment_checks() {
 
 #[test]
 fn time_segment_checks() {
-    let checks = [
-        (0x010203, " 1:02", " 1:02:03"),
-        (0x160659, "16:06", "16:06:59"),
-        (0x010101, " 1:01", " 1:01:01"),
-    ];
-    for (d, s, w) in checks {
-        assert_eq!(segments_to_str(time_to_segments(d)),
-                   if WIDTH == 4 {s} else {w});
+    for h in 0..24u32 {
+        for m in 0..60 {
+            for s in 0.. 60 {
+                let xx = |x| x % 10 + x / 10 * 16;
+                let t = xx(h) * 65536 + xx(m) * 256 + xx(s);
+                let s = if WIDTH == 6 {format!("{h:2}:{m:02}:{s:02}")}
+                    else {format!("{h:2}:{m:02}")};
+                assert_eq!(segments_to_str(time_to_segments(t)), s);
+            }
+        }
+    }
+}
+
+#[test]
+fn check_decimal() {
+    fn expected(v: i32, min: usize) -> String {
+        let min = min.max(1);
+        let mut s = format!("{:0min$}", v.unsigned_abs());
+        if v < 0 {
+            s.insert(0, '-');
+        }
+        while s.len() < WIDTH {
+            s.insert(0, ' ');
+        }
+        if s.len() > WIDTH {
+            s.replace_range(.. s.len() - WIDTH, "");
+        }
+        s
+    }
+    for i in -65535..=65535 {
+        for min in 0..=2 {
+            let mut segs = SegArray::default();
+            let p = decimal_to_segments(&mut segs, i, min);
+            assert!(p > 0);
+            assert!(p == segs.len() || segs[p] == 0);
+            assert!(segs[p - 1] != 0);
+            let segs = Segments::from_le_bytes(segs);
+            assert_eq!(segments_to_str(segs), expected(i, min));
+        }
+    }
+}
+
+#[test]
+fn check_cal() {
+    for i in -99 ..= 999 {
+        assert_eq!(segments_to_str(cal_to_segments(i)),
+                   format!("C{i:w$}", w = WIDTH - 1));
     }
 }

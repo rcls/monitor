@@ -92,6 +92,20 @@ pub fn ensure_options() {
     crate::debug::write_str("Options written!\n");
 }
 
+pub fn get_cal() -> i32 {
+    let rtc = unsafe {&*stm32u031::RTC::ptr()};
+    let calr = rtc.CALR.read();
+    calr.CALM().bits() as i32 - calr.CALP().bit() as i32 * 512
+}
+
+pub fn set_cal(cal: i32) {
+    let rtc = unsafe {&*stm32u031::RTC::ptr()};
+    unlock();
+    rtc.CALR.write(
+        |w| w.CALP().bit(cal & 512 != 0).CALM().bits(cal as u16 & 511));
+    relock();
+}
+
 fn forwards_time(item: u32, mut t: u32) -> u32 {
     if item == 0 { // Seconds.
         if t & 0xff < 0x59 {
