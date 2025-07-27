@@ -131,12 +131,12 @@ impl Monitor {
         oled::update_text(&mut self.frame[0], &line[..10], 0, 0)?;
 
         decimal::format_u32(&mut line[..6], vsense, 3);
-        line[6..].copy_from_slice(&CHARS_MAP!(" V"));
+        line[6..8].copy_from_slice(&CHARS_MAP!(" V"));
         oled::update_text(&mut self.frame[1], &line[..8], 2, 2)?;
 
         let usense = self.isense.unsigned_abs();
         decimal::format_u32(&mut line[..6], usense, 3);
-        line[6..].copy_from_slice(&CHARS_MAP!(" A"));
+        line[6..8].copy_from_slice(&CHARS_MAP!(" A"));
         oled::update_text(&mut self.frame[2], &line[..8], 2, 4)?;
 
         let centic = (temp_counts * 100 + 50) >> 7;
