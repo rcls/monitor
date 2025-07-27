@@ -147,20 +147,22 @@ fn backwards_time(item: u32, mut t: u32) -> u32 {
 }
 
 // d should be in the RTC BCD date format, and returns a BCD byte.
+#[inline(never)]
 fn days_in_month(d: u32) -> u32 {
-     static DAYS_PER_MONTH: [u8; 32] = [ // BCD!
-         0, 0x31, 0x28, 0x31,  0x30, 0x31, 0x30, 0x31, // Jan ..= Jul
-         0x31,  0x30, 0, 0, 0, 0, 0, 0,                // Aug, Sep.
-         0x31, 0x30, 0x31, 0,  0, 0, 0, 0,   0, 0, 0, 0,   0, 0, 0, 0];
-     let month = (d >> 8) & 31;
-     if month != 2 {
-         DAYS_PER_MONTH[month as usize] as u32
-     }
-     else {
-         let year = ((d >> 16) & 15) + 10 * ((d >> 20) & 15);
-         let leap_year = year & 3 == 0 && year != 0;
-         0x28 + leap_year as u32
-     }
+    static DAYS_PER_MONTH: [u8; 32] = [ // BCD!
+        0, 0x31, 0x28, 0x31,  0x30, 0x31, 0x30, 0x31, // Jan ..= Jul
+        0x31,  0x30, 0, 0, 0, 0, 0, 0,                // Aug, Sep.
+        0x31, 0x30, 0x31, 0,  0, 0, 0, 0,   0, 0, 0, 0,   0, 0, 0, 0];
+    let month = (d >> 8) & 31;
+    let mut dim = DAYS_PER_MONTH[month as usize] as u32;
+    if month == 2 {
+        let year4 = ((d >> 16) & 15) + 2 * ((d >> 20) & 15);
+        let leap_year = year4 & 3 == 0 && year4 != 0;
+        if leap_year {
+            dim += 1;
+        }
+    }
+    dim
 }
 
 fn forwards_date(item: u32, mut d: u32) -> u32 {

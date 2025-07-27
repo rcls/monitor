@@ -1,8 +1,15 @@
 use crate::vcell::VCell;
 
-/// +, -, menu.  Note that the index is one less than the enumeration.
-static VALUES: [VCell<u32>; 3] = [const {VCell::new(0)}; 3];
-static PASS_COMPLETE: VCell<bool> = Default::default();
+/// Pads are +, -, menu.  Note that the index is one less than the enumeration.
+
+struct State {
+    values: [VCell<u32>; 3],
+    complete: VCell<bool>,
+}
+
+#[unsafe(link_section = ".noinit")]
+static STATE: State = State {
+    values: [const {VCell::new(0)}; 3], complete: VCell::new(false)};
 
 pub mod pad {
     pub const NONE : u32 = 0;
@@ -69,7 +76,7 @@ pub fn acquire() {
     // Plus = G7IO3
     // Menu = G5IO4
     // MenuCS = G5IO2
-    PASS_COMPLETE.write(false);
+    STATE.complete.write(false);
     let tsc = unsafe {&*stm32u031::TSC::ptr()};
     // + and cap.
     tsc.IOCCR.write(|w| w.G7_IO3().set_bit().G5_IO4().set_bit());
@@ -85,15 +92,15 @@ fn isr() {
 
     let ccr = tsc.IOCCR.read();
     if ccr.G7_IO3().bit() { // +
-        VALUES[0].write(tsc.IOG7CR.read().bits());
+        STATE.values[0].write(tsc.IOG7CR.read().bits());
     }
     if ccr.G5_IO4().bit() { // Menu
-        VALUES[2].write(tsc.IOG5CR.read().bits());
+        STATE.values[2].write(tsc.IOG5CR.read().bits());
     }
     if ccr.G7_IO1().bit() { // -
         // We got -, the pass is done.
-        VALUES[1].write(tsc.IOG7CR.read().bits());
-        PASS_COMPLETE.write(true);
+        STATE.values[1].write(tsc.IOG7CR.read().bits());
+        STATE.complete.write(true);
     }
     else {
         // We did not get -, get it now.
@@ -106,13 +113,13 @@ fn isr() {
 
 // Return touched pad, 1=+, 2=-, 3=menu, 0=None.
 pub fn retrieve() -> u32 {
-    while !PASS_COMPLETE.read() {
+    while !STATE.complete.read() {
         crate::cpu::WFE();
     }
     // Find the lowest line...
     let mut min_line = 0;
-    let mut min_val = VALUES[0].read();
-    for (i, val) in VALUES.iter().enumerate().skip(1) {
+    let mut min_val = STATE.values[0].read();
+    for (i, val) in STATE.values.iter().enumerate().skip(1) {
         let val = val.read();
         if val < min_val {
             min_val = val;

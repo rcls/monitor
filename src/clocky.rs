@@ -84,18 +84,12 @@ impl System {
         // SAFTEY: We sanitize this at each start-up.
         unsafe {core::mem::transmute(self.state)}
     }
-    fn sub_state(&self) -> u32 {
-        self.sub_state
-    }
-    fn set_sub_state(&mut self, v: u32) {
-        self.sub_state = v;
-    }
     fn blink_mask(&self) -> Segments {
         let dd = lcd::D8 as Segments * 0x101;
         if self.state() == State::Cal {
             return (1 << WIDTH * 8 - 8) - 1;
         }
-        match self.sub_state() {        // Date or time.
+        match self.sub_state {        // Date or time.
             1 => dd << WIDTH * 8 - 16,
             2 => dd << WIDTH * 8 - 32,
             3 if WIDTH == 6 => dd,
@@ -144,7 +138,7 @@ fn rtc_setup_tick() {
 
 fn cal_segments(sys: &System) -> Segments {
     use lcd::{DC, DA, DL};
-    if sys.sub_state() == 0 {
+    if sys.sub_state == 0 {
         (DC as Segments * 65536 + DA as Segments * 256 + DL as Segments)
             << WIDTH * 8 - 24
     }
@@ -162,7 +156,7 @@ fn get_segments(sys: &System) -> Segments {
         Temp => lcd::temp_to_segments(sys.temp()),
         Cal  => cal_segments(sys),
     };
-    if sys.sub_state() == 0 || rtc.SSR.read().bits() & 0x40 != 0 {
+    if sys.sub_state == 0 || rtc.SSR.read().bits() & 0x40 != 0 {
         segments
     }
     else {
@@ -193,34 +187,45 @@ fn touch_process(sys: &mut System) {
     if !touch_state(sys, pad) {
         return;
     }
-    if pad == pad::NONE {
-        // Cancel any blinky stuff.
-        sys.set_sub_state(0);
-        return;
+
+    match pad {
+        pad::NONE => sys.sub_state = 0,        // Cancel any blinky stuff.
+        pad::MENU => { // Rotate sub-state.
+            let s = sys.state();
+            let ss = sys.sub_state;
+            let max = match s {State::Temp => 0, State::Cal => 1, _ => 3};
+            sys.sub_state = if ss >= max {0} else {ss + 1};
+        },
+        _ => touch_plus_minus(sys, pad),
     }
 
+    // Update the cal clock output.
+    let rcc = unsafe {&*stm32u031::RCC::ptr()};
+    if sys.state() == State::Cal && sys.sub_state != 0 {
+        rcc.BDCR.modify(
+            |_, w| w.LSCOSEL().set_bit().LSCOEN().set_bit().LSESYSEN().set_bit());
+    }
+    // FIXME - when exactly do we turn off?
+    else if sys.state() != State::Cal {
+        rcc.BDCR.modify(
+            |_, w| w.LSCOEN().clear_bit().LSESYSEN().clear_bit());
+    }
+}
+
+fn touch_plus_minus(sys: &mut System, pad: u32) {
     let s = sys.state();
-    let ss = sys.sub_state();
 
-    if pad == pad::MENU {
-        // Rotate sub-state.
-        let max = match s {State::Temp => 0, State::Cal => 1, _ => 3};
-        sys.sub_state = if ss == max {0} else {ss + 1};
-        return;
-    }
-
-    // + or -.  If sub-state is 0 then rotate state.  Else adjust.
-    if ss == 0 {
-        if pad == pad::PLUS {
-            sys.state = if s >= State::MAX {State::MIN as u32} else {s as u32 + 1};
+    if sys.sub_state == 0 {
+        // Rotate the main state.
+        sys.state = if pad == pad::PLUS {
+            if s >= State::MAX {State::MIN as u32} else {s as u32 + 1}
         }
         else {
-            sys.state = if s <= State::MIN {State::MAX as u32} else {s as u32 - 1};
-        }
+            if s <= State::MIN {State::MAX as u32} else {s as u32 - 1}
+        };
         return;
     }
 
-    // Adjust...
     if s == State::Cal {
         let cal = rtc::get_cal();
         rtc::set_cal(
@@ -235,10 +240,10 @@ fn touch_process(sys: &mut System) {
     // Date or Time.
     let item;
     if s == State::Time {
-        item = 3 - sys.sub_state();
+        item = 3 - sys.sub_state;
     }
     else {
-        item = 5 - WIDTH as u32 / 2 + sys.sub_state();
+        item = 5 - WIDTH as u32 / 2 + sys.sub_state;
     }
     if pad == pad::PLUS {
         rtc::forwards(item);
@@ -317,10 +322,6 @@ pub fn main() -> ! {
     if rcc_csr & 0xfe000000 != 0 || sys.magic != MAGIC
         || !sr1.SBF().bit() {
         cold_start(sys);
-    }
-
-    if false {
-        tsc::init();
     }
 
     let mut lcd_update = false;

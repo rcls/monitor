@@ -11,9 +11,7 @@
 mod clocky;
 mod cpu;
 mod debug;
-#[allow(dead_code)]
 mod dma;
-#[allow(dead_code)]
 mod i2c;
 mod lcd;
 mod rtc;
