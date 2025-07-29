@@ -165,18 +165,29 @@ pub fn date_time_to_segments(mut t: u32, dots: Segments, kz: bool) -> Segments {
     Segments::from_le_bytes(result) | dots
 }
 
-pub fn time_to_segments(t: u32) -> Segments {
-    let t = if WIDTH == 4 {t >> 8} else {t};
-    date_time_to_segments(t, COL1 | COL2, false)
+pub fn time_to_segments(t: u32, sub_state: u32) -> Segments {
+    let t = if WIDTH == 6 || sub_state == 3 {t} else {t >> 8};
+    let segs = date_time_to_segments(t, COL1 | COL2, false);
+    if WIDTH == 6 || sub_state != 3 {
+        segs
+    }
+    else {
+        segs & 0xffff
+    }
 }
 
-pub fn date_to_segments(d: u32) -> Segments {
+pub fn date_to_segments(d: u32, sub_state: u32) -> Segments {
     let mult = if WIDTH == 4 {1} else {0x10001};
     let dots = mult * 0x10000 + COL1 + COL2;
     // Mask off day-of-week.
     let d = (d & !0xe000).swap_bytes();
-    let d = if WIDTH == 4 {d >> 16} else {d >> 8};
-    date_time_to_segments(d, dots, true)
+    let d = if WIDTH == 4 && sub_state != 1 {d >> 16} else {d >> 8};
+    if WIDTH == 4 && sub_state == 1 {
+        date_time_to_segments(d, dots, false) & 0x1ffff
+    }
+    else {
+        date_time_to_segments(d, dots, true)
+    }
 }
 
 pub fn temp_to_segments(temp: i32) -> Segments {
@@ -289,7 +300,7 @@ fn date_segment_checks() {
         (0x01f101, " 1⋮11", " 1⋮11⋮01"),
     ];
     for (d, s, w) in checks {
-        assert_eq!(segments_to_str(date_to_segments(d)),
+        assert_eq!(segments_to_str(date_to_segments(d, 0)),
                    if WIDTH == 4 {s} else {w});
     }
 }
@@ -303,10 +314,31 @@ fn time_segment_checks() {
                 let t = xx(h) * 65536 + xx(m) * 256 + xx(s);
                 let s = if WIDTH == 6 {format!("{h:2}:{m:02}:{s:02}")}
                     else {format!("{h:2}:{m:02}")};
-                assert_eq!(segments_to_str(time_to_segments(t)), s);
+                assert_eq!(segments_to_str(time_to_segments(t, 0)), s);
             }
         }
     }
+}
+
+#[test]
+fn date_adjust_date_checks() {
+    if WIDTH == 6 {
+        for i in 0 ..= 3 {
+            assert_eq!(segments_to_str(date_to_segments(0x691204, i)),
+                       " 4⋮12⋮69");
+        }
+        return;
+    }
+    assert_eq!(segments_to_str(date_to_segments(0x691204, 2)),
+               " 4⋮12");
+    assert_eq!(segments_to_str(date_to_segments(0x691204, 3)),
+               " 4⋮12");
+    assert_eq!(segments_to_str(date_to_segments(0x691204, 1)),
+               "  ⋮69");
+    assert_eq!(segments_to_str(date_to_segments(0x691204, 1)),
+               "  ⋮69");
+    assert_eq!(segments_to_str(date_to_segments(0x071204, 1)),
+               "  ⋮07");
 }
 
 #[test]

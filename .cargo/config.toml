@@ -1,5 +1,6 @@
 [alias]
 b = 'build --release --target thumbv6m-none-eabi -Zbuild-std -Zbuild-std-features=optimize_for_size -Z build-std-features=panic_immediate_abort'
+bp = 'build --release --target thumbv6m-none-eabi -Zbuild-std -Zbuild-std-features=optimize_for_size'
 
 [target.thumbv6m-none-eabi]
 rustflags = [

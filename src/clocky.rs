@@ -26,6 +26,7 @@ const REPEAT_AGAIN: u32 = TICKS_PER_SEC / 2;
 
 /// The overall system state, taking just 9 32-bit words.
 #[repr(C)]
+#[derive(Default)]
 struct System {
     /// Magic number.
     magic: u32,
@@ -73,6 +74,7 @@ impl System {
         }
         sys
     }
+
     fn reset(&mut self) {
         self.magic = MAGIC;
         self.temp = self.temp.clamp(-1999, 1999);
@@ -86,13 +88,19 @@ impl System {
     }
     fn blink_mask(&self) -> Segments {
         let dd = lcd::D8 as Segments * 0x101;
-        if self.state() == State::Cal {
+        let state = self.state();
+        use State::*;
+        if state == Cal {
             return (1 << WIDTH * 8 - 8) - 1;
         }
-        match self.sub_state {        // Date or time.
+        // The numbering is big endian, time display is big endian, date
+        // display is little endian.  For a 4 digit display, the exception
+        // is always on the right.
+        let pos = if state == Date {4 - self.sub_state} else {self.sub_state};
+        match pos {        // Date or time.
             1 => dd << WIDTH * 8 - 16,
             2 => dd << WIDTH * 8 - 32,
-            3 if WIDTH == 6 => dd,
+            3 => dd,
             _ => 0,
         }
     }
@@ -151,8 +159,8 @@ fn get_segments(sys: &System) -> Segments {
     let rtc = unsafe {&*stm32u031::RTC::ptr()};
     use State::*;
     let segments = match sys.state() {
-        Time => lcd::time_to_segments(rtc.TR().read().bits()),
-        Date => lcd::date_to_segments(rtc.DR().read().bits()),
+        Time => lcd::time_to_segments(rtc.TR().read().bits(), sys.sub_state),
+        Date => lcd::date_to_segments(rtc.DR().read().bits(), sys.sub_state),
         Temp => lcd::temp_to_segments(sys.temp()),
         Cal  => cal_segments(sys),
     };
@@ -189,8 +197,8 @@ fn touch_process(sys: &mut System) {
     }
 
     match pad {
-        pad::NONE => sys.sub_state = 0,        // Cancel any blinky stuff.
-        pad::MENU => { // Rotate sub-state.
+        pad::NONE => sys.sub_state = 0, // Cancel any blinky stuff.
+        pad::MENU => {                  // Rotate sub-state.
             let s = sys.state();
             let ss = sys.sub_state;
             let max = match s {State::Temp => 0, State::Cal => 1, _ => 3};
@@ -237,14 +245,9 @@ fn touch_plus_minus(sys: &mut System, pad: u32) {
         return; // Nothing to do (should have ss==0 anyway).
     }
 
-    // Date or Time.
-    let item;
-    if s == State::Time {
-        item = 3 - sys.sub_state;
-    }
-    else {
-        item = 5 - WIDTH as u32 / 2 + sys.sub_state;
-    }
+    // Date or Time.  The sub-state numbering is big endian 1-based, the
+    // forwards/backward numbering is little endian 0-based.
+    let item = if s == State::Time {3} else {6} - sys.sub_state;
     if pad == pad::PLUS {
         rtc::forwards(item);
     }
@@ -337,4 +340,24 @@ pub fn main() -> ! {
     }
 
     rtc::standby(lcd_update);
+}
+
+#[test]
+fn blink_mask_checks() {
+    let checks = [
+        (State::Cal , 0, 0x00ffffff, 0x00ffffffffffu64),
+        (State::Time, 1, 0xfefe0000, 0xfefe00000000),
+        (State::Time, 2, 0x0000fefe, 0x0000fefe0000),
+        (State::Time, 3, 0x0000fefe, 0x00000000fefe),
+        (State::Date, 1, 0x0000fefe, 0x00000000fefe),
+        (State::Date, 2, 0x0000fefe, 0x0000fefe0000),
+        (State::Date, 3, 0xfefe0000, 0xfefe00000000)
+    ];
+
+    let mut sys = System::default();
+    for (s, ss, m4, m6) in checks {
+        sys.state = s as u32;
+        sys.sub_state = ss;
+        assert_eq!(sys.blink_mask(), if WIDTH == 4 {m4} else {m6} as Segments);
+    }
 }

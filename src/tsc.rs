@@ -2,6 +2,9 @@ use crate::vcell::VCell;
 
 /// Pads are +, -, menu.  Note that the index is one less than the enumeration.
 
+/// Set to just log touch values.
+const EVALUATE: bool = false;
+
 struct State {
     values: [VCell<u32>; 3],
     complete: VCell<bool>,
@@ -125,6 +128,11 @@ pub fn retrieve() -> u32 {
             min_val = val;
             min_line = i as u32;
         }
+    }
+    if EVALUATE {
+        crate::dbgln!("Touch {} {} {}", STATE.values[0].read(),
+                      STATE.values[1].read(), STATE.values[2].read());
+        return 0;
     }
     if min_val < 1536 {
         min_line + 1
