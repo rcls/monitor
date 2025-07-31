@@ -10,7 +10,8 @@ pub const ADC_MUXIN: u32 = 5;
 use crate::ADC_CHANNELS;
 const NUM_CHANNELS: usize = ADC_CHANNELS.len();
 
-pub static DMA_BUF: [VCell<u16>; 3] = [const {VCell::new(0)}; NUM_CHANNELS];
+pub static DMA_BUF: [VCell<u16>; NUM_CHANNELS] = [
+    const {VCell::new(0)}; NUM_CHANNELS];
 pub static DONE: VCell<bool> = VCell::new(false);
 
 pub fn start() {
@@ -68,10 +69,10 @@ pub fn init2() {
     while !adc.ISR.read().ADRDY().bit() {
     }
 
-    // Use DMAEN, and set AUTOFF for intermittent conversions.
-    adc.CFGR1.write(|w| w.AUTOFF().set_bit().DMAEN().set_bit());
     // Oversample config.
     adc.CFGR2.write(|w| w.OVSS().B_0x4().OVSR().B_0x7().OVSE().set_bit());
+    // Use DMAEN, and set AUTOFF for intermittent conversions.
+    adc.CFGR1.write(|w| w.AUTOFF().set_bit().DMAEN().set_bit());
 
     // Configure ADC chanels and wait for ready.  The datasheet appears to lie.
     // We actually get Isense on AIN9, VSENSE on A17 and VREF on A18 (0 based

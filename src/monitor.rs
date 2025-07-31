@@ -1,37 +1,9 @@
-#![cfg_attr(target_os = "none", no_std)]
-#![cfg_attr(target_os = "none", no_main)]
-#![allow(internal_features)]
-#![allow(unpredictable_function_pointer_comparisons)]
-#![feature(const_default)]
-#![feature(const_trait_impl)]
-#![feature(derive_const)]
-#![feature(format_args_nl)]
-#![feature(link_llvm_intrinsics)]
 
+use crate::*;
 use cpu::WFE;
 use noise::Noise;
 use static_assertions::const_assert;
 use vcell::UCell;
-
-mod adc;
-mod cpu;
-mod decimal;
-mod dma;
-mod debug;
-mod font;
-mod i2c;
-mod noise;
-mod oled;
-mod usqrt;
-mod utils;
-mod vcell;
-
-const CONFIG: cpu::Config = *cpu::Config::new(16000000)
-    .systick(systick_handler).adc().debug().i2c();
-
-const ADC_CHANNELS: [u32; 3] = [9, 17, 18];
-
-const I2C_LINES: i2c::I2CLines = i2c::I2CLines::A9_A10;
 
 unsafe extern "C" {
     static mut __bss_start: u8;
@@ -50,7 +22,10 @@ struct Monitor {
 
 static MONITOR: UCell<Monitor> = UCell::new(Monitor::new());
 
-fn systick_handler() {
+// Accelerometer.
+//const FXLS8971: u8 = 0x30;
+
+pub fn systick_handler() {
     unsafe{MONITOR.as_mut().systick_handler()};
 }
 
@@ -89,20 +64,30 @@ impl Monitor {
         i2c::read_reg(i2c::TMP117, 0, &mut self.temp).wait()?;
 
         // Log the ADC & TEMP values....
-        let isense_counts = adc::DMA_BUF[0].read() as i32;
-        let vsense_counts = adc::DMA_BUF[1].read() as u32;
-        let v3v3_counts   = adc::DMA_BUF[2].read() as u32;
+        let isense_counts = adc::DMA_BUF[ISENSE_INDEX].read() as i32;
+        let vsense_counts = adc::DMA_BUF[VSENSE1_INDEX].read() as u32;
+        let v3v3_counts   = adc::DMA_BUF[VREF_INDEX].read() as u32;
         let temp_counts   = i16::from_be(self.temp) as i32;
 
-        let isense_raw = isense_counts - 32646;
-        self.isense = (isense_raw * 25000 + 32768) >> 16;
+        let isense_raw = isense_counts - ISENSE_ZERO;
+        dbgln!("{isense_counts}");
+        self.isense = (isense_raw * ISENSE_SCALE + 32768) >> 16;
 
-        let vsense = vconvert(vsense_counts);
+        let vsense;
+        let power;
+        if vsense_counts < 0xff00 || VSENSE1_INDEX == VSENSE2_INDEX {
+            vsense = vconvert(vsense_counts);
+            power = power_cW(isense_raw, vsense_counts);
+        }
+        else {
+            let vsense2_counts = adc::DMA_BUF[VSENSE2_INDEX].read() as u32;
+            vsense = vconvert2(vsense2_counts);
+            power = power2_cW(isense_raw, vsense2_counts);
+        }
 
         let v3v3 = v3v3convert(v3v3_counts);
         //let v3v3 = v3v3::v3v3_est(v3v3_counts);
 
-        let power = power_cW(isense_raw, vsense_counts);
 
         self.noise[0].update(vsense);
         self.noise[1].update(self.isense as u32);
@@ -169,12 +154,12 @@ impl Monitor {
         let mut base = font::SPACE;
         let mut inc  = 0;
         let mut dir  = 0;
-        if self.isense > 0 {
+        if self.isense >= 10 {
             base = font::LEFT_TOP_0;
             inc = 1;
             dir = 2;
         }
-        else if self.isense < 0 {
+        else if self.isense <= -10 {
             base = font::RIGHT_TOP_0;
             inc = 1;
             dir = 6;
@@ -245,13 +230,20 @@ pub fn main() -> ! {
     }
 }
 
-fn vconvert(counts: u32) -> u32 {
-    const V_FULL_SCALE: f64 = 118.0 / 18.0 * 3.3 * 1000.0; // millivolts.
-    const V_SHIFT: u32 = 1;
-    const V_MULT: u32 = (V_FULL_SCALE * (1 << V_SHIFT) as f64 + 0.5) as u32;
+pub fn vconvert(counts: u32) -> u32 {
+    const V_MULT: u32
+        = (VSENSE1_FS * (1000 << VSENSE1_SHIFT) as f64 + 0.5) as u32;
     const_assert!(V_MULT >= 32768);
     const_assert!(V_MULT < 65536);
-    (counts * V_MULT + (1 << V_SHIFT-1)) >> (16 + V_SHIFT)
+    (counts * V_MULT + (32768 << VSENSE1_SHIFT)) >> (16 + VSENSE1_SHIFT)
+}
+
+pub fn vconvert2(counts: u32) -> u32 {
+    const V_MULT: u32
+        = (VSENSE2_FS * (1000 << VSENSE2_SHIFT) as f64 + 0.5) as u32;
+    const_assert!(V_MULT >= 32768);
+    const_assert!(V_MULT < 65536);
+    (counts * V_MULT + (32768 << VSENSE2_SHIFT)) >> (16 + VSENSE2_SHIFT)
 }
 
 fn v3v3convert(v3v3_counts: u32) -> u32 {
@@ -269,34 +261,52 @@ fn v3v3convert(v3v3_counts: u32) -> u32 {
 #[allow(non_snake_case)]
 // Note returns absolute value.
 fn power_cW(isense_raw: i32, vsense_counts: u32) -> u32 {
-    // u32::MAX is 270W.
-    // 65536 is 4mW, resolution on (v_counts * i_counts) is ≈ 0.1µW.
-    // Drop 12 bits, this gives us resolution of around 0.5mW.
     #[allow(non_upper_case_globals)]
-    const cW_PER_COUNT: f64 = 118.0 / 18.0 * 3.3 / 65536.0 // Voltage
-        * 25.0 / 65536.0                                   // Current
-        * 100.0;
-    const POWER_SCALE: f64 = 65536.0 * 65536.0 * cW_PER_COUNT;
-    const MULT: u32 = POWER_SCALE as u32;
-    const_assert!(MULT < 65536 && MULT > 50000);
+    const cW_FS: f64 = VSENSE1_FS  // Voltage
+        * ISENSE_FS                // Current
+        * 100.0;                           // centi Watts
+    const MULT: u32 = (cW_FS * (1 << POWER1_SHIFT) as f64) as u32;
+    debug_assert!(MULT < 65536, "{cW_FS} {MULT} {VSENSE1_FS} {ISENSE_FS}");
+    debug_assert!(MULT > 32768, "{cW_FS} {MULT} {VSENSE1_FS} {ISENSE_FS}");
     let power_counts = vsense_counts * isense_raw.unsigned_abs();
     // Power in centiwatts * 65536.
     let power = (power_counts >> 16) * MULT
         + ((power_counts & 0xffff) * MULT + 32768 >> 16);
     // Power in cW.
-    power >> 16
+    power >> (16 + POWER1_SHIFT)
 }
 
-#[test]
-fn test_vconvert() {
-    const FS: f64 = 118.0 / 18.0 * 3.3 * 1000.0;
-    assert!(20000. <= FS && FS <= 25000., "{FS}");
-    assert_eq!(vconvert(0), 0);
-    let high = vconvert(0xffff);
-    assert!((high as f64 - FS * 65535./65536.).abs() <= 1.);
+#[allow(non_snake_case)]
+// Note returns absolute value.
+fn power2_cW(isense_raw: i32, vsense_counts: u32) -> u32 {
+    #[allow(non_upper_case_globals)]
+    const cW_FS: f64 = VSENSE2_FS  // Voltage
+        * ISENSE_FS                // Current
+        * 100.0;                           // centi Watts
+    const MULT: u32 = (cW_FS / (1 << POWER2_SHIFT) as f64 + 0.5) as u32;
+    debug_assert!(MULT < 65536, "{cW_FS} {MULT} {VSENSE2_FS} {ISENSE_FS}");
+    debug_assert!(MULT > 32768, "{cW_FS} {MULT} {VSENSE2_FS} {ISENSE_FS}");
+    let power_counts = vsense_counts * isense_raw.unsigned_abs();
+    // Power in centiwatts * (65536 >> POWER2_SHIFT).
+    let power = (power_counts >> 16) * MULT
+        + ((power_counts & 0xffff) * MULT + 32768 >> 16);
+    // Power in cW.
+    power >> (16 - POWER2_SHIFT)
 }
 
 #[test]
 fn char_checks() {
     assert_eq!(font::SPACE, 0);
+}
+
+#[test]
+fn power_check() {
+    assert_eq!(power_cW(0, 0), 0);
+    assert_eq!(power2_cW(0, 0), 0);
+    // Check that full scale readings don't overflow and are in the right
+    // ball-park.
+    let p = power_cW(65535, 65535);
+    assert!((p as f64 - 100. * VSENSE1_FS * ISENSE_FS).abs() < 10.);
+    let p = power2_cW(65535, 65535);
+    assert!((p as f64 - 100. * VSENSE2_FS * ISENSE_FS).abs() < 10.);
 }

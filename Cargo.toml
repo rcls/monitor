@@ -18,9 +18,14 @@ cortex-m = '*'
 cortex-m = {version = '*', features = ['inline-asm']}
 
 [[bin]]
-name = 'monitor'
-filename = 'monitor.elf'
-path = 'src/monitor.rs'
+name = 'monitor-discrete'
+filename = 'monitor-discrete.elf'
+path = 'src/monitor-discrete.rs'
+
+[[bin]]
+name = 'monitor-hall'
+filename = 'monitor-hall.elf'
+path = 'src/monitor-hall.rs'
 
 [[bin]]
 name = 'clocky32'
