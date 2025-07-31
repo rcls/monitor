@@ -19,7 +19,8 @@ fn format_fixed(result: &mut [u8], v: u32, sign: u8, dp: usize) {
 
     // Discard leading zeros...
     let mut lead = 0;
-    while result[lead] == DIGIT_0 && result[lead+1] != PERIOD {
+    while result[lead] == DIGIT_0 && lead+1 < len
+        && result[lead+1] != PERIOD {
         result[lead] = SPACE;
         lead += 1;
     }
@@ -84,4 +85,10 @@ fn signed() {
     assert_eq!(ff_i32(-12345, 6, 3), "-2.345");
     assert_eq!(ff_i32(-12345, 7, 3), "-12.345");
     assert_eq!(ff_i32(-12345, 8, 3), " -12.345");
+}
+
+#[test]
+fn zero() {
+    assert_eq!(ff_i32(0, 6, 0), "     0");
+    assert_eq!(ff_u32(0, 6, 0), "     0");
 }

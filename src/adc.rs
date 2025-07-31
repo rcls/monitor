@@ -95,18 +95,12 @@ pub fn adc_isr() {
     // Get EOC and OVR bits.
     let isr = adc.ISR.read().bits();
     adc.ISR.write(|w| w.bits(isr & 0x18));
-    // sdbgln!("ADC ISR {isr:#x}");
+
     // FIXME - abort if OVR is set.
     if dma.CH(0).NDTR.read().NDT().bits() == 0 {
         // sdbgln!("ADC done");
         DONE.write(true);
     }
-    // sdbgln!("{:#x} {:#x} {:#x} {:#x} {:#x}",
-    //        dma.ISR.read().bits(), dma.CCR1.read().bits(),
-    //        dma.CNDTR1.read().bits(), dma.CPAR1.read().bits(),
-    //        dma.CMAR1.read().bits());
-    // let dmamux = unsafe {&*stm32u031::DMAMUX::ptr()};
-    // sdbgln!(" {:#x}", dmamux.C0CR.read().bits());
 }
 
 pub fn dma1_isr() {
@@ -114,12 +108,11 @@ pub fn dma1_isr() {
     let dma = unsafe {&*stm32u031::DMA1::ptr()};
     let status = dma.ISR.read().bits();
     dma.IFCR.write(|w| w.CGIF1().set_bit());
-    // sdbgln!("DMA1 ISR {status:#x}");
+
     if status & 10 != 0 {
         dma.CH(0).CR.write(|w| w.bits(0));
     }
     if status & 10 != 0 && adc.CR.read().ADSTART().bit() {
-        // sdbgln!("ADC DONE");
         DONE.write(true);
     }
 }

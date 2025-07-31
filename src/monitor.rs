@@ -70,7 +70,6 @@ impl Monitor {
         let temp_counts   = i16::from_be(self.temp) as i32;
 
         let isense_raw = isense_counts - ISENSE_ZERO;
-        dbgln!("{isense_counts}");
         self.isense = (isense_raw * ISENSE_SCALE + 32768) >> 16;
 
         let vsense;
