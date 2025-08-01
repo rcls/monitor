@@ -16,9 +16,7 @@ mod debug;
 mod font;
 mod i2c;
 mod monitor;
-mod noise;
 mod oled;
-mod usqrt;
 mod utils;
 mod vcell;
 
@@ -43,21 +41,26 @@ const ISENSE_FS: f64 = 25.;
 const ISENSE_SCALE: i32 = (ISENSE_FS as f64 * 1000. + 0.5) as i32;
 
 // Full scale on vsense in V.
-const VSENSE1_FS: f64 = 118.0 / 18.0 * 3.3;
-const VSENSE1_SHIFT: u32 = 1;
+const VSENSE_FS: f64 = 118.0 / 18.0 * 3.3;
+const VSENSE_SHIFT: u32 = 1;
+
+const VCONVERT1: monitor::VConvert = monitor::VConvert::new(
+    VSENSE_FS, VSENSE_SHIFT);
+const VCONVERT2: monitor::VConvert = VCONVERT1;
 
 const VSENSE2_INDEX: usize = VSENSE1_INDEX;
-const VSENSE2_FS: f64 = VSENSE1_FS;
-const VSENSE2_SHIFT: u32 = 1;
 
-const POWER1_SHIFT: u32 = 0;
-const POWER2_SHIFT: u32 = 0;
+const PCONVERT1: monitor::PConvert = monitor::PConvert::new(
+    ISENSE_FS, VSENSE_FS, 0, 0);
+const PCONVERT2: monitor::PConvert = PCONVERT1;
+
+const HAVE_ACCEL: bool = true;
 
 #[test]
 fn test_vconvert() {
     const FS: f64 = 118.0 / 18.0 * 3.3 * 1000.0;
     assert!(20000. <= FS && FS <= 25000., "{FS}");
-    assert_eq!(monitor::vconvert(0), 0);
-    let high = monitor::vconvert(0xffff);
+    assert_eq!(VCONVERT1.convert(0), 0);
+    let high = VCONVERT1.convert(0xffff);
     assert!((high as f64 - FS * 65535./65536.).abs() <= 1.);
 }

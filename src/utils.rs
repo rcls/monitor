@@ -55,6 +55,11 @@ pub const fn spread16(v: u16) -> u32 {
     v + (v & 0x22222222)
 }
 
+#[inline]
+pub const fn round_shr(x: u32, s: u32) -> u32 {
+    (x + if s > 0 {1 << s-1} else {0}) >> s
+}
+
 #[test]
 fn test_spread() {
     for i in 0..16 {
