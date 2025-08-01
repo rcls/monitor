@@ -97,7 +97,8 @@ fn advance(lcd: &mut LCD, num: u32) {
 static TSC_BUSY: VCell<u8> = VCell::new(0);
 
 fn tsc_isr() {
-    let tsc   = unsafe {&*stm32u031::TSC::ptr()};
+    let tsc = unsafe {&*stm32u031::TSC::ptr()};
+
     let sr = tsc.ISR.read().bits();
     tsc.ICR.write(|w| w.bits(sr));
     let ccr = tsc.IOCCR.read();
@@ -228,7 +229,7 @@ fn main() -> ! {
     // Reduce priority of the TSC interrupt.
     #[cfg(not(test))]
     unsafe {
-        let nvic  = &*cortex_m::peripheral::NVIC::PTR;
+        let nvic = &*cortex_m::peripheral::NVIC::PTR;
         assert_eq!(&nvic.ipr[5] as *const _ as usize, 0xE000E400 + 20);
         nvic.ipr[5].write(0xc0 << 8);
     }

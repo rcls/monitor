@@ -18,8 +18,6 @@ pub const I2C_LINES: i2c::I2CLines = i2c::I2CLines::B6_B7;
 const TICKS_PER_SEC: u32 = 8;
 const ALARM_BITS: u8 = 8 - TICKS_PER_SEC.ilog2() as u8;
 
-static_assertions::const_assert_eq!(TICKS_PER_SEC, 1 << 8 - ALARM_BITS);
-
 const TOUCH_TIME_OUT: u32 = 10 * TICKS_PER_SEC;
 const REPEAT_FIRST: u32 = TICKS_PER_SEC;
 const REPEAT_AGAIN: u32 = TICKS_PER_SEC / 2;
@@ -46,7 +44,6 @@ struct System {
     /// Stored address before crash & reboot.
     crash: u32,
 }
-static_assertions::const_assert!(size_of::<System>() == 9 * 4);
 
 #[allow(dead_code)]
 #[repr(u32)]
@@ -65,6 +62,7 @@ impl State {
 
 impl System {
     unsafe fn get() -> &'static mut Self {
+        const {assert!(size_of::<System>() == 9 * 4)};
         let tamp = unsafe {&*stm32u031::TAMP::ptr()};
         let p = tamp.BKPR[0].as_ptr() as *const crate::vcell::UCell<System>;
         let sys = unsafe {(&*p).as_mut()};
@@ -130,6 +128,9 @@ fn cold_start(sys: &mut System) {
 
 fn rtc_setup_tick() {
     rtc::setup_start();
+
+    const {assert!(TICKS_PER_SEC == 1 << 8 - ALARM_BITS)};
+
     // Set the alarm A to fire (8>>bits) times / sec.
     let rtc = unsafe {&*stm32u031::RTC::ptr()};
     rtc.CR.write(|w| w.ALRAE().clear_bit());

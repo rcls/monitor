@@ -38,7 +38,7 @@ const VREF_INDEX: usize = 2;   // Pin 15
 const ISENSE_ZERO: i32 = 32646;
 // Current in A that gives 3.3V.
 const ISENSE_FS: f64 = 25.;
-const ISENSE_SCALE: i32 = (ISENSE_FS as f64 * 1000. + 0.5) as i32;
+const ISENSE_SCALE: i32 = (ISENSE_FS * 1000. + 0.5) as i32;
 
 // Full scale on vsense in V.
 const VSENSE_FS: f64 = 118.0 / 18.0 * 3.3;

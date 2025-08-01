@@ -1,7 +1,6 @@
 
 use crate::*;
 use cpu::WFE;
-use static_assertions::const_assert;
 use vcell::UCell;
 
 unsafe extern "C" {
@@ -72,20 +71,16 @@ impl Monitor {
     }
 
     fn analog_update(&mut self) -> i2c::Result {
-        i2c::read_reg(i2c::TMP117, 0, &mut self.temp).wait()?;
+        let wait = i2c::read_reg(i2c::TMP117, 0, &mut self.temp);
 
-        // Log the ADC & TEMP values....
         let isense_counts = adc::DMA_BUF[ISENSE_INDEX].read() as i32;
-        let vsense_counts = adc::DMA_BUF[VSENSE1_INDEX].read() as u32;
-        let v3v3_counts   = adc::DMA_BUF[VREF_INDEX].read() as u32;
-        let temp_counts   = i16::from_be(self.temp) as i32;
-
         let isense_raw = isense_counts - ISENSE_ZERO;
         self.isense = (isense_raw * ISENSE_SCALE + 32768) >> 16;
+
         // isense accumulation...
         self.isense_accum += isense_raw;
         self.isense_count += 1;
-        if ISTAT && self.isense_count & self.isense_count - 1 == 0 {
+        if ISTAT && self.isense_count.is_power_of_two() {
             dbgln!("isense accum {} over {}", self.isense_accum,
                    self.isense_count / 2);
             let mut line = [0; 9];
@@ -97,6 +92,7 @@ impl Monitor {
             self.isense_accum = 0;
         }
 
+        let vsense_counts = adc::DMA_BUF[VSENSE1_INDEX].read() as u32;
         let vsense;
         let power;
         if vsense_counts < 0xff00 || VSENSE1_INDEX == VSENSE2_INDEX {
@@ -109,8 +105,11 @@ impl Monitor {
             power = PCONVERT2.convert(isense_raw, vsense2_counts);
         }
 
+        let v3v3_counts = adc::DMA_BUF[VREF_INDEX].read() as u32;
         let v3v3 = v3v3convert(v3v3_counts);
 
+        wait.wait()?;
+        let temp_counts = i16::from_be(self.temp) as i32;
         self.update_screen(power, vsense, v3v3, temp_counts)
     }
 
@@ -162,8 +161,8 @@ impl Monitor {
         self.cycle_arrow = cycle;
 
         let mut base = font::SPACE;
-        let mut inc  = 0;
-        let mut dir  = 0;
+        let mut inc = 0;
+        let mut dir = 0;
         if self.isense > 0 {
             base = font::LEFT_TOP_0;
             inc = 1;
@@ -188,9 +187,8 @@ impl Monitor {
 }
 
 pub fn main() -> ! {
-    let gpioa = unsafe {&*stm32u031::GPIOA::ptr()};
-    let rcc   = unsafe {&*stm32u031::RCC  ::ptr()};
-    let scb   = unsafe {&*cortex_m::peripheral::SCB ::PTR};
+    let rcc = unsafe {&*stm32u031::RCC::ptr()};
+    let scb = unsafe {&*cortex_m::peripheral::SCB::PTR};
 
     // Enable clocks.
     rcc.IOPENR.write(|w| w.GPIOAEN().set_bit());
@@ -330,8 +328,8 @@ impl PConvert {
 
 fn v3v3convert(v3v3_counts: u32) -> u32 {
     const COUNTS_V3: u32 = (2.5 / 3.0 * 65536.0) as u32;
-    const_assert!(65536 * 2500 / COUNTS_V3 >= 3000);
-    const_assert!(65536 * 2500 / (COUNTS_V3 + 1) < 3000);
+    const {assert!(65536 * 2500 / COUNTS_V3 >= 3000)};
+    const {assert!(65536 * 2500 / (COUNTS_V3 + 1) < 3000)};
     if v3v3_counts > 45000 && v3v3_counts <= COUNTS_V3 {
         65536 * 2500 / v3v3_counts
     }

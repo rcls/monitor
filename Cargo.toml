@@ -9,7 +9,6 @@ edition = '2024'
 stm32u031 = { path = './stm32u031' }
 arrayvec = {version = '*', default-features=false}
 konst = {version = '*', features = ['iter']}
-static_assertions = "*"
 
 [target.'cfg(not(target_arch = "arm"))'.dependencies]
 cortex-m = '*'

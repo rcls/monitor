@@ -164,8 +164,8 @@ pub fn init1() {
 }
 
 pub fn init2() {
-    let rcc  = unsafe {&*stm32u031::RCC::ptr()};
-    let scb  = unsafe {&*cortex_m::peripheral::SCB ::PTR};
+    let rcc = unsafe {&*stm32u031::RCC::ptr()};
+    let scb = unsafe {&*cortex_m::peripheral::SCB::PTR};
 
     if CONFIG.vectors.systick != bugger {
         // Set the systick interrupt priority to a high value (other

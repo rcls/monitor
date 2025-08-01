@@ -1,8 +1,5 @@
 use crate::CONFIG;
 
-static_assertions::const_assert!(crate::CONFIG.apb1_clocks & 1 << 10 != 0);
-static_assertions::const_assert!(crate::CONFIG.low_power);
-
 /// Make sure RTC is on, and disable RTC write protect.
 pub fn setup_start() {
     let rcc = unsafe {&*stm32u031::RCC::ptr()};
@@ -31,6 +28,10 @@ pub fn relock() {
 /// Start initialization.
 pub fn init_start() {
     let rtc = unsafe {&*stm32u031::RTC::ptr()};
+
+    const {assert!(crate::CONFIG.apb1_clocks & 1 << 10 != 0)}
+    const {assert!(crate::CONFIG.low_power)}
+
     unlock();
     rtc.ICSR.write(|w| w.INIT().set_bit());
     // Polling...
@@ -250,12 +251,12 @@ pub fn backwards(item: u32) {
 }
 
 pub fn standby(update_pupd: bool) -> ! {
-    let pwr   = unsafe {&*stm32u031::PWR::ptr()};
-    let rcc   = unsafe {&*stm32u031::RCC::ptr()};
+    let pwr   = unsafe {&*stm32u031::PWR  ::ptr()};
+    let rcc   = unsafe {&*stm32u031::RCC  ::ptr()};
     let gpioa = unsafe {&*stm32u031::GPIOA::ptr()};
     let gpiob = unsafe {&*stm32u031::GPIOB::ptr()};
     let gpioc = unsafe {&*stm32u031::GPIOC::ptr()};
-    let scb   = unsafe {&*cortex_m::peripheral::SCB ::PTR};
+    let scb   = unsafe {&*cortex_m::peripheral::SCB::PTR};
 
     // Low power mode to use is standby...
     pwr.CR1.modify(|_,w| w.LPMS().bits(3)); // 3=Standby, 4=Shutdown.

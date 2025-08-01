@@ -1,6 +1,6 @@
 use crate::vcell::VCell;
 
-/// Pads are +, -, menu.  Note that the index is one less than the enumeration.
+///! Pads are +, -, menu.  Note that the index is one less than the enumeration.
 
 /// Set to just log touch values.
 const EVALUATE: bool = false;
@@ -74,14 +74,14 @@ pub fn acquire() {
     // then - on the second pass.
     // FIXME - how do we select channels?
 
-    // Minus = G7IO1
-    // CS = G7IO2
-    // Plus = G7IO3
-    // Menu = G5IO4
+    // Minus  = G7IO1
+    // CS     = G7IO2
+    // Plus   = G7IO3
+    // Menu   = G5IO4
     // MenuCS = G5IO2
     STATE.complete.write(false);
     let tsc = unsafe {&*stm32u031::TSC::ptr()};
-    // + and cap.
+    // Get + and cap.
     tsc.IOCCR.write(|w| w.G7_IO3().set_bit().G5_IO4().set_bit());
     tsc.IOSCR.write(|w| w.G7_IO2().set_bit().G5_IO2().set_bit());
     tsc.IOGCSR.write(|w| w.G7E().set_bit().G5E().set_bit());
@@ -106,7 +106,7 @@ fn isr() {
         STATE.complete.write(true);
     }
     else {
-        // We did not get -, get it now.
+        // We did not get -, get - and menu now.
         tsc.IOCCR.write(|w| w.G7_IO1().set_bit());
         tsc.IOSCR.write(|w| w.G7_IO2().set_bit());
         tsc.IOGCSR.write(|w| w.G7E().set_bit());

@@ -3,7 +3,6 @@ use crate::cpu::WFE;
 use crate::vcell::{UCell, VCell, barrier};
 
 use core::fmt::Write;
-use static_assertions::const_assert;
 
 pub use stm32u031::LPUART1 as UART;
 
@@ -161,7 +160,7 @@ impl Write for DebugMarker {
 #[macro_export]
 macro_rules! dbg {
     ($($tt:tt)*) => {
-        if !crate::CONFIG.no_debug {
+        if !$crate::CONFIG.no_debug {
             let _ = core::fmt::Write::write_fmt(
                 &mut $crate::debug::DebugMarker, format_args!($($tt)*));
         }
@@ -174,7 +173,7 @@ macro_rules! dbgln {
         let _ = core::fmt::Write::write_str(
             &mut $crate::debug::DebugMarker, "\n");
         }};
-    ($($tt:tt)*) => {if !crate::CONFIG.no_debug {
+    ($($tt:tt)*) => {if !$crate::CONFIG.no_debug {
         let _ = core::fmt::Write::write_fmt(
             &mut $crate::debug::DebugMarker, format_args_nl!($($tt)*));
         }};
@@ -191,7 +190,7 @@ pub fn lazy_init() {
 
 pub fn init() {
     check_vtors();
-    let gpioa = unsafe {&*stm32u031::GPIOA ::ptr()};
+    let gpioa = unsafe {&*stm32u031::GPIOA::ptr()};
     let rcc   = unsafe {&*stm32u031::RCC::ptr()};
     let uart  = unsafe {&*UART::ptr()};
 
@@ -214,8 +213,8 @@ pub fn init() {
     const PB: (u32, u32) = prescale(115200);
     const PRESC: u32 = PB.0;
     const BRR: u32 = PB.1;
-    const_assert!(BRR >= 0x300);
-    const_assert!(BRR < 1 << 20);
+    const {assert!(BRR >= 0x300)}
+    const {assert!(BRR < 1 << 20)}
     uart.BRR.write(|w| w.bits(BRR));
     uart.PRESC.write(|w| w.bits(PRESC));
     uart.CR1.write(

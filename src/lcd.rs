@@ -31,10 +31,8 @@ pub const DL: u8 = DC & !SEG_A;
 
 pub const MINUS: u8 = SEG_G;
 /// Right or only colon.
-#[allow(unused)]
 pub const COL2: Segments = 1;
 /// Left colon on wide display.
-#[allow(unused)]
 pub const COL1: Segments = if WIDTH == 6 {1 << 48} else {0};
 
 pub trait SegmentsTrait<const N: usize> {type Segments;}
@@ -51,6 +49,8 @@ pub fn init() {
     let gpioa = unsafe {&*stm32u031::GPIOA::ptr()};
     let gpiob = unsafe {&*stm32u031::GPIOB::ptr()};
     let spi   = unsafe {&*stm32u031::SPI1 ::ptr()};
+
+    const {assert!(crate::CONFIG.apb2_clocks & 1 << 12 != 0)};
 
     // Remove any standby pull-up/pull-downs.
     crate::cpu::Config::new(0).lcd().clear_pupd();
@@ -222,7 +222,7 @@ pub fn decimal_to_segments(segs: &mut SegArray, v: i32, min: usize) -> usize {
         *p = MINUS;
         count += 1;
     }
-    return count;
+    count
 }
 
 pub fn cal_to_segments(cal: i32) -> Segments {
@@ -241,8 +241,6 @@ impl crate::cpu::Config {
         self.clocks(0, 0, 1 << 12)
     }
 }
-
-static_assertions::const_assert!(crate::CONFIG.apb2_clocks & 1 << 12 != 0);
 
 #[cfg(test)]
 fn segments_to_str(s: Segments) -> String {

@@ -62,7 +62,7 @@ pub fn alert() -> i32 {
 }
 
 fn counts_to_temp(c: i32) -> i32 {
-    (c * 5 + 32) >> 6
+    c * 5 + 32 >> 6
 }
 
 fn next_temp(t: i32) -> i32 {
@@ -79,7 +79,7 @@ fn prev_temp(t: i32) -> i32 {
 #[inline(never)]
 fn div5floor(t: i32) -> i32 {
     // (t - if t < 0 {4} else {0}) / 5
-    const ADJUST: i32 = 1<<24;
+    const ADJUST: i32 = 1 << 24;
     let t = t + ADJUST * 5;
     debug_assert!(t > 0);
     const M: i32 = 0x10000 * 4 / 5;
