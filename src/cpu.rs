@@ -108,9 +108,10 @@ fn pupd_via_gpio() {
 }
 
 pub fn init1() {
-    let scb   = unsafe {&*cortex_m::peripheral::SCB::PTR};
-    let pwr   = unsafe {&*stm32u031::PWR  ::ptr()};
-    let rcc   = unsafe {&*stm32u031::RCC  ::ptr()};
+    let scb  = unsafe {&*cortex_m::peripheral::SCB::PTR};
+    let nvic = unsafe {&*cortex_m::peripheral::NVIC::PTR};
+    let pwr  = unsafe {&*stm32u031::PWR::ptr()};
+    let rcc  = unsafe {&*stm32u031::RCC::ptr()};
 
     rcc.AHBENR .write(|w| w.bits(CONFIG.ahb_clocks));
     rcc.APBENR1.write(|w| w.bits(CONFIG.apb1_clocks));
@@ -155,12 +156,16 @@ pub fn init1() {
         rcc.BDCR.write(
             |w| w.bits(bdcr.bits()).LSEON().set_bit().LSEDRV().B_0x3());
     }
+
+    // Enable interrupts.
+    unsafe {
+        nvic.iser[0].write(CONFIG.interrupts);
+    }
 }
 
 pub fn init2() {
     let rcc  = unsafe {&*stm32u031::RCC::ptr()};
     let scb  = unsafe {&*cortex_m::peripheral::SCB ::PTR};
-    let nvic = unsafe {&*cortex_m::peripheral::NVIC::PTR};
 
     if CONFIG.vectors.systick != bugger {
         // Set the systick interrupt priority to a high value (other
@@ -192,11 +197,6 @@ pub fn init2() {
         rcc.CR.write(
             |w| w.MSIRANGE().bits(MSIRANGE).MSIRGSEL().set_bit()
                 . MSION().set_bit().MSIPLLEN().set_bit());
-    }
-
-    // Enable interrupts.
-    unsafe {
-        nvic.iser[0].write(CONFIG.interrupts);
     }
 }
 

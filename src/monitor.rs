@@ -43,19 +43,20 @@ impl Monitor {
     }
 
     fn systick_handler(&mut self) {
-        // Update arrows every tick.
+        // Update arrows every tick.  Do this first to get smooth motion.
         let _ = self.update_arrows();
         let divide = if self.divide == 0 {4} else {self.divide - 1};
         self.divide = divide;
         if divide == 0 {
             adc::start();
         }
-        else if adc::DONE.read() {
-            adc::DONE.write(false);
-            vcell::barrier();
-            let _ = self.analog_update();
+        if divide == 2 {
+            adc::recalibrate_start();
         }
-        else if divide == 4 {
+        if divide == 3 {
+            accel_frig();
+        }
+        if divide == 4 {
             let _ = self.refresh();
         }
     }
@@ -153,12 +154,12 @@ impl Monitor {
         let mut base = font::SPACE;
         let mut inc  = 0;
         let mut dir  = 0;
-        if self.isense >= 10 {
+        if self.isense > 0 {
             base = font::LEFT_TOP_0;
             inc = 1;
             dir = 2;
         }
-        else if self.isense <= -10 {
+        else if self.isense < 0 {
             base = font::RIGHT_TOP_0;
             inc = 1;
             dir = 6;
@@ -215,6 +216,15 @@ pub fn main() -> ! {
     dbgln!("Oled init!");
 
     adc::init2();
+
+    if crate::HAVE_ACCEL {
+        let ok = accel_init();
+        dbgln!("Accel start {ok:?}");
+    }
+
+    // Turn on LSCO.
+    //rcc.BDCR.modify(
+    //    |_, w| w.LSCOSEL().set_bit().LSCOEN().set_bit().LSESYSEN().set_bit());
 
     // systick counts at 16MHz / 8 = 2MHz.
     unsafe {

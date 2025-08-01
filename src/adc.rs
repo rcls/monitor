@@ -12,13 +12,16 @@ const NUM_CHANNELS: usize = ADC_CHANNELS.len();
 
 pub static DMA_BUF: [VCell<u16>; NUM_CHANNELS] = [
     const {VCell::new(0)}; NUM_CHANNELS];
-pub static DONE: VCell<bool> = VCell::new(false);
+pub static OUTSTANDING: VCell<u8> = VCell::new(0);
+
+const F_ADC: u8 = 1;
+const F_DMA: u8 = 2;
 
 pub fn start() {
     let adc = unsafe {&*stm32u031::ADC ::ptr()};
     let dma = unsafe {&*stm32u031::DMA1::ptr()};
 
-    DONE.write(false);
+    OUTSTANDING.write(F_ADC | F_DMA);
 
     // Set-up DMA for the ADC.
     dma.CH(0).read(DMA_BUF.as_ptr().addr(), NUM_CHANNELS, 1);
@@ -53,33 +56,30 @@ pub fn init2() {
 
     // Wait for ADC calibration complete.
     dbgln!("Eocal wait");
-    while !adc.ISR.read().EOCAL().bit() {
+    while OUTSTANDING.read() != 0 {
+        crate::cpu::WFE();
     }
-    adc.ISR.write(|w| w.EOCAL().set_bit());
     dbgln!("Eocal done");
     dbgln!("ADC CR = {:#x}, ISR = {:#x}", adc.CR.read().bits(),
            adc.ISR.read().bits());
 
-    // Enable the ADC and wait for ready...
-    dbgln!("ADC CR = {:#x}, ISR = {:#x}", adc.CR.read().bits(),
-           adc.ISR.read().bits());
+    // Enable the ADC and wait for ready.  This should be fast.
     adc.CR.write(|w| w.ADVREGEN().set_bit().ADEN().set_bit());
-    dbgln!("ADC CR = {:#x}, ISR = {:#x}", adc.CR.read().bits(),
-           adc.ISR.read().bits());
     while !adc.ISR.read().ADRDY().bit() {
     }
 
     // Oversample config.
-    adc.CFGR2.write(|w| w.OVSS().B_0x4().OVSR().B_0x7().OVSE().set_bit());
-    // Use DMAEN, and set AUTOFF for intermittent conversions.
-    adc.CFGR1.write(|w| w.AUTOFF().set_bit().DMAEN().set_bit());
+    adc.CFGR2.write(
+        |w| w.OVSS().B_0x4().OVSR().B_0x7().OVSE().set_bit()
+            .LFTRIG().set_bit());
+    adc.CFGR1.write(|w| w.DMAEN().set_bit());
 
     // Configure ADC chanels and wait for ready.  The datasheet appears to lie.
     // We actually get Isense on AIN9, VSENSE on A17 and VREF on A18 (0 based
     // v. 1 based?)
     const MASK: u32 = crate::utils::make_mask(&ADC_CHANNELS);
     adc.CHSELR.write(|w| w.bits(MASK));
-    // Wait for ready.
+    // Wait for ready.  This should be fast.
     dbgln!("Ccrdy wait");
     while !adc.ISR.read().CCRDY().bit() {
     }
@@ -89,22 +89,30 @@ pub fn init2() {
     adc.SMPR.write(|w| w.SMP1().B_0x7()); // ≈10µs sample gate.
 }
 
+pub fn recalibrate_start() {
+    let adc = unsafe {&*stm32u031::ADC::ptr()};
+    // Disable & start calibrate.
+    OUTSTANDING.write(F_ADC);
+    adc.CR.write(|w| w.ADVREGEN().set_bit().ADCAL().set_bit());
+}
+
 pub fn adc_isr() {
     let adc = unsafe {&*stm32u031::ADC ::ptr()};
-    let dma = unsafe {&*stm32u031::DMA1::ptr()};
     // Get EOC and OVR bits.
-    let isr = adc.ISR.read().bits();
-    adc.ISR.write(|w| w.bits(isr & 0x18));
+    let isr = adc.ISR.read();
+    adc.ISR.write(|w| w.bits(isr.bits()));
 
-    // FIXME - abort if OVR is set.
-    if dma.CH(0).NDTR.read().NDT().bits() == 0 {
-        // sdbgln!("ADC done");
-        DONE.write(true);
+    if isr.EOCAL().bit() {
+        // Renable the ADC.
+        adc.CR.write(|w| w.ADVREGEN().set_bit().ADEN().set_bit());
+    }
+
+    if isr.EOCAL().bit() || isr.EOS().bit() || isr.OVR().bit() {
+        OUTSTANDING.write(OUTSTANDING.read() & !F_ADC);
     }
 }
 
 pub fn dma1_isr() {
-    let adc = unsafe {&*stm32u031::ADC::ptr()};
     let dma = unsafe {&*stm32u031::DMA1::ptr()};
     let status = dma.ISR.read().bits();
     dma.IFCR.write(|w| w.CGIF1().set_bit());
@@ -112,8 +120,8 @@ pub fn dma1_isr() {
     if status & 10 != 0 {
         dma.CH(0).CR.write(|w| w.bits(0));
     }
-    if status & 10 != 0 && adc.CR.read().ADSTART().bit() {
-        DONE.write(true);
+    if status & 10 != 0  {
+        OUTSTANDING.write(OUTSTANDING.read() & !F_DMA);
     }
 }
 
