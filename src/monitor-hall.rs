@@ -14,20 +14,14 @@ mod decimal;
 mod dma;
 mod debug;
 mod font;
+mod fxls8971; // Not actually on board.
 mod i2c;
 mod monitor;
 mod oled;
 mod utils;
 mod vcell;
 
-use monitor::main;
-
-const I2C_LINES: i2c::I2CLines = i2c::I2CLines::A9_A10;
-
-const CONFIG: cpu::Config = {
-    let mut c = cpu::Config::new(16000000);
-    c.fll = false;
-    *c.systick(monitor::systick_handler).adc().debug().i2c()};
+use monitor::*;
 
 const ADC_CHANNELS: [u32; 3] = [9, 17, 18];
 
@@ -42,10 +36,8 @@ const ISENSE_SCALE: i32 = (ISENSE_FS * 1000. + 0.5) as i32;
 
 // Full scale on vsense in V.
 const VSENSE_FS: f64 = 118.0 / 18.0 * 3.3;
-const VSENSE_SHIFT: u32 = 1;
 
-const VCONVERT1: monitor::VConvert = monitor::VConvert::new(
-    VSENSE_FS, VSENSE_SHIFT);
+const VCONVERT1: monitor::VConvert = monitor::VConvert::new(VSENSE_FS, 1);
 const VCONVERT2: monitor::VConvert = VCONVERT1;
 
 const VSENSE2_INDEX: usize = VSENSE1_INDEX;
@@ -54,7 +46,7 @@ const PCONVERT1: monitor::PConvert = monitor::PConvert::new(
     ISENSE_FS, VSENSE_FS, 0, 0);
 const PCONVERT2: monitor::PConvert = PCONVERT1;
 
-const HAVE_ACCEL: bool = true;
+const HAVE_ACCEL: bool = false;
 
 #[test]
 fn test_vconvert() {

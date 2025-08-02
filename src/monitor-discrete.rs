@@ -14,22 +14,14 @@ mod decimal;
 mod dma;
 mod debug;
 mod font;
+mod fxls8971;
 mod i2c;
 mod monitor;
 mod oled;
 mod utils;
 mod vcell;
 
-use monitor::main;
-
-use crate::monitor::{PConvert, VConvert};
-
-const I2C_LINES: i2c::I2CLines = i2c::I2CLines::A9_A10;
-
-const CONFIG: cpu::Config = {
-    let mut c = cpu::Config::new(16000000);
-    c.fll = false;
-    *c.systick(monitor::systick_handler).adc().debug().i2c()};
+use monitor::*;
 
 const ADC_CHANNELS: [u32; 4] = [8, 10, 14, 18];
 

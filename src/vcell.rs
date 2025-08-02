@@ -17,7 +17,7 @@ impl<T: Sync + const Default> const Default for VCell<T> {
 pub struct UCell<T>(UnsafeCell<T>);
 
 unsafe impl<T> Sync for VCell<T> {}
-unsafe impl<T> Sync for UCell<T> {}
+unsafe impl<T: Sync> Sync for UCell<T> {}
 
 impl<T: Sync> VCell<T> {
     pub const fn new(v: T) -> Self {Self(UnsafeCell::new(v))}

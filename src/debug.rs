@@ -111,7 +111,7 @@ pub fn flush() {
         return;                        // Not initialized, nothing to do.
     }
 
-    let uart  = unsafe {&*UART::ptr()};
+    let uart = unsafe {&*UART::ptr()};
     // Enable the TC interrupt.
     uart.CR1().modify(|_,w| w.TCIE().set_bit());
     // Wait for the TC bit.
@@ -246,6 +246,7 @@ const fn prescale(bit_rate: u32) -> (u32, u32) {
         let brr = calc(bit_rate, presc);
         brr >= 0x300 && brr < 1<<20 && (brr >= 0x800 || presc == 0)
     }
+    // Use the highest prescaler that passes the check.
     let mut presc = 11;
     while !ok(bit_rate, presc) {
         presc -= 1;

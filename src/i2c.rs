@@ -215,19 +215,21 @@ impl I2cContext {
         self.outstanding.write(F_I2C | F_DMA);
     }
     fn done(&self) -> bool {self.outstanding.read() == 0}
-    fn wait(&self) -> Result {
+    fn wait(&self) {
         while !self.done() {
             crate::cpu::WFE();
         }
         barrier();
-        if self.error.read() == 0 {Ok(())} else {Err(())}
     }
 }
 
 impl Wait<'_> {
     pub fn new() -> Self {Wait(PhantomData)}
     pub fn defer(self) {core::mem::forget(self);}
-    pub fn wait(self) -> Result {CONTEXT.wait()}
+    pub fn wait(self) -> Result {
+        CONTEXT.wait();
+        if CONTEXT.error.read() == 0 {Ok(())} else {Err(())}
+    }
 }
 
 impl Drop for Wait<'_> {

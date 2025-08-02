@@ -97,7 +97,7 @@ pub fn recalibrate_start() {
 }
 
 pub fn adc_isr() {
-    let adc = unsafe {&*stm32u031::ADC ::ptr()};
+    let adc = unsafe {&*stm32u031::ADC::ptr()};
     // Get EOC and OVR bits.
     let isr = adc.ISR.read();
     adc.ISR.write(|w| w.bits(isr.bits()));

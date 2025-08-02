@@ -1,13 +1,13 @@
 use crate::i2c;
-use crate::vcell::nothing;
 
 use i2c::Result;
 
-const SH1106: u8 = 0x78;
+pub const SH1106: u8 = 0x78;
 
 const LINE_LENGTH: usize = 12;
 pub type Line = [u8; LINE_LENGTH];
-// type LineBits = [u8; 128];
+
+static FLIP: crate::vcell::UCell<bool> = Default::default();
 
 pub fn reset() -> Result {
     i2c::write(
@@ -17,10 +17,11 @@ pub fn reset() -> Result {
           0xad, 0x8b, // Charge pump enable.
           0x40,       // COM0 address.
           0x80,       // Default contrast.
-          0xa1,       // Horizontal flip display.
+          // 0xa1,       // Horizontal flip display.
+          0xa4,       // No all pixels on.
           0xa6,       // Normal pixel polarity.
           0xa8, 0x3f, // Number of COM to use -1
-          0xc8,       // Common direction - vertical flip.
+          // 0xc8,       // Common direction - vertical flip.
           0xd3, 0x00, // First common line to use.
           0xd5, 0x50, // Clocking config.
           0xd9, 0x22, // discharge & precharge periods.
@@ -38,13 +39,8 @@ pub fn init() -> Result {
     ]).wait()?; // Common off voltage.
     reset()?;
 
-    for _ in 0.. 1<<21 {
-        nothing();
-    }
-    i2c::write(SH1106, &[0u8, 0xa4]).wait()?; // No all pixels on.
-    for _ in 0.. 1<<21 {
-        nothing();
-    }
+    flip_screen(true)?;
+
     clear_screen()
 }
 
@@ -121,6 +117,22 @@ pub fn clear_screen() -> Result {
         draw_chars(&[crate::font::SPACE; LINE_LENGTH], 0, y)?
     }
     Ok(())
+}
+
+pub fn is_flipped() -> bool {
+    *FLIP.as_ref()
+}
+
+pub fn flip_screen(new_flip: bool) -> Result {
+    let flip = unsafe {FLIP.as_mut()};
+    if *flip == new_flip {
+        return Ok(());
+    }
+    *flip = new_flip;
+    static CMD_NORM: [u8; 3] = [0, 0xa0, 0xc0];
+    static CMD_FLIP: [u8; 3] = [0, 0xa1, 0xc8];
+    i2c::write(crate::oled::SH1106,
+               if new_flip {&CMD_FLIP} else {&CMD_NORM}).wait()
 }
 
 #[macro_export]

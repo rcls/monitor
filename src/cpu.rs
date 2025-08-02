@@ -132,6 +132,13 @@ pub fn init1() {
         pupd_via_gpio();
     }
 
+    // Enable the LSE.  Set high drive strength for crystal start-up.
+    let bdcr = rcc.BDCR.read();
+    if !bdcr.LSEON().bit() || !bdcr.LSERDY().bit() {
+        rcc.BDCR.write(
+            |w| w.bits(bdcr.bits()).LSEON().set_bit().LSEDRV().B_0x3());
+    }
+
     // Clear the BSS.
     if !cfg!(test) {
         crate::vcell::barrier();
@@ -150,11 +157,16 @@ pub fn init1() {
     // We use sev-on-pend to avoid trivial interrupt handlers.
     unsafe {scb.scr.write(16)};
 
-    // Enable the LSE.  Set high drive strength for crystal start-up.
-    let bdcr = rcc.BDCR.read();
-    if !bdcr.LSEON().bit() || !bdcr.LSERDY().bit() {
-        rcc.BDCR.write(
-            |w| w.bits(bdcr.bits()).LSEON().set_bit().LSEDRV().B_0x3());
+    if CONFIG.vectors.systick != bugger {
+        // Set the systick interrupt priority to a high value (other
+        // interrupts pre-empt).
+        // The Cortex-M crate doesn't use the ARM indexes, so be careful about
+        // the address.  We want SHPR3.
+        link_assert!(core::ptr::from_ref(&scb.shpr[1]) as usize == 0xE000ED20);
+        #[cfg(not(test))]
+        unsafe {
+            scb.shpr[1].write(0xc0 << 24);
+        }
     }
 
     // Enable interrupts.
@@ -165,19 +177,6 @@ pub fn init1() {
 
 pub fn init2() {
     let rcc = unsafe {&*stm32u031::RCC::ptr()};
-    let scb = unsafe {&*cortex_m::peripheral::SCB::PTR};
-
-    if CONFIG.vectors.systick != bugger {
-        // Set the systick interrupt priority to a high value (other
-        // interrupts pre-empt).
-        // The Cortex-M crate doesn't use the ARM indexes, so be careful about the
-        // address.  We want SHPR3.
-        link_assert!(core::ptr::from_ref(&scb.shpr[1]) as usize == 0xE000ED20);
-        #[cfg(not(test))]
-        unsafe {
-            scb.shpr[1].write(0xc0 << 24);
-        }
-    }
 
     // Enable the LSE interrupt, wait for it and then enable the MSI FLL.
     rcc.CIER.write(|w| w.LSERDYIE().set_bit());
@@ -205,6 +204,7 @@ impl Config {
         Config {
             clk, vectors: VectorTable::default(),
             // Always enable PWR clock.
+            ahb_clocks: 0x100,
             apb1_clocks: 1 << 28,
             pullup: 1 << 13, pulldown: 1 << 14,
             fll: true, .. Config::default()

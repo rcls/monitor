@@ -3,10 +3,15 @@ use crate::*;
 use cpu::WFE;
 use vcell::UCell;
 
-unsafe extern "C" {
-    static mut __bss_start: u8;
-    static mut __bss_end: u8;
-}
+pub const I2C_LINES: i2c::I2CLines = i2c::I2CLines::A9_A10;
+
+pub const CONFIG: cpu::Config = {
+    let mut c = cpu::Config::new(16000000);
+    c.fll = false;
+    if HAVE_ACCEL {
+        c.fxls8971();
+    }
+    *c.systick(monitor::systick_handler).adc().debug().i2c()};
 
 struct Monitor {
     divide: u8,
@@ -21,10 +26,8 @@ struct Monitor {
 
 static MONITOR: UCell<Monitor> = UCell::new(Monitor::new());
 
-const ISTAT: bool = true;
-
-// Accelerometer.
-const FXLS8971: u8 = 0x30;
+/// Keep stats on current measurement instead of misc info.
+const ISTAT: bool = false;
 
 pub fn systick_handler() {
     unsafe{MONITOR.as_mut().systick_handler()};
@@ -61,9 +64,6 @@ impl Monitor {
         }
         if divide == 2 {
             adc::recalibrate_start();
-        }
-        if divide == 3 {
-            accel_frig();
         }
         if divide == 4 {
             let _ = self.refresh();
@@ -163,12 +163,13 @@ impl Monitor {
         let mut base = font::SPACE;
         let mut inc = 0;
         let mut dir = 0;
-        if self.isense > 0 {
+        let isense = if oled::is_flipped() {-self.isense} else {self.isense};
+        if isense < 0 {
             base = font::LEFT_TOP_0;
             inc = 1;
             dir = 2;
         }
-        else if self.isense < 0 {
+        else if isense > 0 {
             base = font::RIGHT_TOP_0;
             inc = 1;
             dir = 6;
@@ -194,41 +195,32 @@ pub fn main() -> ! {
     rcc.IOPENR.write(|w| w.GPIOAEN().set_bit());
 
     cpu::init1();
-
-    gpioa.MODER.modify(|_, w| w.MODE11().B_0x1().MODE12().B_0x1()); // GPO LEDs.
-
     debug::init();
 
     dbgln!("Debug up");
 
     adc::init1();
-
     i2c::init();
 
     // Set the systick interrupt priority to a high value (other interrupts
     // pre-empt).
     // The Cortex-M crate doesn't use the ARM indexes, so be careful about the
     // address.  We want SHPR3.
-    assert_eq!(&scb.shpr[1] as *const _ as usize, 0xE000ED20);
+    link_assert!(&scb.shpr[1] as *const _ as usize == 0xE000ED20);
     #[cfg(not(test))]
     unsafe {
         scb.shpr[1].write(0xc0 << 24);
     }
 
     cpu::init2();
-
-    dbgln!("Going!");
-
-    let _ = oled::init();
-
-    dbgln!("Oled init!");
-
-    adc::init2();
-
-    if crate::HAVE_ACCEL {
-        let ok = accel_init();
-        dbgln!("Accel start {ok:?}");
+    if let Err(()) = oled::init() {
+        debug::write_str("OLED failed\n");
     }
+
+    if crate::HAVE_ACCEL && let Err(()) = fxls8971::accel_init() {
+        debug::write_str("Accel failed\n");
+    }
+    adc::init2();
 
     // systick counts at 16MHz / 8 = 2MHz.
     unsafe {
@@ -241,34 +233,6 @@ pub fn main() -> ! {
     loop {
         WFE();
     }
-}
-
-fn accel_init() -> i2c::Result {
-    // SENS_CONFIG1
-    i2c::write(FXLS8971, &[0x15u8,
-        1,                              // SENS_CONFIG1
-        0x00,                           // SENS_CONFIG2, no decimation.
-        0x99,                           // 6.25Hz.
-        ]).wait()?;
-    Ok(())
-}
-
-fn accel_frig() {
-    if !HAVE_ACCEL {
-        return;
-    }
-    let mut buf = [0u8; 7];
-    let _ = i2c::read_reg(FXLS8971, 0, &mut buf).wait();
-
-    let x = (buf[1] as u32 + buf[2] as u32 * 256) as i16 as i32;
-    let y = (buf[3] as u32 + buf[4] as u32 * 256) as i16 as i32;
-    let z = (buf[5] as u32 + buf[6] as u32 * 256) as i16 as i32;
-    // Full scale is ±2G, ±2048 counts.
-    const MULT: i32 = (65536.0 * 1000.0 * 2.0 / 2048. + 0.5) as i32;
-    let x = x * MULT >> 16;
-    let y = y * MULT >> 16;
-    let z = z * MULT >> 16;
-    dbgln!("{x} {y} {z} mG");
 }
 
 pub struct VConvert {
