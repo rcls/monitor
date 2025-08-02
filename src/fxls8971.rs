@@ -34,7 +34,7 @@ pub fn accel_init() -> crate::i2c::Result {
         0,    // Route interrupts to INT1.
         ]).wait()?;
 
-    // Activat the device.
+    // Activate the device.
     i2c::write(FXLS8971, &[0x15u8,
         1,                              // SENS_CONFIG1
         0x00,                           // SENS_CONFIG2, no decimation.
@@ -43,7 +43,7 @@ pub fn accel_init() -> crate::i2c::Result {
         ]).wait()?;
 
     // INT1 is on pin 25 = PA15.  Set up EXTI to interrupt on the rising edge
-    //  of PA15.
+    // of PA15.
     gpioa.MODER.modify(|_,w| w.MODE11().B_0x0().MODE15().B_0x0()); // GPI
 
     // Reduce the priority of the EXTI interrupt. EXTI4_15 is 7.
@@ -52,7 +52,8 @@ pub fn accel_init() -> crate::i2c::Result {
     #[cfg(not(test))]
     unsafe {
         let nvic = &*cortex_m::peripheral::NVIC::PTR;
-        assert_eq!(&nvic.ipr[1] as *const _ as usize, 0xE000E400 + 4);
+        crate::link_assert!(core::ptr::from_ref(&nvic.ipr[1]) as usize
+                            == 0xE000E400 + 4);
         nvic.ipr[1].write(0xc0 << 24);
     }
 
@@ -87,16 +88,19 @@ pub fn accel_isr() {
     // let z = i16::from_le_bytes(buf[6..8].try_into().unwrap()) as i32;
 
     let state = unsafe {STATE.as_mut()};
+    let one_g = 1024;
+    if y.unsigned_abs() < one_g as u32 / 10 {
+        return;                         // Ignore small angles.
+    }
 
     // Integrate and clamp at 1G = 1/2 FS = 1024.
     state.accum += y;
-    let fs = 1024;
-    if state.accum > fs {
-        state.accum = fs;
+    if state.accum > one_g {
+        state.accum = one_g;
         let _ = crate::oled::flip_screen(true);
     }
-    else if state.accum < -fs {
-        state.accum = -fs;
+    else if state.accum < -one_g {
+        state.accum = -one_g;
         let _ = crate::oled::flip_screen(false);
     }
 }

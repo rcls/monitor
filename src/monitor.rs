@@ -117,7 +117,9 @@ impl Monitor {
                      temp_counts: i32) -> i2c::Result {
         let mut line = [0; 10];
         decimal::format_u32(&mut line[..7], power, 2);
-        line[7..].copy_from_slice(&CHARS_MAP!("  W"));
+        line[7] = oled::char_map(' ');
+        line[8] = oled::char_map(' ');
+        line[9] = oled::char_map('W');
         oled::update_text(&mut self.frame[0], &line[..10], 0, 0)?;
 
         decimal::format_u32(&mut line[..6], vsense, 3);
@@ -196,9 +198,6 @@ pub fn main() -> ! {
 
     cpu::init1();
     debug::init();
-
-    dbgln!("Debug up");
-
     adc::init1();
     i2c::init();
 

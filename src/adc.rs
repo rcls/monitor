@@ -1,7 +1,6 @@
 
 use crate::dma::DMA;
 use crate::vcell::VCell;
-use crate::dbgln;
 
 // DMA MUX lines.
 // Use DMA1 Ch1
@@ -55,13 +54,9 @@ pub fn init2() {
     let adc = unsafe {&*stm32u031::ADC::ptr()};
 
     // Wait for ADC calibration complete.
-    dbgln!("Eocal wait");
     while OUTSTANDING.read() != 0 {
         crate::cpu::WFE();
     }
-    dbgln!("Eocal done");
-    dbgln!("ADC CR = {:#x}, ISR = {:#x}", adc.CR.read().bits(),
-           adc.ISR.read().bits());
 
     // Enable the ADC and wait for ready.  This should be fast.
     adc.CR.write(|w| w.ADVREGEN().set_bit().ADEN().set_bit());
@@ -80,10 +75,9 @@ pub fn init2() {
     const MASK: u32 = crate::utils::make_mask(&ADC_CHANNELS);
     adc.CHSELR.write(|w| w.bits(MASK));
     // Wait for ready.  This should be fast.
-    dbgln!("Ccrdy wait");
     while !adc.ISR.read().CCRDY().bit() {
     }
-    dbgln!("Ccrdy done");
+
     // Enable ADC EOC and OVR interrupts.
     adc.IER.write(|w| w.EOSIE().set_bit().OVRIE().set_bit());
     adc.SMPR.write(|w| w.SMP1().B_0x7()); // ≈10µs sample gate.
