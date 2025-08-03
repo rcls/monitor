@@ -6956,6 +6956,36 @@
 			(embedded_fonts no)
 		)
 	)
+	(text "5V"
+		(exclude_from_sim no)
+		(at 139.446 63.5 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+		(uuid "59ca9fb2-2d10-452f-b7a8-aea5fdcb9e34")
+	)
+	(text "3.3V\n"
+		(exclude_from_sim no)
+		(at 140.462 69.85 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+		(uuid "71e3f514-7f88-45f3-8a31-1475fa1a31ce")
+	)
+	(text "3.15V,3.49V"
+		(exclude_from_sim no)
+		(at 143.256 56.388 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+		(uuid "9e1c65cd-2c61-43f4-9d7c-ef61beba3f6b")
+	)
 	(text "Use 5P for COL."
 		(exclude_from_sim no)
 		(at 192.532 153.924 0)
@@ -14590,7 +14620,7 @@
 				(justify bottom)
 			)
 		)
-		(property "Value" "845k"
+		(property "Value" "634k"
 			(at 118.11 55.88 90)
 			(effects
 				(font
@@ -14888,7 +14918,7 @@
 				(justify bottom)
 			)
 		)
-		(property "Value" "3M3"
+		(property "Value" "3M6"
 			(at 133.35 55.88 90)
 			(effects
 				(font
@@ -18793,7 +18823,7 @@
 				(justify bottom)
 			)
 		)
-		(property "Value" "2M7"
+		(property "Value" "3M6"
 			(at 133.35 63.5 90)
 			(effects
 				(font
@@ -19608,7 +19638,7 @@
 				(justify bottom)
 			)
 		)
-		(property "Value" "5M6"
+		(property "Value" "6M8"
 			(at 125.73 55.88 90)
 			(effects
 				(font
@@ -21716,7 +21746,7 @@
 				(justify bottom)
 			)
 		)
-		(property "Value" "150k"
+		(property "Value" "274k"
 			(at 125.73 63.5 90)
 			(effects
 				(font
