@@ -39,7 +39,7 @@ pub trait SegmentsTrait<const N: usize> {type Segments;}
 impl SegmentsTrait<6> for () {type Segments = u64;}
 impl SegmentsTrait<4> for () {type Segments = u32;}
 pub type Segments = <() as SegmentsTrait<{WIDTH}>>::Segments;
-type SegArray = [u8; size_of::<Segments>()];
+pub type SegArray = [u8; size_of::<Segments>()];
 
 pub static DIGITS: [u8; 16] = [
     D0, D1, D2, D3, D4, D5, D6, D7, D8, D9, 0, 0, 0, 0, 0, 0];

@@ -2,8 +2,15 @@ use crate::vcell::VCell;
 
 ///! Pads are +, -, menu.  Note that the index is one less than the enumeration.
 
-/// Set to just log touch values.
-const EVALUATE: bool = false;
+/// Rev 1 board had high caps, rev 2 board had low caps.  This value is used to
+/// distinguish them.
+pub const LO_HI_SEP: u32 = 100;
+
+/// Touch threshold used for low cap boards.
+pub const LO_THRESHOLD: u32 = 26;
+
+/// Touch threshold used for hi cap boards.
+pub const HI_THRESHOLD: u32 = 1536;
 
 struct State {
     values: [VCell<u32>; 3],
@@ -58,7 +65,7 @@ pub fn init() {
     // Spread-sprectrum on but as low as possible.
     // Max counts is set to 2048, values much below that count as a touch.
     tsc.CR.write(
-        |w| w.CTPH().bits(2).CTPL().bits(2)
+        |w| w.CTPH().bits(1).CTPL().bits(2)
             . SSD().bits(0). SSE().set_bit().SSPSC().set_bit()
             . PGPSC().bits(prescaler).MCV().B_0x3().TSCE().set_bit());
     // Turning off hysteresis for the cap-sense lines seems to improve
@@ -115,31 +122,28 @@ fn isr() {
 }
 
 // Return touched pad, 1=+, 2=-, 3=menu, 0=None.
-pub fn retrieve() -> u32 {
+pub fn retrieve() -> (u32, u32) {
     while !STATE.complete.read() {
         crate::cpu::WFE();
     }
     // Find the lowest line...
     let mut min_line = 0;
     let mut min_val = STATE.values[0].read();
+    let mut max_val = min_val;
     for (i, val) in STATE.values.iter().enumerate().skip(1) {
         let val = val.read();
-        if val < min_val {
+        if val > max_val {
+            max_val = val;
+        }
+        else if val < min_val {
             min_val = val;
             min_line = i as u32;
         }
     }
-    if EVALUATE {
-        crate::dbgln!("Touch {} {} {}", STATE.values[0].read(),
-                      STATE.values[1].read(), STATE.values[2].read());
-        return 0;
-    }
-    if min_val < 1536 {
-        min_line + 1
-    }
-    else {
-        0
-    }
+
+    let threshold = if max_val > LO_HI_SEP {HI_THRESHOLD} else {LO_THRESHOLD};
+    let line = if min_val < threshold {min_line + 1} else {0};
+    (line, min_val)
 }
 
 impl crate::cpu::Config {

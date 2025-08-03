@@ -3,6 +3,8 @@ use crate::*;
 use lcd::{Segments, WIDTH};
 use tsc::pad;
 
+pub const TOUCH_EVALUATE: bool = false;
+
 pub const CONFIG: cpu::Config = {
     let mut cfg = cpu::Config::new(2000000);
     cfg.pullup |= 1 << 0x2d;
@@ -40,7 +42,8 @@ struct System {
     /// Timer, counting ticks.  Down counter running while touch system
     /// activated.
     timer: u32,
-    _unused: [u32; 2],
+    scratch: u32,
+    _unused: [u32; 1],
     /// Stored address before crash & reboot.
     crash: u32,
 }
@@ -157,6 +160,11 @@ fn cal_segments(sys: &System) -> Segments {
 }
 
 fn get_segments(sys: &System) -> Segments {
+    if TOUCH_EVALUATE {
+        let mut segs = lcd::SegArray::default();
+        lcd::decimal_to_segments(&mut segs, sys.scratch as i32, 0);
+        return Segments::from_le_bytes(segs);
+    }
     let rtc = unsafe {&*stm32u031::RTC::ptr()};
     use State::*;
     let segments = match sys.state() {
@@ -192,7 +200,12 @@ fn touch_state(sys: &mut System, pad: u32) -> bool {
 }
 
 fn touch_process(sys: &mut System) {
-    let pad = tsc::retrieve();
+    let (pad, val) = tsc::retrieve();
+    if TOUCH_EVALUATE {
+        sys.scratch = val;
+        return;
+    }
+
     if !touch_state(sys, pad) {
         return;
     }

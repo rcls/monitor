@@ -75,8 +75,9 @@ pub fn accel_isr() {
     let exti  = unsafe {&*stm32u031::EXTI ::ptr()};
     exti.RPR1.modify(|_,w| w);
     let mut buf = [0u8; 8];
-    let Ok(_) = crate::i2c::read_reg(FXLS8971, 0, &mut buf[1..]).wait()
-        else {return};
+    if let Err(_) = crate::i2c::read_reg(FXLS8971, 0, &mut buf[1..]).wait() {
+        return;
+    }
 
     // Check the status.  If no data ready then ignore it.
     if buf[1] & 0x80 == 0 {
