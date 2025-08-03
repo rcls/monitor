@@ -49,9 +49,9 @@ struct System {
 #[repr(u32)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd)]
 enum State {
-    Time = 0,
-    Date = 1,
-    Temp = 2,
+    Temp = 0,
+    Time = 1,
+    Date = 2,
     Cal  = 3,
 }
 
@@ -68,7 +68,7 @@ impl System {
         let sys = unsafe {(&*p).as_mut()};
         // Validate fields.
         if sys.state > State::MAX as u32 {
-            sys.state = State::Time as u32;
+            sys.state = State::Temp as u32;
         }
         sys
     }
