@@ -189,9 +189,6 @@ pub fn init2() {
     rcc.CIER.write(|w| w.LSIRDYIE().clear_bit());
     rcc.CICR.write(|w| w.bits(!0));
 
-    // Reduce drive strength.  (Lowest drive strength appears unreliable).
-    rcc.BDCR.modify(|_,w| w.LSEDRV().B_0x2());
-
     if CONFIG.fll {
         rcc.CR.write(
             |w| w.MSIRANGE().bits(MSIRANGE).MSIRGSEL().set_bit()

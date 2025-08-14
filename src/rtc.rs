@@ -262,7 +262,8 @@ pub fn standby(update_pupd: bool) -> ! {
     pwr.CR1.modify(|_,w| w.LPMS().bits(3)); // 3=Standby, 4=Shutdown.
 
     // Clear the reset causes & set restart MSI.
-    rcc.CSR.write(|w| w.RMVF().set_bit().MSISRANGE().bits(crate::cpu::MSIRANGE));
+    rcc.CSR.write(
+        |w| w.RMVF().set_bit().MSISRANGE().bits(crate::cpu::MSIRANGE));
 
     fn pupd(shift: u32, gpio: &stm32u031::gpioa::RegisterBlock,
             pucr: &stm32u031::pwr::PUCRA, pdcr: &stm32u031::pwr::PDCRA) {

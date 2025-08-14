@@ -3,6 +3,7 @@
 use crate::cpu::WFE;
 
 pub const WIDTH: usize = crate::LCD_WIDTH;
+pub const BITS: usize = WIDTH * 8;
 
 pub const SEG_A: u8 = 32;
 pub const SEG_B: u8 = 16;
@@ -25,8 +26,13 @@ pub const D8: u8 = !DOT;
 pub const D9: u8 = D8 & !SEG_E;
 
 pub const DEG: u8 = SEG_A | SEG_B | SEG_F | SEG_G;
-pub const DC: u8 = D0 & !SEG_B & !SEG_C;
 pub const DA: u8 = D8 & !SEG_D;
+pub const Db: u8 = D6 & !SEG_A;
+pub const DC: u8 = D0 & !SEG_B & !SEG_C;
+pub const Dd: u8 = D8 & !SEG_A & !SEG_F;
+pub const DE: u8 = D6 & !SEG_C;
+pub const DF: u8 = DE & !SEG_D;
+pub const DH: u8 = D4 |  SEG_E;
 pub const DL: u8 = DC & !SEG_A;
 
 pub const MINUS: u8 = SEG_G;
@@ -42,7 +48,7 @@ pub type Segments = <() as SegmentsTrait<{WIDTH}>>::Segments;
 pub type SegArray = [u8; size_of::<Segments>()];
 
 pub static DIGITS: [u8; 16] = [
-    D0, D1, D2, D3, D4, D5, D6, D7, D8, D9, 0, 0, 0, 0, 0, 0];
+    D0, D1, D2, D3, D4, D5, D6, D7, D8, D9, DA, Db, DC, Dd, DE, DF];
 
 /// Initialize the I/O to the LCD.
 pub fn init() {
@@ -146,13 +152,23 @@ fn rx_word(spi: &stm32u031::spi1::RegisterBlock) {
     spi.DR.read();
 }
 
-pub fn date_time_to_segments(mut t: u32, dots: Segments, kz: bool) -> Segments {
-    let mut result = [0; size_of::<Segments>()];
-    for p in result.iter_mut().take(WIDTH) {
-        let d = t as usize & 15;
-        t >>= 4;
+fn hex_to_segments_in_place(mut v: u32, width: usize, result: &mut SegArray) {
+    for p in result.iter_mut().take(width) {
+        let d = v as usize & 15;
+        v >>= 4;
         *p = DIGITS[d];
     }
+}
+
+pub fn hex_to_segments(v: u32, width: usize) -> Segments {
+    let mut result = [0; size_of::<Segments>()];
+    hex_to_segments_in_place(v, width, &mut result);
+    Segments::from_le_bytes(result)
+}
+
+pub fn date_time_to_segments(t: u32, dots: Segments, kz: bool) -> Segments {
+    let mut result = [0; size_of::<Segments>()];
+    hex_to_segments_in_place(t, WIDTH, &mut result);
     if WIDTH == 6 && result[WIDTH - 1] == DIGITS[0] {
         result[WIDTH - 1] = 0;
     }
@@ -225,10 +241,10 @@ pub fn decimal_to_segments(segs: &mut SegArray, v: i32, min: usize) -> usize {
     count
 }
 
-pub fn cal_to_segments(cal: i32) -> Segments {
+pub fn cal_to_segments(prefix: u8, cal: i32) -> Segments {
     let mut segs = SegArray::default();
     decimal_to_segments(&mut segs, cal, 0);
-    Segments::from_le_bytes(segs) | (DC as Segments) << WIDTH * 8 - 8
+    Segments::from_le_bytes(segs) | (prefix as Segments) << BITS - 8
 }
 
 impl crate::cpu::Config {
@@ -371,7 +387,7 @@ fn check_decimal() {
 #[test]
 fn check_cal() {
     for i in -99 ..= 999 {
-        assert_eq!(segments_to_str(cal_to_segments(i)),
+        assert_eq!(segments_to_str(cal_to_segments(DC, i)),
                    format!("C{i:w$}", w = WIDTH - 1));
     }
 }

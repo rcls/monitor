@@ -6956,6 +6956,17 @@
 			(embedded_fonts no)
 		)
 	)
+	(text "J6 got labels swapped on board.\nConnectors are crap for right-angle.\nVBatOk is not that great.\nAlert is not on a wake-up,\nrewire to pin 2, replace RTC out.\nBring batt & super-cap to front.\nCurrent limit somewhere?"
+		(exclude_from_sim no)
+		(at 113.284 45.466 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "3159e7cf-b1e7-4ff5-85b1-5e9de81a4019")
+	)
 	(text "5V"
 		(exclude_from_sim no)
 		(at 139.446 63.5 0)

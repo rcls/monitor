@@ -1,6 +1,6 @@
 use crate::*;
 
-use lcd::{Segments, WIDTH};
+use lcd::{BITS, Segments};
 use tsc::pad;
 
 pub const TOUCH_EVALUATE: bool = false;
@@ -58,8 +58,19 @@ enum State {
     Cal  = 3,
 }
 
+/// Cal substates.
+mod cal {
+    /// Clock calibration.
+    //pub const NONE    : u32 = 0;
+    pub const CAL     : u32 = 1;
+    pub const DRIVE   : u32 = 2;
+    pub const CRASH_HI: u32 = 3;
+    pub const CRASH_LO: u32 = 4;
+    pub const MAX     : u32 = 4;
+}
+
 impl State {
-    const MIN: State = State::Time;
+    const MIN: State = State::Temp;
     const MAX: State = State::Cal;
 }
 
@@ -76,7 +87,7 @@ impl System {
         sys
     }
 
-    fn reset(&mut self) {
+    fn init(&mut self) {
         self.magic = MAGIC;
         self.temp = self.temp.clamp(-1999, 1999);
         self.sub_state = 0;
@@ -92,15 +103,20 @@ impl System {
         let state = self.state();
         use State::*;
         if state == Cal {
-            return (1 << WIDTH * 8 - 8) - 1;
+            if self.sub_state <= 2 {
+                return (1 << BITS - 8) - 1;
+            }
+            else {
+                return 255 << BITS - 16;
+            }
         }
         // The numbering is big endian, time display is big endian, date
         // display is little endian.  For a 4 digit display, the exception
         // is always on the right.
         let pos = if state == Date {4 - self.sub_state} else {self.sub_state};
         match pos {        // Date or time.
-            1 => dd << WIDTH * 8 - 16,
-            2 => dd << WIDTH * 8 - 32,
+            1 => dd << BITS - 16,
+            2 => dd << BITS - 32,
             3 => dd,
             _ => 0,
         }
@@ -120,8 +136,15 @@ impl System {
 }
 
 fn cold_start(sys: &mut System) {
+    let pwr = unsafe {&*stm32u031::PWR::ptr()};
+    // Enable RTC wakeup.  (It should already be enabled.)
+    pwr.CR3.write(|w| w.EIWUL().set_bit());
+
+    // Turn on the VBATT charging.  Set the wakeup 2 polarity at the same time.
+    pwr.CR4.write(|w| w.VBE().set_bit().VBRS().set_bit().WP2().set_bit());
+
     debug::banner("**** CLOCKY 0x", sys.crash, " ****\n");
-    sys.reset();
+    sys.init();
 
     rtc::ensure_options();
     rtc_setup_tick();
@@ -149,13 +172,19 @@ fn rtc_setup_tick() {
 }
 
 fn cal_segments(sys: &System) -> Segments {
-    use lcd::{DC, DA, DL};
-    if sys.sub_state == 0 {
-        (DC as Segments * 65536 + DA as Segments * 256 + DL as Segments)
-            << WIDTH * 8 - 24
-    }
-    else {
-        lcd::cal_to_segments(rtc::get_cal()) | (DC as Segments) << WIDTH * 8 - 8
+    let rcc = unsafe {&*stm32u031::RCC::ptr()};
+    use lcd::{DA, DC, Dd, DH, DL};
+    match sys.sub_state {
+        cal::CAL => lcd::cal_to_segments(lcd::DC, rtc::get_cal()),
+        cal::DRIVE => lcd::cal_to_segments(
+            Dd, rcc.BDCR.read().LSEDRV().bits().into()),
+        cal::CRASH_LO => lcd::hex_to_segments(sys.crash, LCD_WIDTH - 2)
+            | (DC as Segments * 256 + DL as Segments) << BITS - 16,
+        cal::CRASH_HI => lcd::hex_to_segments(
+            sys.crash >> LCD_WIDTH * 4 - 8, LCD_WIDTH - 2)
+            | (DC as Segments * 256 + DH as Segments) << BITS - 16,
+        _ => (DC as Segments * 65536 + DA as Segments * 256 + DL as Segments)
+            << BITS - 24
     }
 }
 
@@ -215,7 +244,8 @@ fn touch_process(sys: &mut System) {
         pad::MENU => {                  // Rotate sub-state.
             let s = sys.state();
             let ss = sys.sub_state;
-            let max = match s {State::Temp => 0, State::Cal => 1, _ => 3};
+            let max
+                = match s {State::Temp => 0, State::Cal => cal::MAX, _ => 3};
             sys.sub_state = if ss >= max {0} else {ss + 1};
         },
         _ => touch_plus_minus(sys, pad),
@@ -249,10 +279,7 @@ fn touch_plus_minus(sys: &mut System, pad: u32) {
     }
 
     if s == State::Cal {
-        let cal = rtc::get_cal();
-        rtc::set_cal(
-            if pad == pad::PLUS {cal.min(98) + 1} else {cal.max(-98) - 1});
-        return;
+        return cal_plus_minus(sys, pad);
     }
 
     if s == State::Temp {
@@ -267,6 +294,24 @@ fn touch_plus_minus(sys: &mut System, pad: u32) {
     }
     if pad == pad::MINUS {
         rtc::backwards(item);
+    }
+}
+
+fn cal_plus_minus(sys: &mut System, pad: u32) {
+    let rcc = unsafe {&*stm32u031::RCC::ptr()};
+    match sys.sub_state {
+        cal::CAL => {
+            let cal = rtc::get_cal();
+            rtc::set_cal(
+                if pad == pad::PLUS {cal.min(98) + 1} else {cal.max(-98) - 1});
+        }
+        cal::DRIVE => {
+            let bdcr = rcc.BDCR.read();
+            let d = bdcr.LSEDRV().bits();
+            let d = if pad == pad::PLUS {d.min(2) + 1} else {d.max(2) - 1};
+            rcc.BDCR.write(|w| w.bits(bdcr.bits()).LSEDRV().bits(d));
+        }
+        _ => (),
     }
 }
 
@@ -372,6 +417,6 @@ fn blink_mask_checks() {
     for (s, ss, m4, m6) in checks {
         sys.state = s as u32;
         sys.sub_state = ss;
-        assert_eq!(sys.blink_mask(), if WIDTH == 4 {m4} else {m6} as Segments);
+        assert_eq!(sys.blink_mask(), if LCD_WIDTH == 4 {m4} else {m6} as Segments);
     }
 }
