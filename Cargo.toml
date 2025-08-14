@@ -46,11 +46,6 @@ name = 'blink-clocky'
 filename = 'blink-clocky.elf'
 path = 'src/blink-clocky.rs'
 
-[[bin]]
-name = 'clocky-thermo'
-filename = 'clocky-thermo.elf'
-path = 'src/clocky-thermo.rs'
-
 [profile.dev]
 panic = 'abort'
 

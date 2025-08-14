@@ -8,8 +8,8 @@ pub fn init() {
 
     crate::i2c::init();
 
-    // Alert is hot-wired to PC13, WKUP2.  Set it to falling edge triggered.
-    pwr.CR3.modify(|_,w| w.EIWUL().set_bit().EWUP2().set_bit());
+    // Alert is hot-wired to PC13, WKUP2.
+    pwr.CR3.modify(|_,w| w.EWUP2().set_bit());
     // Clear the wake-up pin as it has probably gotten set during start-up.
     pwr.SCR.write(|w| w.CWUF2().set_bit());
 
