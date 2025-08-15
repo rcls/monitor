@@ -6967,7 +6967,7 @@
 		)
 		(uuid "3159e7cf-b1e7-4ff5-85b1-5e9de81a4019")
 	)
-	(text "5V"
+	(text "4V"
 		(exclude_from_sim no)
 		(at 139.446 63.5 0)
 		(effects
@@ -6987,7 +6987,7 @@
 		)
 		(uuid "71e3f514-7f88-45f3-8a31-1475fa1a31ce")
 	)
-	(text "3.15V,3.49V"
+	(text "2.86V, 3.13V"
 		(exclude_from_sim no)
 		(at 143.256 56.388 0)
 		(effects
@@ -14929,7 +14929,7 @@
 				(justify bottom)
 			)
 		)
-		(property "Value" "3M6"
+		(property "Value" "3M9"
 			(at 133.35 55.88 90)
 			(effects
 				(font
@@ -18834,7 +18834,7 @@
 				(justify bottom)
 			)
 		)
-		(property "Value" "3M6"
+		(property "Value" "3M9"
 			(at 133.35 63.5 90)
 			(effects
 				(font
@@ -19649,7 +19649,7 @@
 				(justify bottom)
 			)
 		)
-		(property "Value" "6M8"
+		(property "Value" "6M2"
 			(at 125.73 55.88 90)
 			(effects
 				(font
@@ -21757,7 +21757,7 @@
 				(justify bottom)
 			)
 		)
-		(property "Value" "274k"
+		(property "Value" "330k"
 			(at 125.73 63.5 90)
 			(effects
 				(font
@@ -21834,7 +21834,7 @@
 				(justify bottom)
 			)
 		)
-		(property "Value" "6M8"
+		(property "Value" "5M1"
 			(at 118.11 63.5 90)
 			(effects
 				(font
