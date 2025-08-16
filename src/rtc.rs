@@ -174,7 +174,7 @@ fn forwards_date(item: u32, mut d: u32) -> u32 {
         d = d & !0xff | 1;
     }
     if item <= 4 { // Month.
-        if d & 0x1fff < 0x1200 {
+        if d & 0x1f00 < 0x1200 {
             return d + if d & 0xf00 < 0x900 {0x100} else {0x700};
         }
         d -= 0x1100;
@@ -192,8 +192,8 @@ fn forwards_date(item: u32, mut d: u32) -> u32 {
 }
 
 fn back_month_or_year(item: u32, mut d: u32) -> u32 {
-    if item <= 4 {
-        if d & 0xffff >= 0x0200 {
+    if item <= 4 { // Month
+        if d & 0x1fff >= 0x0200 {
             return d - if d & 0xfff >= 0x100 {0x100} else {0x700};
         }
         d += 0x1100;
@@ -325,10 +325,15 @@ fn test_days_in_month() {
 
 #[cfg(test)]
 fn check_date_pair(item: u32, a: u32, b: u32) {
-    let aa = backwards_date(item, b);
-    let bb = forwards_date(item, a);
-    assert_eq!(b, bb, "{item} {a:06x} {bb:06x}/{b:06x}");
-    assert_eq!(aa, a, "{item} {aa:06x}/{a:06x} {b:06x}");
+    // Cover all values of the day-of-week field.
+    for d in 0 ..= 7 {
+        let a = a | d << 13;
+        let b = b | d << 13;
+        let aa = backwards_date(item, b);
+        let bb = forwards_date(item, a);
+        assert_eq!(b, bb, "{item} {a:06x} {bb:06x}/{b:06x}");
+        assert_eq!(aa, a, "{item} {aa:06x}/{a:06x} {b:06x}");
+    }
 }
 
 #[test]
@@ -351,6 +356,9 @@ fn test_advance_date() {
     check_date_pair(3, 0x020529, 0x020530);
     check_date_pair(3, 0x020530, 0x020531);
     check_date_pair(3, 0x020531, 0x020601);
+
+    check_date_pair(3, 0x250930, 0x251001);
+    check_date_pair(4, 0x250912, 0x251012);
 }
 
 #[test]
