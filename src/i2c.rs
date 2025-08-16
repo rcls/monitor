@@ -58,12 +58,12 @@ pub fn init() {
     // Drive the lines up briefly.
     match crate::I2C_LINES {
         I2CLines::B6_B7 => {
-            gpiob.MODER.modify(|_, w| w.MODE6().B_0x1().MODE7().B_0x1());
             gpiob.BSRR.write(|w| w.BS6().set_bit().BS7().set_bit());
+            gpiob.MODER.modify(|_, w| w.MODE6().B_0x1().MODE7().B_0x1());
         },
         I2CLines::A9_A10 => {
-            gpioa.MODER.modify(|_, w| w.MODE9().B_0x1().MODE10().B_0x1());
             gpioa.BSRR.write(|w| w.BS9().set_bit().BS10().set_bit());
+            gpioa.MODER.modify(|_, w| w.MODE9().B_0x1().MODE10().B_0x1());
         }
     }
 

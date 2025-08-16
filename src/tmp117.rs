@@ -1,17 +1,9 @@
 
 use crate::i2c;
 
-/// Initialize the TMP117.  Trigger a conversion if trigger is true, else
-/// just put it into shutdown.
+/// Initialize the TMP117.  Trigger a conversion if trigger.
 pub fn init() {
-    let pwr = unsafe {&*stm32u031::PWR::ptr()};
-
     crate::i2c::init();
-
-    // Alert is hot-wired to PC13, WKUP2.
-    pwr.CR3.modify(|_,w| w.EWUP2().set_bit());
-    // Clear the wake-up pin as it has probably gotten set during start-up.
-    pwr.SCR.write(|w| w.CWUF2().set_bit());
 
     // Trigger an initial conversion, interrupt on data ready.
     const COMMAND: [u8; 3] = [1u8, 12, 4];
@@ -53,9 +45,6 @@ pub fn alert() -> i32 {
 
     // The alert pin should be released.  Reenable the pull-up.
     pwr.PUCRC.write(|w| w.PU13().set_bit());
-
-    // Updating the display can wait for the next tick.  Disable the wake-up.
-    pwr.CR3.modify(|_,w| w.EIWUL().set_bit().EWUP2().clear_bit());
 
     temp
 }

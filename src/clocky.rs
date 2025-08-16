@@ -32,8 +32,7 @@ struct System {
     magic: u32,
     /// State enumeration.
     state: u32,
-    /// Temperature in tenths of °C in low 16 bits.  High bit indicates
-    /// measurement outstanding.
+    /// Temperature in tenths of °C in low 16 bits.
     temp: i32,
     /// Sub-state - which field is active when updating date or time.
     sub_state: u32,
@@ -121,24 +120,16 @@ impl System {
             _ => 0,
         }
     }
-    fn temp(&self) -> i32 {self.temp as i16 as i32}
-    /// Also clears pending.
-    fn set_temp(&mut self, temp: i16) {self.temp = temp as u16 as i32}
-    fn set_temp_pending(&mut self, pending: bool) {
-        if pending {
-            self.temp |= 1 << 31;
-        }
-        else {
-            self.temp &= !(1 << 31);
-        }
-    }
-    fn is_temp_pending(&self) -> bool {self.temp & 1 << 31 != 0}
 }
 
 fn cold_start(sys: &mut System) {
     let pwr = unsafe {&*stm32u031::PWR::ptr()};
-    // Enable RTC wakeup.  (It should already be enabled.)
-    pwr.CR3.write(|w| w.EIWUL().set_bit());
+    // Enable RTC wakeup.  (It should already be enabled).  The TMP117 alert
+    // is on PC13, wake-up 2, enable that.
+    pwr.CR3.write(|w| w.APC().set_bit().EIWUL().set_bit().EWUP2().set_bit());
+    // Clear the wake-up pin now as it has probably gotten set during start-up.
+    // We will trigger a temperature conversion immediately, and
+    pwr.SCR.write(|w| w.CWUF2().set_bit());
 
     // Turn on the VBATT charging.  Set the wakeup 2 polarity at the same time.
     pwr.CR4.write(|w| w.VBE().set_bit().VBRS().set_bit().WP2().set_bit());
@@ -173,16 +164,16 @@ fn rtc_setup_tick() {
 
 fn cal_segments(sys: &System) -> Segments {
     let rcc = unsafe {&*stm32u031::RCC::ptr()};
-    use lcd::{DA, DC, Dd, DH, DL};
+    use lcd::{DA, DC, Dd, DE, DH, DL};
     match sys.sub_state {
         cal::CAL => lcd::cal_to_segments(lcd::DC, rtc::get_cal()),
         cal::DRIVE => lcd::cal_to_segments(
             Dd, rcc.BDCR.read().LSEDRV().bits().into()),
         cal::CRASH_LO => lcd::hex_to_segments(sys.crash, LCD_WIDTH - 2)
-            | (DC as Segments * 256 + DL as Segments) << BITS - 16,
+            | (DE as Segments * 256 + DL as Segments) << BITS - 16,
         cal::CRASH_HI => lcd::hex_to_segments(
             sys.crash >> LCD_WIDTH * 4 - 8, LCD_WIDTH - 2)
-            | (DC as Segments * 256 + DH as Segments) << BITS - 16,
+            | (DE as Segments * 256 + DH as Segments) << BITS - 16,
         _ => (DC as Segments * 65536 + DA as Segments * 256 + DL as Segments)
             << BITS - 24
     }
@@ -199,7 +190,7 @@ fn get_segments(sys: &System) -> Segments {
     let segments = match sys.state() {
         Time => lcd::time_to_segments(rtc.TR().read().bits(), sys.sub_state),
         Date => lcd::date_to_segments(rtc.DR().read().bits(), sys.sub_state),
-        Temp => lcd::temp_to_segments(sys.temp()),
+        Temp => lcd::temp_to_segments(sys.temp),
         Cal  => cal_segments(sys),
     };
     if sys.sub_state == 0 || rtc.SSR.read().bits() & 0x40 != 0 {
@@ -324,13 +315,7 @@ fn tick(sys: &mut System) {
     let ssr = rtc.SSR.read().bits();
 
     let tacquire;
-    if sys.is_temp_pending() {
-        // Override tacquire if we already have one pending, don't request
-        // another.
-        sys.set_temp_pending(false);
-        tacquire = false;
-    }
-    else if ssr >= 0xfc {
+    if ssr >= 0xfc {
         // If we're displaying the temperature, trigger a conversion every second.
         // If we're not displaying it, then grab it every minute.
         tacquire = sys.state() == State::Temp
@@ -359,18 +344,15 @@ fn tick(sys: &mut System) {
     }
 }
 
-fn temp_alert(sys: &mut System) {
-    let temp = tmp117::alert();
-    sys.set_temp(temp as i16);
-}
-
 pub fn main() -> ! {
-    let pwr = unsafe {&*stm32u031::PWR::ptr()};
-    let rcc = unsafe {&*stm32u031::RCC::ptr()};
-    let sys = unsafe {System::get()};
+    let gpioc = unsafe {&*stm32u031::GPIOC::ptr()};
+    let pwr   = unsafe {&*stm32u031::PWR  ::ptr()};
+    let rcc   = unsafe {&*stm32u031::RCC  ::ptr()};
+    let sys   = unsafe {System::get()};
 
     // Enable IO clocks.
-    rcc.IOPENR.write(|w| w.GPIOAEN().set_bit().GPIOBEN().set_bit());
+    rcc.IOPENR.write(
+        |w| w.GPIOAEN().set_bit().GPIOBEN().set_bit().GPIOBEN().set_bit());
 
     cpu::init1();
     cpu::init2();
@@ -387,10 +369,12 @@ pub fn main() -> ! {
     }
 
     let mut lcd_update = false;
-    // Wake-up 2 is the TMP117 alert.
-    if sr1.WUF2().bit() {
+    // Wake-up 2 / PC13 is the TMP117 alert, active low.  We test the GPIO state
+    // rather than the wake-up flag, so that a lost edge on the alert pin
+    // doesn't hang the temperature reading.
+    if sr1.WUF2().bit() || !gpioc.IDR.read().ID13().bit() {
         pwr.SCR.write(|w| w.CWUF2().set_bit());
-        temp_alert(sys);
+        sys.temp = tmp117::alert();
     }
 
     if sr1.WUFI().bit() {

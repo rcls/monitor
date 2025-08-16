@@ -6956,7 +6956,7 @@
 			(embedded_fonts no)
 		)
 	)
-	(text "J6 got labels swapped on board.\nConnectors are crap for right-angle.\nVBatOk is not that great.\nAlert is not on a wake-up,\nrewire to pin 2, replace RTC out.\nBring batt & super-cap to front.\nCurrent limit somewhere?"
+	(text "J6 got labels swapped on board.\nConnectors are crap for right-angle.\nVBatOk is not that great.\nAlert is not on a wake-up,\nrewire to pin 2, replace RTC out.\nBring batt & super-cap to front.\nProbably better to use a low\npower LDO than the buck."
 		(exclude_from_sim no)
 		(at 113.284 45.466 0)
 		(effects
