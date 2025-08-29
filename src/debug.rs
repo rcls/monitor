@@ -35,6 +35,9 @@ impl Debug {
         }
     }
     fn write_bytes(&self, s: &[u8]) {
+        if crate::CONFIG.no_debug {
+            return;
+        }
         check_vtors();
         lazy_init();
         let mut w = self.w.read();
@@ -127,6 +130,9 @@ pub fn flush() {
 
 /// The code gen for formats is so awful that we do this!
 pub fn banner(s: &str, mut v: u32, t: &str) {
+    if crate::CONFIG.no_debug {
+        return;
+    }
     write_str(s);
     let mut hex = [0; 8];
     for p in hex.iter_mut().rev() {
@@ -278,8 +284,5 @@ fn check_vtors() {
     use crate::link_assert;
     if !crate::CONFIG.no_debug {
         link_assert!(crate::cpu::VECTORS.isr[UART_ISR as usize] == debug_isr);
-    }
-    else {
-        link_assert!(crate::cpu::VECTORS.isr[UART_ISR as usize] != debug_isr);
     }
 }

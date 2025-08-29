@@ -42,7 +42,7 @@ struct System {
     /// activated.
     timer: u32,
     scratch: u32,
-    _unused: [u32; 1],
+    _unused: u32,
     /// Stored address before crash & reboot.
     crash: u32,
 }
@@ -60,7 +60,6 @@ enum State {
 /// Cal substates.
 mod cal {
     /// Clock calibration.
-    //pub const NONE    : u32 = 0;
     pub const CAL     : u32 = 1;
     pub const DRIVE   : u32 = 2;
     pub const CRASH_HI: u32 = 3;

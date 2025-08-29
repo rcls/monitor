@@ -30,7 +30,7 @@ const VSENSE1_INDEX: usize = 1;
 const VSENSE2_INDEX: usize = 2;
 const VREF_INDEX: usize = 0;
 
-const ISENSE_ZERO: i32 = 32733;
+const ISENSE_ZERO: i32 = 32784;
 /// A to V transfer of isense circuit.
 const ISENSE_GAIN: f64 = 0.001 * 101. * 100. / 39.;
 /// Current in A to give 3.3V.
