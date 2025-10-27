@@ -287,7 +287,7 @@
       ],
       [
         "power_pin_not_driven|1955800|1625600|94f81534-57fc-4200-a565-0d1173f8cd5f|00000000-0000-0000-0000-000000000000|/1a152c6d-723d-49c0-9a40-41d8f1ee1a82|/1a152c6d-723d-49c0-9a40-41d8f1ee1a82|",
-        ""
+        "Intentional"
       ]
     ],
     "meta": {
@@ -732,18 +732,6 @@
           "group_by": false,
           "label": "#",
           "name": "${ITEM_NUMBER}",
-          "show": false
-        },
-        {
-          "group_by": false,
-          "label": "Sim.Device",
-          "name": "Sim.Device",
-          "show": false
-        },
-        {
-          "group_by": false,
-          "label": "Sim.Pins",
-          "name": "Sim.Pins",
           "show": false
         },
         {

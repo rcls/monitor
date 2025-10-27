@@ -13382,7 +13382,7 @@
 				(hide yes)
 			)
 		)
-		(property "LCSC" "C15195"
+		(property "JLCPCB" "C15195"
 			(at 87.63 156.21 0)
 			(effects
 				(font
@@ -18419,7 +18419,7 @@
 				(hide yes)
 			)
 		)
-		(property "JLCPCB" "C15850"
+		(property "JLCPCB" "C19702"
 			(at 58.42 24.13 0)
 			(effects
 				(font
@@ -18905,15 +18905,6 @@
 			)
 		)
 		(property "Description" "Light emitting diode"
-			(at 96.52 124.46 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Sim.Pins" "1=K 2=A"
 			(at 96.52 124.46 0)
 			(effects
 				(font
@@ -21190,7 +21181,7 @@
 		(at 247.65 151.13 0)
 		(unit 1)
 		(exclude_from_sim no)
-		(in_bom yes)
+		(in_bom no)
 		(on_board yes)
 		(dnp no)
 		(uuid "e2ce767c-cd81-4409-a2d0-704376f0651c")
@@ -21502,7 +21493,7 @@
 				(justify bottom)
 			)
 		)
-		(property "Value" "330k"
+		(property "Value" "560k"
 			(at 119.38 50.8 90)
 			(effects
 				(font
@@ -21537,7 +21528,7 @@
 				(hide yes)
 			)
 		)
-		(property "JLCPCB" "C22807"
+		(property "JLCPCB" "C23203"
 			(at 119.38 50.8 0)
 			(effects
 				(font
@@ -21566,7 +21557,7 @@
 		(at 120.65 127 0)
 		(unit 1)
 		(exclude_from_sim no)
-		(in_bom yes)
+		(in_bom no)
 		(on_board yes)
 		(dnp no)
 		(uuid "efe2862d-ab47-4c94-a0e8-9ce5479b3b77")

@@ -18,7 +18,6 @@ $(PROJECTS:%=out/%_bom.csv): %_bom.csv: %_bom_raw.csv filter_pos.py
 
 $(PROJECTS:%=out/%_bom_raw.csv): out/%_bom_raw.csv: %.kicad_sch *.kicad_sch Parts.kicad_sym
 	mkdir -p out
-#	kicad-cli sch export bom --exclude-dnp --labels Comment,Designator,Footprint,'JLCPcb Part' --ref-range-delimiter='' -o $@ $<
 	kicad-cli sch export bom --preset JLCPCB --exclude-dnp --labels Comment,Designator,Footprint,'JLCPcb Part' --ref-range-delimiter='' -o $@ $<
 
 out/%_gerber.zip: %.kicad_pcb out/%.rpt
