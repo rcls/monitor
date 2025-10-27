@@ -13968,7 +13968,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Package_DFN_QFN:QFN-48-1EP_7x7mm_P0.5mm_EP5.6x5.6mm"
+		(property "Footprint" "Parts:QFN-48-1EP_7x7mm_P0.5mm_EP5.6x5.6mm"
 			(at 49.53 157.48 0)
 			(effects
 				(font
@@ -15633,7 +15633,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Package_DFN_QFN:QFN-20-1EP_3.5x3.5mm_P0.5mm_EP2x2mm"
+		(property "Footprint" "Parts:QFN-20-1EP_3.5x3.5mm_P0.5mm_EP2x2mm"
 			(at 67.31 53.34 0)
 			(effects
 				(font
