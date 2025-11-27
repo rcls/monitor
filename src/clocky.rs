@@ -315,8 +315,10 @@ fn tick(sys: &mut System) {
 
     let tacquire;
     if ssr >= 0xfc {
-        // If we're displaying the temperature, trigger a conversion every second.
-        // If we're not displaying it, then grab it every minute.
+        ens::ens212id();
+        ens::ens220id();
+        // If we're displaying the temperature, trigger a conversion every
+        // second.  If we're not displaying it, then grab it every minute.
         tacquire = sys.state() == State::Temp
             || rtc.TR.read().bits() & 0xff == 0;
     }

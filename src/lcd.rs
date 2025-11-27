@@ -34,6 +34,7 @@ pub const DE: u8 = D6 & !SEG_C;
 pub const DF: u8 = DE & !SEG_D;
 pub const DH: u8 = D4 |  SEG_E;
 pub const DL: u8 = DC & !SEG_A;
+pub const Do: u8 = Dd & !SEG_B;
 
 pub const MINUS: u8 = SEG_G;
 /// Right or only colon.
@@ -161,13 +162,13 @@ fn hex_to_segments_in_place(mut v: u32, width: usize, result: &mut SegArray) {
 }
 
 pub fn hex_to_segments(v: u32, width: usize) -> Segments {
-    let mut result = [0; size_of::<Segments>()];
+    let mut result = [0; _];
     hex_to_segments_in_place(v, width, &mut result);
     Segments::from_le_bytes(result)
 }
 
 pub fn date_time_to_segments(t: u32, dots: Segments, kz: bool) -> Segments {
-    let mut result = [0; size_of::<Segments>()];
+    let mut result = [0; _];
     hex_to_segments_in_place(t, WIDTH, &mut result);
     if WIDTH == 6 && result[WIDTH - 1] == DIGITS[0] {
         result[WIDTH - 1] = 0;
@@ -207,7 +208,7 @@ pub fn date_to_segments(d: u32, sub_state: u32) -> Segments {
 }
 
 pub fn temp_to_segments(temp: i32) -> Segments {
-    let mut segs = SegArray::default();
+    let mut segs = [0; _];
     let p = decimal_to_segments(&mut segs, temp, 2);
     let mut segs = Segments::from_le_bytes(segs) | DOT as Segments * 256;
     if p < WIDTH {
@@ -219,7 +220,33 @@ pub fn temp_to_segments(temp: i32) -> Segments {
     segs
 }
 
-/// Works on 17 bit signed, -65535 ..= 65535.
+pub fn humi_to_segments(humidity: u32) -> Segments {
+    // 99.9, on a 6 digit display add %(°o).
+    let mut segs = [0; _];
+    let d = decimal_to_segments(&mut segs, humidity as i32, 3);
+    let segs = Segments::from_le_bytes(segs) | DOT as Segments * 256;
+    if WIDTH == 6 && d <= 4 {
+        segs * 65536 + DEG as Segments * 256 + Do as Segments
+    }
+    else if d < 4 {
+        segs * 256
+    }
+    else {
+        segs
+    }
+}
+
+pub fn pres_to_segments(pres: u32) -> Segments {
+    let mut segs = [0; _];
+    // For six digits: Tenths of Pa precision.
+    // For four digits: Ten Pa precision.
+    // For pressures above 100kPa, we drop the leading digit.
+    let pres = if WIDTH == 6 {(pres * 10 + 32) / 64} else {(pres + 320) / 640};
+    decimal_to_segments(&mut segs, pres as i32, WIDTH);
+    Segments::from_le_bytes(segs) | (DOT as Segments) << (BITS - 16)
+}
+
+/// Best effort if it doesn't fit - return trailing digits!
 pub fn decimal_to_segments(segs: &mut SegArray, v: i32, min: usize) -> usize {
     let mut i = segs.iter_mut();
     let mut count = 0;
@@ -242,7 +269,7 @@ pub fn decimal_to_segments(segs: &mut SegArray, v: i32, min: usize) -> usize {
 }
 
 pub fn cal_to_segments(prefix: u8, cal: i32) -> Segments {
-    let mut segs = SegArray::default();
+    let mut segs = [0; _];
     decimal_to_segments(&mut segs, cal, 0);
     Segments::from_le_bytes(segs) | (prefix as Segments) << BITS - 8
 }
