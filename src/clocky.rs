@@ -30,19 +30,20 @@ const REPEAT_AGAIN: u32 = TICKS_PER_SEC / 2;
 struct System {
     /// Magic number.
     magic: u32,
-    /// State enumeration.
-    state: u32,
+    /// State enumeration in low 16 bits, sub-state in high 16 bits.
+    states: u32,
     /// Temperature in tenths of °C in low 16 bits.
     temp: i32,
-    /// Sub-state - which field is active when updating date or time.
-    sub_state: u32,
+    /// Humidity or ~0 for no sensor.
+    humidity: u32,
     /// Current touch state. 0:None, 1:+, 2:-, 3:≡
     touch: u32,
     /// Timer, counting ticks.  Down counter running while touch system
     /// activated.
     timer: u32,
     scratch: u32,
-    _unused: u32,
+    /// Pressure in 1/64 Pa, or ~0 for no sensor.
+    pressure: u32,
     /// Stored address before crash & reboot.
     crash: u32,
 }
@@ -54,7 +55,9 @@ enum State {
     Temp = 0,
     Time = 1,
     Date = 2,
-    Cal  = 3,
+    Pres = 3,
+    Humi = 4,
+    Cal  = 5,
 }
 
 /// Cal substates.
@@ -70,6 +73,23 @@ mod cal {
 impl State {
     const MIN: State = State::Temp;
     const MAX: State = State::Cal;
+
+    fn next(self) -> State {
+        if self < State::MAX {
+            unsafe {core::mem::transmute(self as u32 + 1)}
+        }
+        else {
+            State::MIN
+        }
+    }
+    fn prev(self) -> State {
+        if self > State::MIN {
+            unsafe {core::mem::transmute(self as u32 - 1)}
+        }
+        else {
+            State::MAX
+        }
+    }
 }
 
 impl System {
@@ -79,8 +99,8 @@ impl System {
         let p = tamp.BKPR[0].as_ptr() as *const crate::vcell::UCell<System>;
         let sys = unsafe {(&*p).as_mut()};
         // Validate fields.
-        if sys.state > State::MAX as u32 {
-            sys.state = State::Temp as u32;
+        if sys.states & 0xffff > State::MAX as u32 {
+            sys.states = State::Temp as u32;
         }
         sys
     }
@@ -88,20 +108,22 @@ impl System {
     fn init(&mut self) {
         self.magic = MAGIC;
         self.temp = self.temp.clamp(-1999, 1999);
-        self.sub_state = 0;
         self.touch = 0;
         self.timer = 0;
+        self.pressure = !0;
+        self.humidity = !0;
     }
     fn state(&self) -> State {
-        // SAFTEY: We sanitize this at each start-up.
-        unsafe {core::mem::transmute(self.state)}
+        // SAFETY: We sanitize this at each start-up.
+        unsafe {core::mem::transmute(self.states & 0xffff)}
     }
     fn blink_mask(&self) -> Segments {
         let dd = lcd::D8 as Segments * 0x101;
         let state = self.state();
+        let sub_state = self.sub_state();
         use State::*;
         if state == Cal {
-            if self.sub_state <= 2 {
+            if sub_state <= 2 {
                 return (1 << BITS - 8) - 1;
             }
             else {
@@ -111,13 +133,29 @@ impl System {
         // The numbering is big endian, time display is big endian, date
         // display is little endian.  For a 4 digit display, the exception
         // is always on the right.
-        let pos = if state == Date {4 - self.sub_state} else {self.sub_state};
+        let pos = if state == Date {4 - sub_state} else {sub_state};
         match pos {        // Date or time.
             1 => dd << BITS - 16,
             2 => dd << BITS - 32,
             3 => dd,
             _ => 0,
         }
+    }
+
+    fn set_state(&mut self, state: State) {
+        self.states = self.states & 0xffff0000 | state as u32;
+    }
+    fn sub_state(&self) -> u32 {
+        self.states >> 16
+    }
+    fn set_sub_state(&mut self, sub_state: u32) {
+        self.states = self.states & 0xffff | sub_state << 16;
+    }
+    fn have_pressure(&self) -> bool {
+        self.pressure < 0x80000000
+    }
+    fn have_humidity(&self) -> bool {
+        self.humidity < 0x80000000
     }
 }
 
@@ -134,6 +172,7 @@ fn cold_start(sys: &mut System) {
     pwr.CR4.write(|w| w.VBE().set_bit().VBRS().set_bit().WP2().set_bit());
 
     debug::banner("**** CLOCKY 0x", sys.crash, " ****\n");
+    debug::flush();
     sys.init();
 
     rtc::ensure_options();
@@ -164,7 +203,7 @@ fn rtc_setup_tick() {
 fn cal_segments(sys: &System) -> Segments {
     let rcc = unsafe {&*stm32u031::RCC::ptr()};
     use lcd::{DA, DC, Dd, DE, DH, DL};
-    match sys.sub_state {
+    match sys.sub_state() {
         cal::CAL => lcd::cal_to_segments(lcd::DC, rtc::get_cal()),
         cal::DRIVE => lcd::cal_to_segments(
             Dd, rcc.BDCR.read().LSEDRV().bits().into()),
@@ -185,14 +224,17 @@ fn get_segments(sys: &System) -> Segments {
         return Segments::from_le_bytes(segs);
     }
     let rtc = unsafe {&*stm32u031::RTC::ptr()};
+    let sub_state = sys.sub_state();
     use State::*;
     let segments = match sys.state() {
-        Time => lcd::time_to_segments(rtc.TR().read().bits(), sys.sub_state),
-        Date => lcd::date_to_segments(rtc.DR().read().bits(), sys.sub_state),
+        Time => lcd::time_to_segments(rtc.TR().read().bits(), sub_state),
+        Date => lcd::date_to_segments(rtc.DR().read().bits(), sub_state),
         Temp => lcd::temp_to_segments(sys.temp),
+        Pres => lcd::pres_to_segments(sys.pressure),
+        Humi => lcd::humi_to_segments(sys.humidity),
         Cal  => cal_segments(sys),
     };
-    if sys.sub_state == 0 || rtc.SSR.read().bits() & 0x40 != 0 {
+    if sub_state == 0 || rtc.SSR.read().bits() & 0x40 != 0 {
         segments
     }
     else {
@@ -221,6 +263,7 @@ fn touch_state(sys: &mut System, pad: u32) -> bool {
 fn touch_process(sys: &mut System) {
     let (pad, val) = tsc::retrieve();
     if TOUCH_EVALUATE {
+        dbgln!("touch = {val}");
         sys.scratch = val;
         return;
     }
@@ -230,20 +273,22 @@ fn touch_process(sys: &mut System) {
     }
 
     match pad {
-        pad::NONE => sys.sub_state = 0, // Cancel any blinky stuff.
+        pad::NONE => sys.set_sub_state(0), // Cancel any blinky stuff.
         pad::MENU => {                  // Rotate sub-state.
             let s = sys.state();
-            let ss = sys.sub_state;
-            let max
-                = match s {State::Temp => 0, State::Cal => cal::MAX, _ => 3};
-            sys.sub_state = if ss >= max {0} else {ss + 1};
+            let ss = sys.sub_state();
+            let max = match s {
+                State::Date | State::Time => 3,
+                State::Cal => cal::MAX,
+                _ => 0};
+            sys.set_sub_state(if ss >= max {0} else {ss + 1});
         },
         _ => touch_plus_minus(sys, pad),
     }
 
     // Update the cal clock output.
     let rcc = unsafe {&*stm32u031::RCC::ptr()};
-    if sys.state() == State::Cal && sys.sub_state != 0 {
+    if sys.state() == State::Cal && sys.sub_state() != 0 {
         rcc.BDCR.modify(
             |_, w| w.LSCOSEL().set_bit().LSCOEN().set_bit().LSESYSEN().set_bit());
     }
@@ -257,14 +302,19 @@ fn touch_process(sys: &mut System) {
 fn touch_plus_minus(sys: &mut System, pad: u32) {
     let s = sys.state();
 
-    if sys.sub_state == 0 {
+    if sys.sub_state() == 0 {
         // Rotate the main state.
-        sys.state = if pad == pad::PLUS {
-            if s >= State::MAX {State::MIN as u32} else {s as u32 + 1}
+        let mut s = s;
+        loop {
+            s = if pad == pad::PLUS {s.next()} else {s.prev()};
+            if s == State::Pres && !sys.have_pressure()
+                || s == State::Humi && !sys.have_humidity() {
+            }
+            else {
+                break;
+            }
         }
-        else {
-            if s <= State::MIN {State::MAX as u32} else {s as u32 - 1}
-        };
+        sys.set_state(s);
         return;
     }
 
@@ -278,7 +328,7 @@ fn touch_plus_minus(sys: &mut System, pad: u32) {
 
     // Date or Time.  The sub-state numbering is big endian 1-based, the
     // forwards/backward numbering is little endian 0-based.
-    let item = if s == State::Time {3} else {6} - sys.sub_state;
+    let item = if s == State::Time {3} else {6} - sys.sub_state();
     if pad == pad::PLUS {
         rtc::forwards(item);
     }
@@ -289,7 +339,7 @@ fn touch_plus_minus(sys: &mut System, pad: u32) {
 
 fn cal_plus_minus(sys: &mut System, pad: u32) {
     let rcc = unsafe {&*stm32u031::RCC::ptr()};
-    match sys.sub_state {
+    match sys.sub_state() {
         cal::CAL => {
             let cal = rtc::get_cal();
             rtc::set_cal(
@@ -400,8 +450,9 @@ fn blink_mask_checks() {
 
     let mut sys = System::default();
     for (s, ss, m4, m6) in checks {
-        sys.state = s as u32;
-        sys.sub_state = ss;
-        assert_eq!(sys.blink_mask(), if LCD_WIDTH == 4 {m4} else {m6} as Segments);
+        sys.set_state(s);
+        sys.set_sub_state(ss);
+        assert_eq!(sys.blink_mask(),
+                   if LCD_WIDTH == 4 {m4} else {m6} as Segments);
     }
 }
