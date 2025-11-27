@@ -1,4 +1,4 @@
-cargo-features = ['different-binary-name']
+cargo-features = ['different-binary-name', 'panic-immediate-abort']
 
 [package]
 name = 'monitor'
@@ -54,5 +54,6 @@ lto = true
 codegen-units = 1
 opt-level = 's'
 debug = true
-panic = 'abort'
+#panic = 'abort'
+panic = 'immediate-abort'
 strip = false
