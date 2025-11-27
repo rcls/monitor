@@ -1,4 +1,4 @@
-use crate::vcell::VCell;
+use crate::vcell::{UCell, VCell};
 
 ///! Pads are +, -, menu.  Note that the index is one less than the enumeration.
 
@@ -12,14 +12,18 @@ pub const LO_THRESHOLD: u32 = 26;
 /// Touch threshold used for hi cap boards.
 pub const HI_THRESHOLD: u32 = 1536;
 
+// Big board gives 27..30 and 19..20, threhold 23 would be good.
+
+macro_rules!dbgln {($($tt:tt)*) => {if false {crate::dbgln!($($tt)*)}};}
+
 struct State {
-    values: [VCell<u32>; 3],
+    values: UCell<[u32; 3]>,
     complete: VCell<bool>,
 }
 
 #[unsafe(link_section = ".noinit")]
 static STATE: State = State {
-    values: [const {VCell::new(0)}; 3], complete: VCell::new(false)};
+    values: UCell::new([0; 3]), complete: VCell::new(false)};
 
 pub mod pad {
     pub const NONE : u32 = 0;
@@ -101,15 +105,16 @@ fn isr() {
     tsc.ICR.write(|w| w.bits(sr));
 
     let ccr = tsc.IOCCR.read();
+    let values = unsafe {STATE.values.as_mut()};
     if ccr.G7_IO3().bit() { // +
-        STATE.values[0].write(tsc.IOG7CR.read().bits());
+        values[0] = tsc.IOG7CR.read().bits();
     }
     if ccr.G5_IO4().bit() { // Menu
-        STATE.values[2].write(tsc.IOG5CR.read().bits());
+        values[2] = tsc.IOG5CR.read().bits();
     }
     if ccr.G7_IO1().bit() { // -
         // We got -, the pass is done.
-        STATE.values[1].write(tsc.IOG7CR.read().bits());
+        values[1] = tsc.IOG7CR.read().bits();
         STATE.complete.write(true);
     }
     else {
@@ -128,10 +133,10 @@ pub fn retrieve() -> (u32, u32) {
     }
     // Find the lowest line...
     let mut min_line = 0;
-    let mut min_val = STATE.values[0].read();
+    let values = STATE.values.as_ref();
+    let mut min_val = values[0];
     let mut max_val = min_val;
-    for (i, val) in STATE.values.iter().enumerate().skip(1) {
-        let val = val.read();
+    for (i, &val) in values.iter().enumerate().skip(1) {
         if val > max_val {
             max_val = val;
         }
@@ -140,6 +145,7 @@ pub fn retrieve() -> (u32, u32) {
             min_line = i as u32;
         }
     }
+    dbgln!("TSC min {min_val} max {max_val}");
 
     let threshold = if max_val > LO_HI_SEP {HI_THRESHOLD} else {LO_THRESHOLD};
     let line = if min_val < threshold {min_line + 1} else {0};
