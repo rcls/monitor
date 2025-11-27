@@ -36,16 +36,6 @@ name = 'clocky48'
 filename = 'clocky48.elf'
 path = 'src/clocky48.rs'
 
-[[bin]]
-name = 'blink-monitor'
-filename = 'blink-monitor.elf'
-path = 'src/blink-monitor.rs'
-
-[[bin]]
-name = 'blink-clocky'
-filename = 'blink-clocky.elf'
-path = 'src/blink-clocky.rs'
-
 [profile.dev]
 panic = 'abort'
 
