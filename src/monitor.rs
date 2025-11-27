@@ -3,6 +3,9 @@ use crate::*;
 use cpu::WFE;
 use vcell::UCell;
 
+/// TMP117 I2C address.
+pub const TMP117: u8 = 0x92;
+
 pub const I2C_LINES: i2c::I2CLines = i2c::I2CLines::A9_A10;
 
 pub const CONFIG: cpu::Config = {
@@ -55,7 +58,7 @@ impl Monitor {
         // This should happen on divide = 1.
         if adc::OUTSTANDING.read() == 0 {
             adc::OUTSTANDING.write(1);
-            vcell::barrier();
+            cpu::barrier();
             let _ = self.analog_update();
         }
 
@@ -71,7 +74,7 @@ impl Monitor {
     }
 
     fn analog_update(&mut self) -> i2c::Result {
-        let wait = i2c::read_reg(i2c::TMP117, 0, &mut self.temp);
+        let wait = i2c::read_reg(TMP117, 0, &mut self.temp);
 
         let isense_counts = adc::DMA_BUF[ISENSE_INDEX].read() as i32;
         let isense_raw = isense_counts - ISENSE_ZERO;

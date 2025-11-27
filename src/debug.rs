@@ -1,6 +1,6 @@
 
-use crate::cpu::WFE;
-use crate::vcell::{UCell, VCell, barrier};
+use crate::cpu::{WFE, barrier};
+use crate::vcell::{UCell, VCell};
 
 use core::fmt::Write;
 

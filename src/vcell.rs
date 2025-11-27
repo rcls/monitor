@@ -33,29 +33,6 @@ impl<T: Sync> UCell<T> {
     pub unsafe fn as_mut(&self) -> &mut T {unsafe{&mut *self.0.get()}}
 }
 
-#[inline(always)]
-pub fn barrier() {
-    core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
-}
-
-#[inline(always)]
-pub fn nothing() {
-    unsafe {core::arch::asm!("", options(nomem))}
-}
-
-pub mod interrupt {
-    // We don't use disabling interrupts to transfer ownership, so no need for
-    // the enable to be unsafe.
-    #[cfg(target_arch = "arm")]
-    pub fn enable() {unsafe{cortex_m::interrupt::enable()}}
-    #[cfg(target_arch = "arm")]
-    pub fn disable() {cortex_m::interrupt::disable()}
-    #[cfg(not(target_arch = "arm"))]
-    pub fn enable() { }
-    #[cfg(not(target_arch = "arm"))]
-    pub fn disable() { }
-}
-
 impl<T: Sync> core::ops::Deref for UCell<T> {
     type Target = T;
     fn deref(&self) -> &T {self.as_ref()}

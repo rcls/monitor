@@ -141,7 +141,7 @@ pub fn init1() {
 
     // Clear the BSS.
     if !cfg!(test) {
-        crate::vcell::barrier();
+        barrier();
         // The rustc memset is hideous.
         let mut p = (&raw mut __bss_start) as *mut u32;
         loop {
@@ -151,7 +151,7 @@ pub fn init1() {
                 break;
             }
         }
-        crate::vcell::barrier();
+        barrier();
     }
 
     // We use sev-on-pend to avoid trivial interrupt handlers.
@@ -331,6 +331,34 @@ pub fn reboot() -> ! {
     loop {
         unsafe {(*cortex_m::peripheral::SCB::PTR).aircr.write(0x05fa0004)};
     }
+}
+
+#[inline(always)]
+pub fn barrier() {
+    core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
+}
+
+#[inline(always)]
+#[allow(unused)]
+pub fn nothing() {
+    unsafe {core::arch::asm!("", options(nomem))}
+}
+
+pub mod interrupt {
+    // We don't use disabling interrupts to transfer ownership, so no need for
+    // the enable to be unsafe.
+    #[cfg(target_arch = "arm")]
+    #[allow(unused)]
+    pub fn enable_all() {unsafe{cortex_m::interrupt::enable()}}
+    #[cfg(target_arch = "arm")]
+    #[allow(unused)]
+    pub fn disable_all() {cortex_m::interrupt::disable()}
+    #[cfg(not(target_arch = "arm"))]
+    #[allow(unused)]
+    pub fn enable_all() { }
+    #[cfg(not(target_arch = "arm"))]
+    #[allow(unused)]
+    pub fn disable_all() { }
 }
 
 #[test]

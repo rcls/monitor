@@ -1,13 +1,16 @@
 
 use crate::i2c;
 
+/// TMP117 I²C address.
+pub const TMP117: u8 = 0x92;
+
 /// Initialize the TMP117.  Trigger a conversion if trigger.
 pub fn init() {
     crate::i2c::init();
 
     // Trigger an initial conversion, interrupt on data ready.
     const COMMAND: [u8; 3] = [1u8, 12, 4];
-    let _ = i2c::write(i2c::TMP117, &COMMAND).wait();
+    let _ = i2c::write(TMP117, &COMMAND).wait();
 }
 
 pub fn acquire() -> i2c::Wait<'static> {
@@ -19,7 +22,7 @@ pub fn acquire() -> i2c::Wait<'static> {
 
     i2c::init();
     const COMMAND: [u8; 3] = [1, 12, 0];
-    i2c::write(i2c::TMP117, &COMMAND)
+    i2c::write(TMP117, &COMMAND)
 }
 
 pub fn alert() -> i32 {
@@ -31,18 +34,19 @@ pub fn alert() -> i32 {
 
     // Read the temperature...
     let mut countsbe = 0i16;
-    let _ = i2c::read_reg(i2c::TMP117, 0, &mut countsbe).wait();
+    let _ = i2c::read_reg(TMP117, 0, &mut countsbe).wait();
     // The docs say we need a read of config to clear the alert.
-    let _ = i2c::read_reg(i2c::TMP117, 1, &mut 0i16).wait();
+    let _ = i2c::read_reg(TMP117, 1, &mut 0i16).wait();
     let counts = i16::from_be(countsbe) as i32;
     let temp = counts_to_temp(counts);
 
     // Write the alert high and low registers.
     let upper = next_temp(temp).max(counts + 3).min( 0x7fff);
     let lower = prev_temp(temp).min(counts - 3).max(-0x8000);
-    let _ = i2c::write(i2c::TMP117, &[2u8, (upper >> 8) as u8, upper as u8]);
-    let _ = i2c::write(i2c::TMP117, &[3u8, (lower >> 8) as u8, lower as u8]);
+    let _ = i2c::write(TMP117, &[2u8, (upper >> 8) as u8, upper as u8]);
+    let _ = i2c::write(TMP117, &[3u8, (lower >> 8) as u8, lower as u8]);
 
+    crate::dbgln!("T = {temp} from {counts}");
     // The alert pin should be released.  Reenable the pull-up.
     pwr.PUCRC.write(|w| w.PU13().set_bit());
 

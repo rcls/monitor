@@ -1,5 +1,5 @@
 
-use crate::dma::DMA;
+use crate::dma::DMA_Channel;
 use crate::vcell::VCell;
 
 // DMA MUX lines.
@@ -44,7 +44,7 @@ pub fn init1() {
 
     // Wait for LDO ready... ≈20µs.
     for _ in 0..200 {
-        crate::vcell::nothing();
+        crate::cpu::nothing();
     }
     // Start the calibration.
     adc.CR.write(|w| w.ADCAL().set_bit().ADVREGEN().set_bit());

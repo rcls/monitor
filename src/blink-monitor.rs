@@ -14,7 +14,7 @@ mod debug;
 mod utils;
 mod vcell;
 
-use vcell::nothing;
+use cpu::nothing;
 
 type I2C = stm32u031::i2c1::RegisterBlock;
 const CONFIG: cpu::Config = *cpu::Config::new(16000000).debug();

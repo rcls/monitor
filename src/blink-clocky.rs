@@ -20,6 +20,8 @@ mod vcell;
 use cpu::WFE;
 use vcell::{UCell, VCell};
 
+pub const TMP117: u8 = 0x92;
+
 const CONFIG: cpu::Config = *cpu::Config::new(2000000)
     .systick(systick_handler)
     .isr(stm32u031::Interrupt::TSC, tsc_isr)
@@ -69,7 +71,7 @@ fn systick_handler() {
 fn advance(lcd: &mut LCD, num: u32) {
     let mut segments = (lcd::DOT as u64) << 8;
     let mut temp: i16 = 0;
-    let _ = i2c::read_reg(i2c::TMP117, 0, &mut temp);
+    let _ = i2c::read_reg(TMP117, 0, &mut temp);
 
     let temp = i16::from_be(temp);
 
