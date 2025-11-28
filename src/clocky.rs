@@ -78,11 +78,10 @@ enum State {
 /// Cal substates.
 mod cal {
     /// Clock calibration.
-    pub const CAL     : u32 = 1;
-    pub const DRIVE   : u32 = 2;
-    pub const CRASH_HI: u32 = 3;
-    pub const CRASH_LO: u32 = 4;
-    pub const MAX     : u32 = 4;
+    pub const CAL  : u32 = 1;
+    pub const DRIVE: u32 = 2;
+    pub const CRASH: u32 = 3;
+    pub const MAX  : u32 = 3;
 }
 
 impl State {
@@ -195,6 +194,14 @@ fn cold_start(sys: &mut System) {
     rtc::ensure_options();
     rtc_setup_tick();
 
+    if let Ok(humidity) = ens212::init() {
+        sys.humidity = humidity;
+    }
+
+    if let Ok(pressure) = ens220::init() {
+        sys.pressure = pressure;
+    }
+
     tmp117::init();
 }
 
@@ -219,18 +226,23 @@ fn rtc_setup_tick() {
 
 fn cal_segments(sys: &System) -> Segments {
     let rcc = unsafe {&*stm32u031::RCC::ptr()};
-    use lcd::{DA, DC, Dd, DE, DH, DL};
+    use lcd::{DC, Dd, DE, DF, Di, DG, DL, Dn, Do};
     match sys.sub_state() {
         cal::CAL => lcd::cal_to_segments(lcd::DC, rtc::get_cal()),
         cal::DRIVE => lcd::cal_to_segments(
             Dd, rcc.BDCR.read().LSEDRV().bits().into()),
-        cal::CRASH_LO => lcd::hex_to_segments(sys.crash, LCD_WIDTH - 2)
-            | (DE as Segments * 256 + DL as Segments) << BITS - 16,
-        cal::CRASH_HI => lcd::hex_to_segments(
-            sys.crash >> LCD_WIDTH * 4 - 8, LCD_WIDTH - 2)
-            | (DE as Segments * 256 + DH as Segments) << BITS - 16,
-        _ => (DC as Segments * 65536 + DA as Segments * 256 + DL as Segments)
-            << BITS - 24
+        cal::CRASH => if LCD_WIDTH == 6 {
+                lcd::hex_to_segments(sys.crash, 4)
+                    | lcd::seg4(0, 0, DE, DL) << BITS - 16
+            }
+            else {
+                lcd::hex_to_segments(sys.crash, 3)
+                    | (DL as Segments) << BITS - 8
+            }
+        _ => {
+            let conf = lcd::seg4(DC, Do, Dn, DF);
+            if BITS < 48 {conf} else {conf * 65536 + lcd::seg4(0, 0, Di, DG)}
+        }
     }
 }
 
@@ -390,15 +402,45 @@ fn acquire(sys: &mut System, tr: u32, ssr: u32) -> Completer {
 
     if state == State::Humi && ssr == 0
        || state != State::Humi && item == 0x100 && ssr == 2 {
-        return ens212::start();
+        return Completer(ens212::start(), ens212_start_done);
     }
 
     if state == State::Humi && ssr == 2
        || state != State::Humi && item == 0x100 && ssr == 3 {
-        return ens212::get();
+        return Completer(ens212::get(), ens212_get_done);
     }
 
+    if state == State::Pres && ssr == 0
+       || state != State::Pres && item == 0x100 && ssr == 2 {
+        return Completer(ens220::start(), ens220_start_done);
+    }
+
+    if ssr == 3 + TICKS_PER_SEC / 2 && (state == State::Pres || item == 0x300) {
+        return Completer(ens220::get(), ens220_get_done);
+    }
+
+
     Completer::default()
+}
+
+fn ens212_start_done(sys: &mut System, ok: i2c::Result) {
+    if ok.is_err() {
+        sys.humidity = !0;
+    }
+}
+
+fn ens212_get_done(sys: &mut System, ok: i2c::Result) {
+    sys.humidity = if ok.is_ok() {ens212::get_humidity()} else {10};
+}
+
+fn ens220_start_done(sys: &mut System, ok: i2c::Result) {
+    if ok.is_err() {
+        sys.pressure = !0;
+    }
+}
+
+fn ens220_get_done(sys: &mut System, ok: i2c::Result) {
+    sys.pressure = if ok.is_ok() {ens220::get_pressure()} else {10};
 }
 
 fn tick(sys: &mut System) {

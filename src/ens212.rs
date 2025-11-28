@@ -1,40 +1,35 @@
 
-use crate::{Completer, System, i2c};
-use i2c::Result;
+use crate::i2c;
 
 const ENS212: u8 = 0x8a;
 
 macro_rules!dbgln {($($tt:tt)*) => {if false {crate::dbgln!($($tt)*)}};}
 
-pub fn start() -> Completer {
-    dbgln!("ENS212 start");
-    i2c::init();
-    // TODO - let other processing happen in the shadow.
-    Completer(i2c::write(ENS212, &[0x22u8, 3]), start_done)
+pub fn init() -> core::result::Result<u32, ()> {
+    start().wait()?;
+    // Wait 32ms ≈ 1/30 seconds.
+    for _ in 0 .. crate::CONFIG.clk / 60 {
+        crate::cpu::nothing();
+    }
+    get().wait()?;
+    Ok(get_humidity())
 }
 
-fn start_done(sys: &mut System, ok: Result) {
-    dbgln!("ENS212 start done {ok:?}");
-    if ok.is_err() {
-        sys.humidity = !0;
-    }
+pub fn start() -> i2c::Wait<'static> {
+    dbgln!("ENS212 start");
+    i2c::init();
+    i2c::write(ENS212, &[0x22u8, 3])
 }
 
 static HUMIDITY: crate::vcell::UCell<u16> = Default::default();
 
-pub fn get() -> Completer {
+pub fn get() -> i2c::Wait<'static> {
     dbgln!("ENS212 get");
     i2c::init();
-    Completer(
-        i2c::read_reg(ENS212, 0x33, unsafe {HUMIDITY.as_mut()}),
-        get_done)
+    i2c::read_reg(ENS212, 0x33, unsafe {HUMIDITY.as_mut()})
 }
 
-fn get_done(sys: &mut System, ok: Result) {
-    dbgln!("ENS212 get done {ok:?} {}", HUMIDITY.as_ref());
-    if ok.is_ok() {
-        sys.humidity = ((*HUMIDITY.as_ref() as u32 * 10 + 256) / 512).min(999);
-    } else {
-        sys.humidity = !0
-    };
+pub fn get_humidity() -> u32 {
+    // 512 counts for each 1% humidity.
+    ((*HUMIDITY.as_ref() as u32 * 10 + 256) / 512).min(999)
 }

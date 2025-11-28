@@ -32,9 +32,11 @@ pub const DC: u8 = D0 & !SEG_B & !SEG_C;
 pub const Dd: u8 = D8 & !SEG_A & !SEG_F;
 pub const DE: u8 = D6 & !SEG_C;
 pub const DF: u8 = DE & !SEG_D;
-pub const DH: u8 = D4 |  SEG_E;
+pub const DG: u8 = DC | SEG_C;
+pub const Di: u8 = DC;
 pub const DL: u8 = DC & !SEG_A;
 pub const Do: u8 = Dd & !SEG_B;
+pub const Dn: u8 = Do & !SEG_D;
 
 pub const MINUS: u8 = SEG_G;
 /// Right or only colon.
@@ -238,12 +240,10 @@ pub fn humi_to_segments(humidity: u32) -> Segments {
 
 pub fn pres_to_segments(pres: u32) -> Segments {
     let mut segs = [0; _];
-    // For six digits: Tenths of Pa precision.
-    // For four digits: Ten Pa precision.
-    // For pressures above 100kPa, we drop the leading digit.
-    let pres = if WIDTH == 6 {(pres * 10 + 32) / 64} else {(pres + 320) / 640};
+    // Tenths of Pa precision.  The value is 64 counts per Pa.
+    let pres = (pres + 32) / 64;
     decimal_to_segments(&mut segs, pres as i32, WIDTH);
-    Segments::from_le_bytes(segs) | (DOT as Segments) << (BITS - 16)
+    Segments::from_le_bytes(segs)
 }
 
 /// Best effort if it doesn't fit - return trailing digits!
@@ -272,6 +272,11 @@ pub fn cal_to_segments(prefix: u8, cal: i32) -> Segments {
     let mut segs = [0; _];
     decimal_to_segments(&mut segs, cal, 0);
     Segments::from_le_bytes(segs) | (prefix as Segments) << BITS - 8
+}
+
+pub fn seg4(a: u8, b: u8, c: u8, d: u8) -> Segments {
+    (a as Segments * 65536 + b as Segments * 256 + c as Segments) * 256
+        + d as Segments
 }
 
 impl crate::cpu::Config {
