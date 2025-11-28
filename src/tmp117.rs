@@ -4,8 +4,11 @@ use crate::i2c;
 /// TMP117 I²C address.
 pub const TMP117: u8 = 0x92;
 
+macro_rules!dbgln {($($tt:tt)*) => {if false {crate::dbgln!($($tt)*)}};}
+
 /// Initialize the TMP117.  Trigger a conversion if trigger.
 pub fn init() {
+    dbgln!("TMP117 init");
     crate::i2c::init();
 
     // Trigger an initial conversion, interrupt on data ready.
@@ -14,6 +17,7 @@ pub fn init() {
 }
 
 pub fn acquire() -> i2c::Wait<'static> {
+    dbgln!("TMP117 acquire");
     let pwr = unsafe {&*stm32u031::PWR::ptr()};
 
     // Single shot conversion.  Arm and clear the wake-up flag.
@@ -26,6 +30,7 @@ pub fn acquire() -> i2c::Wait<'static> {
 }
 
 pub fn alert() -> i32 {
+    dbgln!("TMP117 alert");
     let pwr = unsafe {&*stm32u031::PWR::ptr()};
 
     // Disable the pullup on PC13 while we do the I2C.

@@ -225,14 +225,14 @@ pub fn humi_to_segments(humidity: u32) -> Segments {
     let mut segs = [0; _];
     let d = decimal_to_segments(&mut segs, humidity as i32, 3);
     let segs = Segments::from_le_bytes(segs) | DOT as Segments * 256;
-    if WIDTH == 6 && d <= 4 {
+    if d > 4 {
+        segs
+    }
+    else if WIDTH == 6 {
         segs * 65536 + DEG as Segments * 256 + Do as Segments
     }
-    else if d < 4 {
-        segs * 256
-    }
     else {
-        segs
+        segs * 256
     }
 }
 

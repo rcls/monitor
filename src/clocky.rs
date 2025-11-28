@@ -27,7 +27,7 @@ const REPEAT_AGAIN: u32 = TICKS_PER_SEC / 2;
 /// The overall system state, taking just 9 32-bit words.
 #[repr(C)]
 #[derive(Default)]
-struct System {
+pub struct System {
     /// Magic number.
     magic: u32,
     /// State enumeration in low 16 bits, sub-state in high 16 bits.
@@ -35,28 +35,43 @@ struct System {
     /// Temperature in tenths of °C in low 16 bits.
     temp: i32,
     /// Humidity or ~0 for no sensor.
-    humidity: u32,
-    /// Current touch state. 0:None, 1:+, 2:-, 3:≡
-    touch: u32,
-    /// Timer, counting ticks.  Down counter running while touch system
+    pub humidity: u32,
+    /// Current touch state in low byte. 0:None, 1:+, 2:-, 3:≡
+    /// Touch timer in upper 16 bits. Down counter running while touch system
     /// activated.
-    timer: u32,
+    touches: u32,
+    /// Unused.
+    unused: u32,
+    /// State specific scratch register.
     scratch: u32,
     /// Pressure in 1/64 Pa, or ~0 for no sensor.
     pressure: u32,
     /// Stored address before crash & reboot.
     crash: u32,
 }
+const _: () = assert!(size_of::<System>() == 36);
+
+pub struct Completer(pub i2c::Wait<'static>, pub fn(&mut System, i2c::Result));
+
+impl Default for Completer {
+    fn default() -> Completer {Completer(i2c::Wait::new(), dummy_handler)}
+}
+
+fn dummy_handler(_: &mut System, ok: i2c::Result) {
+    if let Err(_err) = ok {
+        // dbgln!("I2C failed {_err:?}");
+    }
+}
 
 #[allow(dead_code)]
-#[repr(u32)]
+#[repr(u8)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd)]
 enum State {
     Temp = 0,
-    Time = 1,
-    Date = 2,
-    Pres = 3,
-    Humi = 4,
+    Pres = 1,
+    Humi = 2,
+    Time = 3,
+    Date = 4,
     Cal  = 5,
 }
 
@@ -76,7 +91,7 @@ impl State {
 
     fn next(self) -> State {
         if self < State::MAX {
-            unsafe {core::mem::transmute(self as u32 + 1)}
+            unsafe {core::mem::transmute(self as u8 + 1)}
         }
         else {
             State::MIN
@@ -84,7 +99,7 @@ impl State {
     }
     fn prev(self) -> State {
         if self > State::MIN {
-            unsafe {core::mem::transmute(self as u32 - 1)}
+            unsafe {core::mem::transmute(self as u8 - 1)}
         }
         else {
             State::MAX
@@ -106,16 +121,16 @@ impl System {
     }
 
     fn init(&mut self) {
-        self.magic = MAGIC;
-        self.temp = self.temp.clamp(-1999, 1999);
-        self.touch = 0;
-        self.timer = 0;
+        self.magic    = MAGIC;
+        self.temp     = self.temp.clamp(-1999, 1999);
+        self.touches  = 0;
+        self.unused   = 0;
         self.pressure = !0;
         self.humidity = !0;
     }
     fn state(&self) -> State {
         // SAFETY: We sanitize this at each start-up.
-        unsafe {core::mem::transmute(self.states & 0xffff)}
+        unsafe {core::mem::transmute(self.states as u8)}
     }
     fn blink_mask(&self) -> Segments {
         let dd = lcd::D8 as Segments * 0x101;
@@ -145,18 +160,20 @@ impl System {
     fn set_state(&mut self, state: State) {
         self.states = self.states & 0xffff0000 | state as u32;
     }
-    fn sub_state(&self) -> u32 {
-        self.states >> 16
-    }
+
+    fn sub_state(&self) -> u32 {self.states >> 16}
     fn set_sub_state(&mut self, sub_state: u32) {
         self.states = self.states & 0xffff | sub_state << 16;
     }
-    fn have_pressure(&self) -> bool {
-        self.pressure < 0x80000000
+
+    fn touch(&self) -> u32 {self.touches & 0xffff}
+    fn touch_timer(&self) -> u32 {self.touches >> 16}
+    fn set_touch(&mut self, touch: u32, timer: u32) {
+        self.touches = timer * 65536 + touch;
     }
-    fn have_humidity(&self) -> bool {
-        self.humidity < 0x80000000
-    }
+
+    fn have_pressure(&self) -> bool {self.pressure < 0x80000000}
+    fn have_humidity(&self) -> bool {self.humidity < 0x80000000}
 }
 
 fn cold_start(sys: &mut System) {
@@ -172,7 +189,7 @@ fn cold_start(sys: &mut System) {
     pwr.CR4.write(|w| w.VBE().set_bit().VBRS().set_bit().WP2().set_bit());
 
     debug::banner("**** CLOCKY 0x", sys.crash, " ****\n");
-    debug::flush();
+
     sys.init();
 
     rtc::ensure_options();
@@ -243,27 +260,29 @@ fn get_segments(sys: &System) -> Segments {
 }
 
 fn touch_state(sys: &mut System, pad: u32) -> bool {
-    let previous = sys.touch;
-    sys.touch = pad;
+    let previous = sys.touch();
+    let timer;
+    let result;
     if pad != previous {
-        sys.timer = if pad != pad::NONE {REPEAT_FIRST} else {TOUCH_TIME_OUT};
-        pad != 0
+        timer = if pad != pad::NONE {REPEAT_FIRST} else {TOUCH_TIME_OUT};
+        result = pad != 0;
     }
     else {
-        let t = sys.timer;
-        sys.timer = if t > 1 {t - 1} else {match pad {
+        let t = sys.touch_timer();
+        timer = if t > 1 {t - 1} else {match pad {
             pad::NONE => 0,
             pad::MENU => REPEAT_FIRST,
             _ => REPEAT_AGAIN,
         }};
-        t == 1
+        result = t == 1;
     }
+    sys.set_touch(pad, timer);
+    return result;
 }
 
 fn touch_process(sys: &mut System) {
     let (pad, val) = tsc::retrieve();
     if TOUCH_EVALUATE {
-        dbgln!("touch = {val}");
         sys.scratch = val;
         return;
     }
@@ -292,10 +311,10 @@ fn touch_process(sys: &mut System) {
         rcc.BDCR.modify(
             |_, w| w.LSCOSEL().set_bit().LSCOEN().set_bit().LSESYSEN().set_bit());
     }
-    // FIXME - when exactly do we turn off?
     else if sys.state() != State::Cal {
-        rcc.BDCR.modify(
-            |_, w| w.LSCOEN().clear_bit().LSESYSEN().clear_bit());
+        // FIXME - what happens if we take a real system reset with the LSCO
+        // active?
+        rcc.BDCR.modify(|_, w| w.LSCOEN().clear_bit().LSESYSEN().clear_bit());
     }
 }
 
@@ -304,17 +323,17 @@ fn touch_plus_minus(sys: &mut System, pad: u32) {
 
     if sys.sub_state() == 0 {
         // Rotate the main state.
-        let mut s = s;
+        let mut state = s;
         loop {
-            s = if pad == pad::PLUS {s.next()} else {s.prev()};
-            if s == State::Pres && !sys.have_pressure()
-                || s == State::Humi && !sys.have_humidity() {
+            state = if pad == pad::PLUS {state.next()} else {state.prev()};
+            if state == State::Pres && !sys.have_pressure()
+                || state == State::Humi && !sys.have_humidity() {
             }
             else {
                 break;
             }
         }
-        sys.set_state(s);
+        sys.set_state(state);
         return;
     }
 
@@ -355,6 +374,33 @@ fn cal_plus_minus(sys: &mut System, pad: u32) {
     }
 }
 
+fn acquire(sys: &mut System, tr: u32, ssr: u32) -> Completer {
+    // At each second, acquire the current displayed item, if any.
+    // Otherwise, at half-a-second past the top of the minute, trigger a
+    // conversion of something, round-robin.
+    let state = sys.state();
+
+    let ssr = (!ssr & 0xff) >> ALARM_BITS;
+    let item = tr & 0x3ff;
+
+    if state == State::Temp && ssr == 0
+       || state != State::Temp && item == 0 && ssr == 2 {
+        return Completer(tmp117::acquire(), dummy_handler);
+    }
+
+    if state == State::Humi && ssr == 0
+       || state != State::Humi && item == 0x100 && ssr == 2 {
+        return ens212::start();
+    }
+
+    if state == State::Humi && ssr == 2
+       || state != State::Humi && item == 0x100 && ssr == 3 {
+        return ens212::get();
+    }
+
+    Completer::default()
+}
+
 fn tick(sys: &mut System) {
     let rtc = unsafe {&*stm32u031::RTC::ptr()};
 
@@ -363,22 +409,9 @@ fn tick(sys: &mut System) {
 
     let ssr = rtc.SSR.read().bits();
 
-    let tacquire;
-    if ssr >= 0xfc {
-        ens::ens212id();
-        ens::ens220id();
-        // If we're displaying the temperature, trigger a conversion every
-        // second.  If we're not displaying it, then grab it every minute.
-        tacquire = sys.state() == State::Temp
-            || rtc.TR.read().bits() & 0xff == 0;
-    }
-    else {
-        tacquire = false;
-    }
+    let Completer(wait, handler) = acquire(sys, rtc.TR.read().bits(), ssr);
 
-    let wait = if tacquire {tmp117::acquire()} else {i2c::Wait::new()};
-
-    let do_touch = sys.timer != 0 || ssr & 0x70 == 0x70;
+    let do_touch = sys.touch_timer() != 0 || ssr & 0x70 == 0x70;
     if do_touch {
         tsc::init();
         tsc::acquire();
@@ -388,11 +421,11 @@ fn tick(sys: &mut System) {
     let segments = get_segments(sys);
     lcd::update_lcd(segments, ssr & 1 << ALARM_BITS != 0);
 
-    let _ = wait.wait();
-
     if do_touch {
         touch_process(sys);
     }
+
+    handler(sys, wait.wait());
 }
 
 pub fn main() -> ! {

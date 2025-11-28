@@ -12,7 +12,7 @@ pub const LO_THRESHOLD: u32 = 26;
 /// Touch threshold used for hi cap boards.
 pub const HI_THRESHOLD: u32 = 1536;
 
-// Big board gives 27..30 and 19..20, threhold 23 would be good.
+// Big board gives 27..30 and 19..20, threhold 22 or 23 would be good.
 
 macro_rules!dbgln {($($tt:tt)*) => {if false {crate::dbgln!($($tt)*)}};}
 
@@ -126,7 +126,7 @@ fn isr() {
     }
 }
 
-// Return touched pad, 1=+, 2=-, 3=menu, 0=None.
+/// Return touched pad, 1=+, 2=-, 3=menu, 0=None.
 pub fn retrieve() -> (u32, u32) {
     while !STATE.complete.read() {
         crate::cpu::WFE();

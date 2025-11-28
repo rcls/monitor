@@ -152,8 +152,6 @@ fn i2c_isr() {
             |w| w.ARLOCF().set_bit().BERRCF().set_bit().NACKCF().set_bit());
         *context.outstanding.as_mut() = 0;
         *context.error.as_mut() = 1;
-	// FIXME - abort from wait().
-        rx_channel().CR.write(|w| w);
     }
     else {
         panic!("Unexpected I2C ISR {:#x} {:#x}", status.bits(),
@@ -266,7 +264,24 @@ impl I2cContext {
         while !self.done() {
             crate::cpu::WFE();
         }
+        if self.error.read() != 0 {
+            self.error_cleanup();
+        }
         barrier();
+    }
+    fn error_cleanup(&self) {
+        dbgln!("I2C error cleanup");
+        let i2c = unsafe {&*I2C::ptr()};
+        // Clean-up the DMA and reset the I2C.
+        i2c.CR1.write(|w| w.PE().clear_bit());
+        tx_channel().abort();
+        rx_channel().abort();
+        rx_channel().read_from(i2c.RXDR.as_ptr() as *const u8, RX_MUXIN);
+        tx_channel().writes_to(i2c.TXDR.as_ptr() as *mut   u8, TX_MUXIN);
+        i2c.CR1.write(
+            |w|w.TXDMAEN().set_bit().RXDMAEN().set_bit().PE().set_bit()
+                .NACKIE().set_bit().ERRIE().set_bit().TCIE().set_bit()
+                .STOPIE().set_bit());
     }
 }
 

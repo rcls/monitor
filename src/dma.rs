@@ -9,11 +9,11 @@ macro_rules!dbgln {($($tt:tt)*) => {if false {crate::dbgln!($($tt)*)}};}
 
 #[allow(non_camel_case_types)]
 pub trait DMA_Channel {
-    fn setup(&self, data: usize, len: usize, size: u8, write: bool);
-    // Write to peripheral.
+    /// Write to peripheral.  The channel should be initialised by writes_to().
     fn write(&self, data: usize, len: usize, size: u8) {
         self.setup(data, len, size, true)}
-    // Read from peripheral.
+
+    /// Read from peripheral.  The channel should be initialised by read_from().
     fn read(&self, data: usize, len: usize, size: u8) {
         self.setup(data, len, size, false)}
 
@@ -21,6 +21,11 @@ pub trait DMA_Channel {
     fn writes_to(&self, dst: *mut   u8, request: u8);
     /// Configure to read from a peripheral to memory.
     fn read_from(&self, src: *const u8, request: u8);
+
+    /// Stop and cancel an in-process transfer.
+    fn abort(&self);
+
+    fn setup(&self, data: usize, len: usize, size: u8, write: bool);
 }
 
 impl DMA_Channel for Channel {
@@ -38,6 +43,11 @@ impl DMA_Channel for Channel {
         let dmamux = unsafe {&*stm32u031::DMAMUX::ptr()};
         dmamux.CCR[index].write(|w| w.bits(request as u32));
     }
+
+    fn abort(&self) {
+        self.CR.write(|w| w);
+    }
+
     // size is 0 = 1byte, 1=2byte.
     fn setup(&self, data: usize, len: usize, size: u8, write: bool) {
         self.MAR .write(|w| w.bits(data as u32));
@@ -55,10 +65,10 @@ pub trait Flat {
     fn addr(&self) -> usize {(self as *const Self).addr()}
 }
 
-impl Flat for [u8] {}
-impl<const N: usize> Flat for [u8; N] {}
-impl<const N: usize> Flat for [u16; N] {}
+impl Flat for u8 {}
+impl<T: Flat> Flat for [T] {}
+impl<const N: usize, T: Flat> Flat for [T; N] {}
 impl Flat for i16 {}
+impl Flat for u16 {}
 impl Flat for u32 {}
 impl Flat for u64 {}
-//impl<T: Flat> Flat for VCell<T> {}

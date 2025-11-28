@@ -12,7 +12,7 @@ mod clocky;
 mod cpu;
 mod debug;
 mod dma;
-mod ens;
+mod ens212;
 mod i2c;
 mod lcd;
 mod rtc;
