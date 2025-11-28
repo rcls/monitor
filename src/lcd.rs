@@ -250,14 +250,13 @@ pub fn pres_to_segments(pres: u32) -> Segments {
 pub fn decimal_to_segments(segs: &mut SegArray, v: i32, min: usize) -> usize {
     let mut i = segs.iter_mut();
     let mut count = 0;
-    let mut quo = v.unsigned_abs() as u16;
+    let mut u = crate::utils::to_bcd(v.unsigned_abs()) as usize;
     loop {
-        let rem = quo % 10;
-        quo /= 10;
         let Some(p) = i.next() else {return count};
-        *p = DIGITS[rem as usize];
+        *p = DIGITS[u % 16];
+        u /= 16;
         count += 1;
-        if quo == 0 && count >= min {
+        if u == 0 && count >= min {
             break;
         }
     }
