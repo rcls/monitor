@@ -39,7 +39,12 @@ pub struct I2cContext {
 }
 
 #[must_use]
-pub struct Wait<'a>(PhantomData<&'a()>);
+/// Marker struct to indicate that we are waiting upon an I2C transaction.
+///
+/// The phantoms make sure we bind the lifetime, with the correct mutability.
+/// We would much rather just have a PhantomData of the correct reference type,
+/// but then Wait would be different depending on the data in flight!
+pub struct Wait<'a>(PhantomData<&'a [u8]>, PhantomData<&'a mut [u8]>);
 
 pub static CONTEXT: UCell<I2cContext> = UCell::default();
 
@@ -285,8 +290,14 @@ impl I2cContext {
     }
 }
 
-impl Wait<'_> {
-    pub fn new() -> Self {Wait(PhantomData)}
+impl<'a> Wait<'a> {
+    pub fn default() -> Self {
+        barrier();
+        Wait(PhantomData, PhantomData)
+    }
+    pub fn new<T: ?Sized>(_ : &'a T) -> Self {
+        Self::default()
+    }
     pub fn defer(self) {core::mem::forget(self);}
     pub fn wait(self) -> Result {
         CONTEXT.wait();
@@ -300,34 +311,30 @@ impl Drop for Wait<'_> {
     fn drop(&mut self) {let _ = CONTEXT.wait();}
 }
 
-pub fn waiter<'a, T: ?Sized>(_: &'a T) ->Wait<'a> {
-    Wait::new()
-}
-
-pub fn write<'a, T: Flat + ?Sized>(addr: u8, data: &'a T) -> Wait<'a> {
+pub fn write<T: Flat + ?Sized>(addr: u8, data: &T) -> Wait<'_> {
     CONTEXT.write_start(addr & !1, data.addr(), size_of_val(data), true);
-    waiter(data)
+    Wait::new(data)
 }
 
-pub fn write_reg<'a, T: Flat + ?Sized>(addr: u8, reg: u8, data: &'a T) -> Wait<'a> {
+pub fn write_reg<T: Flat + ?Sized>(addr: u8, reg: u8, data: &T) -> Wait<'_> {
     CONTEXT.write_reg_start(addr & !1, reg, data.addr(), size_of_val(data));
-    waiter(data)
+    Wait::new(data)
 }
 
-pub fn read<'a, T: Flat + ?Sized>(addr: u8, data: &'a mut T) -> Wait<'a> {
+pub fn read<T: Flat + ?Sized>(addr: u8, data: &mut T) -> Wait<'_> {
     CONTEXT.read_start(addr | 1, data.addr(), size_of_val(data));
-    Wait::new()
+    Wait::new(data)
 }
-pub fn read_reg<'a, T: Flat + ?Sized>(addr: u8, reg: u8, data: &'a mut T) -> Wait<'a> {
+pub fn read_reg<T: Flat + ?Sized>(addr: u8, reg: u8, data: &mut T) -> Wait<'_> {
     CONTEXT.read_reg_start(addr | 1, reg, data.addr(), size_of_val(data));
-    Wait::new()
+    Wait::new(data)
 }
 
 pub fn write_read<'a, T: Flat + ?Sized, U: Flat + ?Sized>(
     addr: u8, wdata: &'a T, rdata: &'a mut U) -> Wait<'a> {
     CONTEXT.write_read_start(addr, wdata.addr(), size_of_val(wdata),
                              rdata.addr(), size_of_val(rdata));
-    Wait::new()
+    Wait::new(rdata)
 }
 
 

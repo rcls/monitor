@@ -75,7 +75,6 @@ fn prev_temp(t: i32) -> i32 {
 // We don't cover the full range...
 #[inline(never)]
 fn div5floor(t: i32) -> i32 {
-    // (t - if t < 0 {4} else {0}) / 5
     const ADJUST: i32 = 1 << 24;
     let t = t + ADJUST * 5;
     debug_assert!(t > 0);

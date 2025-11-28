@@ -75,7 +75,7 @@ pub fn update_text(old: &mut Line, new: &[u8],
 
 pub fn draw_chars(text: &[u8], start: usize, y: u8) -> Result {
     let mut data = arrayvec::ArrayVec::<u8, 129>::new();
-    let mut dwait = crate::i2c::waiter(&data);
+    let mut dwait = crate::i2c::Wait::new(&data);
 
     for r in 0 ..= 1 {
         let y = y + r as u8;

@@ -27,7 +27,7 @@ const REPEAT_AGAIN: u32 = TICKS_PER_SEC / 2;
 /// The overall system state, taking just 9 32-bit words.
 #[repr(C)]
 #[derive(Default)]
-pub struct System {
+struct System {
     /// Magic number.
     magic: u32,
     /// State enumeration in low 16 bits, sub-state in high 16 bits.
@@ -35,7 +35,7 @@ pub struct System {
     /// Temperature in tenths of °C in low 16 bits.
     temp: i32,
     /// Humidity or ~0 for no sensor.
-    pub humidity: u32,
+    humidity: u32,
     /// Current touch state in low byte. 0:None, 1:+, 2:-, 3:≡
     /// Touch timer in upper 16 bits. Down counter running while touch system
     /// activated.
@@ -50,18 +50,6 @@ pub struct System {
     crash: u32,
 }
 const _: () = assert!(size_of::<System>() == 36);
-
-pub struct Completer(pub i2c::Wait<'static>, pub fn(&mut System, i2c::Result));
-
-impl Default for Completer {
-    fn default() -> Completer {Completer(i2c::Wait::new(), dummy_handler)}
-}
-
-fn dummy_handler(_: &mut System, ok: i2c::Result) {
-    if let Err(_err) = ok {
-        // dbgln!("I2C failed {_err:?}");
-    }
-}
 
 #[allow(dead_code)]
 #[repr(u8)]
@@ -386,10 +374,11 @@ fn cal_plus_minus(sys: &mut System, pad: u32) {
     }
 }
 
-fn acquire(sys: &mut System, tr: u32, ssr: u32) -> Completer {
+fn acquire(sys: &mut System, tr: u32, ssr: u32)
+        -> (i2c::Wait<'static>, fn(&mut System, i2c::Result)) {
     // At each second, acquire the current displayed item, if any.
-    // Otherwise, at half-a-second past the top of the minute, trigger a
-    // conversion of something, round-robin.
+    // Otherwise, just past the top of the minute, trigger a conversion of
+    // something, round-robin.
     let state = sys.state();
 
     let ssr = (!ssr & 0xff) >> ALARM_BITS;
@@ -397,30 +386,29 @@ fn acquire(sys: &mut System, tr: u32, ssr: u32) -> Completer {
 
     if state == State::Temp && ssr == 0
        || state != State::Temp && item == 0 && ssr == 2 {
-        return Completer(tmp117::acquire(), dummy_handler);
+        return (tmp117::acquire(), dummy_handler);
     }
 
     if state == State::Humi && ssr == 0
        || state != State::Humi && item == 0x100 && ssr == 2 {
-        return Completer(ens212::start(), ens212_start_done);
+        return (ens212::start(), ens212_start_done);
     }
 
     if state == State::Humi && ssr == 2
        || state != State::Humi && item == 0x100 && ssr == 3 {
-        return Completer(ens212::get(), ens212_get_done);
+        return (ens212::get(), ens212_get_done);
     }
 
     if state == State::Pres && ssr == 0
        || state != State::Pres && item == 0x100 && ssr == 2 {
-        return Completer(ens220::start(), ens220_start_done);
+        return (ens220::start(), ens220_start_done);
     }
 
     if ssr == 3 + TICKS_PER_SEC / 2 && (state == State::Pres || item == 0x300) {
-        return Completer(ens220::get(), ens220_get_done);
+        return (ens220::get(), ens220_get_done);
     }
 
-
-    Completer::default()
+    (i2c::Wait::default(), dummy_handler)
 }
 
 fn ens212_start_done(sys: &mut System, ok: i2c::Result) {
@@ -443,6 +431,12 @@ fn ens220_get_done(sys: &mut System, ok: i2c::Result) {
     sys.pressure = if ok.is_ok() {ens220::get_pressure()} else {10};
 }
 
+fn dummy_handler(_: &mut System, ok: i2c::Result) {
+    if let Err(_err) = ok {
+        // dbgln!("I2C failed {_err:?}");
+    }
+}
+
 fn tick(sys: &mut System) {
     let rtc = unsafe {&*stm32u031::RTC::ptr()};
 
@@ -451,7 +445,7 @@ fn tick(sys: &mut System) {
 
     let ssr = rtc.SSR.read().bits();
 
-    let Completer(wait, handler) = acquire(sys, rtc.TR.read().bits(), ssr);
+    let (wait, handler) = acquire(sys, rtc.TR.read().bits(), ssr);
 
     let do_touch = sys.touch_timer() != 0 || ssr & 0x70 == 0x70;
     if do_touch {

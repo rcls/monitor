@@ -240,7 +240,7 @@ pub fn humi_to_segments(humidity: u32) -> Segments {
 
 pub fn pres_to_segments(pres: u32) -> Segments {
     let mut segs = [0; _];
-    // Tenths of Pa precision.  The value is 64 counts per Pa.
+    // The pressure value is 64 counts per Pa.
     let pres = (pres + 32) / 64;
     decimal_to_segments(&mut segs, pres as i32, WIDTH);
     Segments::from_le_bytes(segs)
