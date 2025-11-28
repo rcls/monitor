@@ -51,7 +51,7 @@ pub fn alert() -> i32 {
     let _ = i2c::write(TMP117, &[2u8, (upper >> 8) as u8, upper as u8]);
     let _ = i2c::write(TMP117, &[3u8, (lower >> 8) as u8, lower as u8]);
 
-    crate::dbgln!("T = {temp} from {counts}");
+    dbgln!("T = {temp} from {counts}");
     // The alert pin should be released.  Reenable the pull-up.
     pwr.PUCRC.write(|w| w.PU13().set_bit());
 

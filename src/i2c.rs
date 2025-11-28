@@ -290,7 +290,9 @@ impl Wait<'_> {
     pub fn defer(self) {core::mem::forget(self);}
     pub fn wait(self) -> Result {
         CONTEXT.wait();
-        if CONTEXT.error.read() == 0 {Ok(())} else {Err(())}
+        let result = CONTEXT.error.read();
+        core::mem::forget(self);
+        if result == 0 {Ok(())} else {Err(())}
     }
 }
 
