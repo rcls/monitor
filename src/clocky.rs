@@ -67,7 +67,9 @@ enum State {
 mod cal {
     /// Clock calibration.
     pub const CAL  : u32 = 1;
+    /// Crystal drive stength.
     pub const DRIVE: u32 = 2;
+    /// Crash address.
     pub const CRASH: u32 = 3;
     pub const MAX  : u32 = 3;
 }
@@ -120,22 +122,26 @@ impl System {
         unsafe {core::mem::transmute(self.states as u8)}
     }
     fn blink_mask(&self) -> Segments {
-        let dd = lcd::D8 as Segments * 0x101;
         let state = self.state();
         let sub_state = self.sub_state();
-        use State::*;
-        if state == Cal {
-            if sub_state <= 2 {
-                return (1 << BITS - 8) - 1;
-            }
-            else {
-                return 255 << BITS - 16;
+
+        if state == State::Cal {
+            return match sub_state {
+                0 | cal::CAL | cal::DRIVE => (1 << BITS - 8) - 1,
+                _ => 255 << BITS - 16
             }
         }
+
+        if state == State::Pres && LCD_WIDTH < 6 {
+            let dot = lcd::DOT as Segments;
+            return if sub_state == 0 {0} else {dot * 0x01010100};
+        }
+
         // The numbering is big endian, time display is big endian, date
         // display is little endian.  For a 4 digit display, the exception
         // is always on the right.
-        let pos = if state == Date {4 - sub_state} else {sub_state};
+        let pos = if state == State::Date {4 - sub_state} else {sub_state};
+        let dd = lcd::D8 as Segments * 0x101;
         match pos {        // Date or time.
             1 => dd << BITS - 16,
             2 => dd << BITS - 32,
@@ -159,6 +165,20 @@ impl System {
         self.touches = timer * 65536 + touch;
     }
 
+    fn pressure(&self) -> u32 {self.pressure & 0x00ffffff}
+    fn set_pressure(&mut self, pressure: u32) {
+        self.pressure = self.pressure & 0x7f000000 | pressure;
+    }
+    fn set_no_pressure(&mut self) {
+        self.pressure |= 0x80000000;
+    }
+    fn pressure_point(&self) -> u32 {
+        ((self.pressure >> 24) & 127).min(6 - LCD_WIDTH)
+    }
+    fn set_pressure_point(&mut self, point: u32) {
+        self.pressure = self.pressure & 0x80ffffff | point << 24
+    }
+
     fn have_pressure(&self) -> bool {self.pressure < 0x80000000}
     fn have_humidity(&self) -> bool {self.humidity < 0x80000000}
 }
@@ -175,9 +195,18 @@ fn cold_start(sys: &mut System) {
     // Turn on the VBATT charging.  Set the wakeup 2 polarity at the same time.
     pwr.CR4.write(|w| w.VBE().set_bit().VBRS().set_bit().WP2().set_bit());
 
+    i2c::init();
+
     debug::banner("**** CLOCKY 0x", sys.crash, " ****\n");
 
     sys.init();
+
+    // Wait a few ms.
+    for _ in 0 .. CONFIG.clk / 500 {
+        cpu::nothing();
+    }
+
+    tmp117::init();
 
     rtc::ensure_options();
     rtc_setup_tick();
@@ -187,10 +216,8 @@ fn cold_start(sys: &mut System) {
     }
 
     if let Ok(pressure) = ens220::init() {
-        sys.pressure = pressure;
+        sys.set_pressure(pressure);
     }
-
-    tmp117::init();
 }
 
 fn rtc_setup_tick() {
@@ -247,7 +274,7 @@ fn get_segments(sys: &System) -> Segments {
         Time => lcd::time_to_segments(rtc.TR().read().bits(), sub_state),
         Date => lcd::date_to_segments(rtc.DR().read().bits(), sub_state),
         Temp => lcd::temp_to_segments(sys.temp),
-        Pres => lcd::pres_to_segments(sys.pressure),
+        Pres => lcd::pres_to_segments(sys.pressure(), sys.pressure_point()),
         Humi => lcd::humi_to_segments(sys.humidity),
         Cal  => cal_segments(sys),
     };
@@ -299,10 +326,11 @@ fn touch_process(sys: &mut System) {
             let max = match s {
                 State::Date | State::Time => 3,
                 State::Cal => cal::MAX,
+                State::Pres => if LCD_WIDTH == 6 {0} else {1},
                 _ => 0};
             sys.set_sub_state(if ss >= max {0} else {ss + 1});
         },
-        _ => touch_plus_minus(sys, pad),
+        _ => touch_plus_minus(sys, pad == pad::PLUS),
     }
 
     // Update the cal clock output.
@@ -318,14 +346,14 @@ fn touch_process(sys: &mut System) {
     }
 }
 
-fn touch_plus_minus(sys: &mut System, pad: u32) {
-    let s = sys.state();
+fn touch_plus_minus(sys: &mut System, is_plus: bool) {
+    let state = sys.state();
 
     if sys.sub_state() == 0 {
         // Rotate the main state.
-        let mut state = s;
+        let mut state = state;
         loop {
-            state = if pad == pad::PLUS {state.next()} else {state.prev()};
+            state = if is_plus {state.next()} else {state.prev()};
             if state == State::Pres && !sys.have_pressure()
                 || state == State::Humi && !sys.have_humidity() {
             }
@@ -337,37 +365,38 @@ fn touch_plus_minus(sys: &mut System, pad: u32) {
         return;
     }
 
-    if s == State::Cal {
-        return cal_plus_minus(sys, pad);
-    }
-
-    if s == State::Temp {
-        return; // Nothing to do (should have ss==0 anyway).
-    }
-
-    // Date or Time.  The sub-state numbering is big endian 1-based, the
-    // forwards/backward numbering is little endian 0-based.
-    let item = if s == State::Time {3} else {6} - sys.sub_state();
-    if pad == pad::PLUS {
-        rtc::forwards(item);
-    }
-    if pad == pad::MINUS {
-        rtc::backwards(item);
+    match state {
+        State::Cal => cal_plus_minus(sys, is_plus),
+        State::Pres => if LCD_WIDTH < 6 {
+            let point = sys.pressure_point();
+            let point = if is_plus {
+                if point + LCD_WIDTH >= 6 {0} else {point + 1}
+            }
+            else {
+                if point == 0 {6 - LCD_WIDTH} else {point - 1}
+            };
+            sys.set_pressure_point(point);
+        }
+        // Date or Time.  The sub-state numbering is big endian 1-based, the
+        // forwards/backward numbering is little endian 0-based.
+        State::Time => rtc::adjust(3 - sys.sub_state(), is_plus),
+        State::Date => rtc::adjust(6 - sys.sub_state(), is_plus),
+        _ => (),
     }
 }
 
-fn cal_plus_minus(sys: &mut System, pad: u32) {
+fn cal_plus_minus(sys: &mut System, is_plus: bool) {
     let rcc = unsafe {&*stm32u031::RCC::ptr()};
     match sys.sub_state() {
         cal::CAL => {
             let cal = rtc::get_cal();
             rtc::set_cal(
-                if pad == pad::PLUS {cal.min(98) + 1} else {cal.max(-98) - 1});
+                if is_plus {cal.min(98) + 1} else {cal.max(-98) - 1});
         }
         cal::DRIVE => {
             let bdcr = rcc.BDCR.read();
             let d = bdcr.LSEDRV().bits();
-            let d = if pad == pad::PLUS {d.min(2) + 1} else {d.max(2) - 1};
+            let d = if is_plus {d.min(2) + 1} else {d.max(2) - 1};
             rcc.BDCR.write(|w| w.bits(bdcr.bits()).LSEDRV().bits(d));
         }
         _ => (),
@@ -384,27 +413,24 @@ fn acquire(sys: &mut System, tr: u32, ssr: u32)
     let ssr = (!ssr & 0xff) >> ALARM_BITS;
     let item = tr & 0x3ff;
 
-    if state == State::Temp && ssr == 0
-       || state != State::Temp && item == 0 && ssr == 2 {
+    if if state == State::Temp {ssr == 0} else {item == 0 && ssr == 2} {
         return (tmp117::acquire(), dummy_handler);
     }
 
-    if state == State::Humi && ssr == 0
-       || state != State::Humi && item == 0x100 && ssr == 2 {
+    if if state == State::Humi {ssr == 0} else {item == 0x100 && ssr == 2} {
         return (ens212::start(), ens212_start_done);
     }
 
-    if state == State::Humi && ssr == 2
-       || state != State::Humi && item == 0x100 && ssr == 3 {
+    // TODO - is one tick long enough?
+    if if state == State::Humi {ssr == 1} else {item == 0x100 && ssr == 3} {
         return (ens212::get(), ens212_get_done);
     }
 
-    if state == State::Pres && ssr == 0
-       || state != State::Pres && item == 0x100 && ssr == 2 {
+    if if state == State::Pres {ssr == 0} else {item == 0x100 && ssr == 2} {
         return (ens220::start(), ens220_start_done);
     }
 
-    if ssr == 3 + TICKS_PER_SEC / 2 && (state == State::Pres || item == 0x300) {
+    if ssr == 2 + TICKS_PER_SEC / 4 && (state == State::Pres || item == 0x300) {
         return (ens220::get(), ens220_get_done);
     }
 
@@ -423,12 +449,17 @@ fn ens212_get_done(sys: &mut System, ok: i2c::Result) {
 
 fn ens220_start_done(sys: &mut System, ok: i2c::Result) {
     if ok.is_err() {
-        sys.pressure = !0;
+        sys.set_no_pressure();
     }
 }
 
 fn ens220_get_done(sys: &mut System, ok: i2c::Result) {
-    sys.pressure = if ok.is_ok() {ens220::get_pressure()} else {10};
+    if ok.is_ok() {
+        sys.set_pressure(ens220::get_pressure());
+    }
+    else {
+        sys.set_no_pressure();
+    }
 }
 
 fn dummy_handler(_: &mut System, ok: i2c::Result) {
@@ -465,6 +496,7 @@ fn tick(sys: &mut System) {
 }
 
 pub fn main() -> ! {
+    let gpioa = unsafe {&*stm32u031::GPIOA::ptr()};
     let gpioc = unsafe {&*stm32u031::GPIOC::ptr()};
     let pwr   = unsafe {&*stm32u031::PWR  ::ptr()};
     let rcc   = unsafe {&*stm32u031::RCC  ::ptr()};
@@ -472,10 +504,19 @@ pub fn main() -> ! {
 
     // Enable IO clocks.
     rcc.IOPENR.write(
-        |w| w.GPIOAEN().set_bit().GPIOBEN().set_bit().GPIOBEN().set_bit());
+        |w| w.GPIOAEN().set_bit().GPIOBEN().set_bit().GPIOCEN().set_bit());
+
+    if rcc.BDCR.read().LSCOEN().bit() {
+        // Set PA1 as output high.
+        gpioa.BSRR.write(|w| w.BS1().set_bit());
+        gpioa.MODER.modify(|_, w| w.MODE1().B_0x1());
+    }
 
     cpu::init1();
     cpu::init2();
+
+    // Set the TMP117 alert pin as input.
+    gpioc.MODER.modify(|_, w| w.MODE13().B_0x0());
 
     let rcc_csr = rcc.CSR.read().bits();
 

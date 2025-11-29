@@ -40,7 +40,7 @@ pub fn to_bcd(mut v: u32) -> u32 {
     }
     let pos = 0x11111111;
     let mut bcd = 0u32;
-    for _ in 0..remain {
+    for _ in 0 .. remain {
         let overflow = bcd + 3 * pos & pos * 8;
         bcd = bcd.wrapping_add(bcd + (overflow >> 1) + (overflow >> 2));
         bcd += v >> 31;
@@ -74,9 +74,9 @@ fn test_spread() {
 
 #[test]
 fn test_to_bcd() {
-    for i in 0..65536 {
+    for i in 0 .. 100000 {
         assert_eq!(format!("{i}"), format!("{:x}", to_bcd(i)));
-        let j = i * 0x10001;
+        let j = i * 0xa001;
         assert_eq!(format!("{}", j % 100000000), format!("{:x}", to_bcd(j)));
     }
 }

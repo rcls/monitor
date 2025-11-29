@@ -22,6 +22,6 @@ mod tsc;
 mod utils;
 mod vcell;
 
-const LCD_WIDTH: usize = 6;
+const LCD_WIDTH: u32 = 6;
 
 use clocky::*;

@@ -6,24 +6,25 @@ use crate::vcell::UCell;
 static PRESSURE: UCell<[u8; 3]> = UCell::new([0; _]);
 
 pub fn init() -> core::result::Result<u32, ()> {
-    i2c::init();
     // Set high power mode.
     i2c::write(ENS220, &[6u8, 0x83]).wait()?;
     // Wait 0.5ms...
     for _ in 0..crate::CONFIG.clk / 4000 {
         crate::cpu::nothing();
     }
-    // Set oversampling right down...
-    i2c::write(ENS220, &[9u8, 0]).wait()?;
+
+    // Get a quick sample: One-shot, P_CONV=1ms, PT_RATE=1, OVSP=OVST=1
+    i2c::write(ENS220, &[7u8, 0x00, 0x01, 0x00]).wait()?;
     // Start a conversion.
     i2c::write(ENS220, &[6u8, 0x93]).wait()?;
-    // Wait 1ms for the conversion to complete.
-    for _ in 0..crate::CONFIG.clk / 2000 {
+
+    // Wait 5ms for the conversion to complete.
+    for _ in 0..crate::CONFIG.clk / 400 {
         crate::cpu::nothing();
     }
 
-    // Set oversampling to max.
-    i2c::write(ENS220, &[9u8, 0x3f]).wait()?;
+    // Set one-shot, P_CONV=4ms, PT_RATE=1, OVSP=32, OVST=8.
+    i2c::write(ENS220, &[7u8, 0x10, 0x01, 0x2b]).wait()?;
 
     // Go back to low power mode.
     i2c::write(ENS220, &[6u8, 3]).wait()?;

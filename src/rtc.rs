@@ -222,29 +222,25 @@ fn backwards_date(item: u32, mut d: u32) -> u32 {
     }
 }
 
-pub fn forwards(item: u32) {
-    let rtc = unsafe {&*stm32u031::RTC::ptr()};
+pub fn adjust(item: u32, forwards: bool) {
     init_start();
+    let rtc = unsafe {&*stm32u031::RTC::ptr()};
     if item < 3 {
-        let t = forwards_time(item, rtc.TR.read().bits());
+        let t = if forwards {
+            forwards_time(item, rtc.TR.read().bits())
+        }
+        else {
+            backwards_time(item, rtc.TR.read().bits())
+        };
         rtc.TR.write(|w| w.bits(t));
     }
-    if item >= 3 {
-        let d = forwards_date(item, rtc.DR.read().bits());
-        rtc.DR.write(|w| w.bits(d));
-    }
-    init_end();
-}
-
-pub fn backwards(item: u32) {
-    let rtc = unsafe {&*stm32u031::RTC::ptr()};
-    init_start();
-    if item < 3 {
-        let t = backwards_time(item, rtc.TR.read().bits());
-        rtc.TR.write(|w| w.bits(t));
-    }
-    if item >= 3 {
-        let d = backwards_date(item, rtc.DR.read().bits());
+    else {
+        let d = if forwards {
+            forwards_date(item, rtc.DR.read().bits())
+        }
+        else {
+            backwards_date(item, rtc.DR.read().bits())
+        };
         rtc.DR.write(|w| w.bits(d));
     }
     init_end();

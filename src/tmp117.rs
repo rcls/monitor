@@ -9,11 +9,9 @@ macro_rules!dbgln {($($tt:tt)*) => {if false {crate::dbgln!($($tt)*)}};}
 /// Initialize the TMP117.  Trigger a conversion if trigger.
 pub fn init() {
     dbgln!("TMP117 init");
-    crate::i2c::init();
 
     // Trigger an initial conversion, interrupt on data ready.
-    const COMMAND: [u8; 3] = [1u8, 12, 4];
-    let _ = i2c::write(TMP117, &COMMAND).wait();
+    let _ = i2c::write(TMP117, &[1u8, 12, 4]).wait();
 }
 
 pub fn acquire() -> i2c::Wait<'static> {
@@ -25,8 +23,7 @@ pub fn acquire() -> i2c::Wait<'static> {
     pwr.SCR.write(|w| w.CWUF2().set_bit());
 
     i2c::init();
-    const COMMAND: [u8; 3] = [1, 12, 0];
-    i2c::write(TMP117, &COMMAND)
+    i2c::write(TMP117, &[1u8, 12, 0])
 }
 
 pub fn alert() -> i32 {

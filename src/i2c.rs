@@ -1,6 +1,6 @@
 use core::marker::PhantomData;
 
-use crate::cpu::{barrier, interrupt};
+use crate::cpu::barrier;
 use crate::dma::{Channel, DMA_Channel, Flat};
 use crate::vcell::{UCell, VCell};
 
@@ -207,44 +207,32 @@ impl I2cContext {
     fn read_start(&self, addr: u8, data: usize, len: usize) {
         let i2c = unsafe {&*I2C::ptr()};
 
-        interrupt::disable_all();
         rx_channel().read(data, len, 0);
         self.arm(F_I2C | F_DMA_RX);
         i2c.CR2.write(
             |w|w.START().set_bit().AUTOEND().bit(true).SADD().bits(addr as u16)
                 .RD_WRN().set_bit().NBYTES().bits(len as u8));
-        // Do the DMA set-up in the shadow of the address handling.  In case
-        // we manage to get an I2C error before the DMA set-up is done, we have
-        // interrupts disabled.
-        interrupt::enable_all();
     }
     #[inline(never)]
     fn write_reg_start(&self, addr: u8, reg: u8, data: usize, len: usize) {
         let i2c = unsafe {&*I2C::ptr()};
 
-        interrupt::disable_all();
+        self.arm(F_I2C | F_DMA_TX);
         i2c.CR2.write(
             |w| w.START().set_bit().AUTOEND().set_bit()
                 . SADD().bits(addr as u16).NBYTES().bits(len as u8 + 1));
         i2c.TXDR.write(|w| w.TXDATA().bits(reg));
         tx_channel().write(data, len, 0);
-        self.arm(F_I2C | F_DMA_TX);
-        interrupt::enable_all();
     }
     #[inline(never)]
     fn write_start(&self, addr: u8, data: usize, len: usize, last: bool) {
         let i2c = unsafe {&*I2C::ptr()};
 
-        interrupt::disable_all();
+        self.arm(F_I2C | F_DMA_TX);
         i2c.CR2.write(
             |w| w.START().set_bit().AUTOEND().bit(last)
                 . SADD().bits(addr as u16).NBYTES().bits(len as u8));
-        // Do the DMA set-up in the shadow of the address handling.  In case
-        // we manage to get an I2C error before the DMA set-up is done, we have
-        // interrupts disabled.
         tx_channel().write(data, len, 0);
-        self.arm(F_I2C | F_DMA_TX);
-        interrupt::enable_all();
     }
 
     #[inline(never)]
@@ -262,6 +250,7 @@ impl I2cContext {
     fn arm(&self, flags: u8) {
         self.error.write(0);
         self.outstanding.write(flags);
+        barrier();
     }
 
     fn done(&self) -> bool {self.outstanding.read() == 0}
@@ -269,10 +258,10 @@ impl I2cContext {
         while !self.done() {
             crate::cpu::WFE();
         }
+        barrier();
         if self.error.read() != 0 {
             self.error_cleanup();
         }
-        barrier();
     }
     fn error_cleanup(&self) {
         dbgln!("I2C error cleanup");
@@ -295,9 +284,7 @@ impl<'a> Wait<'a> {
         barrier();
         Wait(PhantomData, PhantomData)
     }
-    pub fn new<T: ?Sized>(_ : &'a T) -> Self {
-        Self::default()
-    }
+    pub fn new<T: ?Sized>(_ : &'a T) -> Self {Self::default()}
     pub fn defer(self) {core::mem::forget(self);}
     pub fn wait(self) -> Result {
         CONTEXT.wait();
@@ -325,6 +312,7 @@ pub fn read<T: Flat + ?Sized>(addr: u8, data: &mut T) -> Wait<'_> {
     CONTEXT.read_start(addr | 1, data.addr(), size_of_val(data));
     Wait::new(data)
 }
+
 pub fn read_reg<T: Flat + ?Sized>(addr: u8, reg: u8, data: &mut T) -> Wait<'_> {
     CONTEXT.read_reg_start(addr | 1, reg, data.addr(), size_of_val(data));
     Wait::new(data)

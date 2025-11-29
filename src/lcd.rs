@@ -2,8 +2,8 @@
 
 use crate::cpu::WFE;
 
-pub const WIDTH: usize = crate::LCD_WIDTH;
-pub const BITS: usize = WIDTH * 8;
+pub const WIDTH: usize = crate::LCD_WIDTH as usize;
+pub const BITS: usize = WIDTH as usize * 8;
 
 pub const SEG_A: u8 = 32;
 pub const SEG_B: u8 = 16;
@@ -52,6 +52,8 @@ pub type SegArray = [u8; size_of::<Segments>()];
 
 pub static DIGITS: [u8; 16] = [
     D0, D1, D2, D3, D4, D5, D6, D7, D8, D9, DA, Db, DC, Dd, DE, DF];
+
+macro_rules!dbgln {($($tt:tt)*) => {if false {crate::dbgln!($($tt)*)}};}
 
 /// Initialize the I/O to the LCD.
 pub fn init() {
@@ -238,19 +240,28 @@ pub fn humi_to_segments(humidity: u32) -> Segments {
     }
 }
 
-pub fn pres_to_segments(pres: u32) -> Segments {
+pub fn pres_to_segments(pressure: u32, point: u32) -> Segments {
     let mut segs = [0; _];
     // The pressure value is 64 counts per Pa.
-    let pres = (pres + 32) / 64;
-    decimal_to_segments(&mut segs, pres as i32, WIDTH);
-    Segments::from_le_bytes(segs)
+    let round = match point {0 => 3200, 1 => 320, _ => 32};
+    let pres = (pressure + round) / 64;
+    let bcd = crate::utils::to_bcd(pres) >> 8 - 4 * point;
+    dbgln!("{pres} {:#x} -> {bcd:#x}", crate::utils::to_bcd(pres));
+    bcd_to_segments(&mut segs, bcd, WIDTH, false);
+    Segments::from_le_bytes(segs) | (DOT as Segments) << (8 * point + 8)
 }
 
 /// Best effort if it doesn't fit - return trailing digits!
 pub fn decimal_to_segments(segs: &mut SegArray, v: i32, min: usize) -> usize {
+    let u = crate::utils::to_bcd(v.unsigned_abs());
+    bcd_to_segments(segs, u, min, v < 0)
+}
+
+pub fn bcd_to_segments(segs: &mut SegArray, u: u32, min: usize, neg: bool)
+        -> usize {
     let mut i = segs.iter_mut();
     let mut count = 0;
-    let mut u = crate::utils::to_bcd(v.unsigned_abs()) as usize;
+    let mut u = u as usize;
     loop {
         let Some(p) = i.next() else {return count};
         *p = DIGITS[u % 16];
@@ -260,7 +271,7 @@ pub fn decimal_to_segments(segs: &mut SegArray, v: i32, min: usize) -> usize {
             break;
         }
     }
-    if v < 0 && let Some(p) = i.next() {
+    if neg && let Some(p) = i.next() {
         *p = MINUS;
         count += 1;
     }

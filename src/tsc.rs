@@ -28,6 +28,7 @@ static STATE: State = State {
 pub mod pad {
     pub const NONE : u32 = 0;
     pub const PLUS : u32 = 1;
+    #[allow(unused)]
     pub const MINUS: u32 = 2;
     pub const MENU : u32 = 3;
 }
