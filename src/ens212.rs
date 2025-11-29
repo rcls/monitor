@@ -6,11 +6,18 @@ const ENS212: u8 = 0x8a;
 macro_rules!dbgln {($($tt:tt)*) => {if false {crate::dbgln!($($tt)*)}};}
 
 pub fn init() -> core::result::Result<u32, ()> {
+    // Set low power.
+    i2c::write(ENS212, &[0x10u8, 1]).wait()?;
+    // Set single shot.
+    i2c::write(ENS212, &[0x21u8, 3]).wait()?;
+    // Do a conversion.
     start().wait()?;
     // Wait 32ms ≈ 1/30 seconds.
     for _ in 0 .. crate::CONFIG.clk / 60 {
         crate::cpu::nothing();
     }
+    // The docs are confusing.  Again set one-shot and "stop continuous."
+    i2c::write(ENS212, &[0x21u8, 3, 0, 3]).wait()?;
     get().wait()?;
     Ok(get_humidity())
 }

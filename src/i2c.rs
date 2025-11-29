@@ -38,12 +38,12 @@ pub struct I2cContext {
     pending_len: VCell<usize>,
 }
 
-#[must_use]
 /// Marker struct to indicate that we are waiting upon an I2C transaction.
 ///
 /// The phantoms make sure we bind the lifetime, with the correct mutability.
 /// We would much rather just have a PhantomData of the correct reference type,
 /// but then Wait would be different depending on the data in flight!
+#[must_use]
 pub struct Wait<'a>(PhantomData<&'a [u8]>, PhantomData<&'a mut [u8]>);
 
 pub static CONTEXT: UCell<I2cContext> = UCell::default();

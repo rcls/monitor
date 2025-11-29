@@ -1,4 +1,4 @@
-/// Apply adjustments to date/time values.
+//! Apply adjustments to date/time values.
 
 pub fn adjust_time(item: u32, t: u32, forwards: bool) -> u32 {
     if forwards {
@@ -59,7 +59,6 @@ fn backwards_time(item: u32, mut t: u32) -> u32 {
 }
 
 // d should be in the RTC BCD date format, and returns a BCD byte.
-#[inline(never)]
 fn days_in_month(d: u32) -> u32 {
     static DAYS_PER_MONTH: [u8; 32] = [ // BCD!
         0, 0x31, 0x28, 0x31,  0x30, 0x31, 0x30, 0x31, // Jan ..= Jul
@@ -203,7 +202,7 @@ fn test_all_dates() {
 }
 
 #[test]
-fn test_advance_time() {
+fn test_all_times() {
     fn seconds_to_bcd(s: u32) -> u32 {
         let su = s % 10;
         let st = s / 10 % 6;
@@ -221,9 +220,9 @@ fn test_advance_time() {
         assert_eq!(bcda, backwards_time(item, bcdb),
                    "{item} {bcda:06x} {bcdb:06x}");
     }
-    for s in 35998..86400 {
-        check_pair(0, s, s+1);
-        check_pair(1, s, s+60);
-        check_pair(2, s, s+3600);
+    for s in 0 .. 86400 {
+        check_pair(0, s, s + 1);
+        check_pair(1, s, s + 60);
+        check_pair(2, s, s + 3600);
     }
 }

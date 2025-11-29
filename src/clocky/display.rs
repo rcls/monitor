@@ -14,7 +14,7 @@ impl System {
         if state == State::Cal {
             return match sub_state {
                 0 | cal::CAL | cal::DRIVE => (1 << BITS - 8) - 1,
-                _ => 255 << BITS - 16
+                _ => (lcd::D8 as Segments) << BITS - 8
             }
         }
 
@@ -39,12 +39,17 @@ impl System {
 
 fn cal_segments(sys: &System) -> Segments {
     let rcc = unsafe {&*stm32u031::RCC::ptr()};
-    use crate::lcd::{DC, Dd, DF, Di, DG, Dn, Do, DP};
+    use crate::lcd::{DC, Dd, DF, Di, DG, Dn, Do, DP, DOT};
     match sys.sub_state() {
         cal::CAL => prefixed_to_segments(DC, crate::rtc::get_cal()),
         cal::DRIVE => prefixed_to_segments(
             Dd, rcc.BDCR.read().LSEDRV().bits().into()),
-        cal::CRASH => prefixed_to_segments(DP, sys.crash as i32),
+        cal::CRASH => {
+            let mut segs = [0; _];
+            hex_to_segments(&mut segs, sys.crash, 0, false);
+            segs[WIDTH - 1] = DP | DOT;
+            Segments::from_le_bytes(segs)
+        },
         _ => {
             let conf = seg4(DC, Do, Dn, DF);
             if BITS < 48 {conf} else {conf * 65536 + seg4(0, 0, Di, DG)}
@@ -157,9 +162,9 @@ pub fn pres_to_segments(pressure: u32, point: u32) -> Segments {
     Segments::from_le_bytes(segs) | (lcd::DOT as Segments) << (8 * point + 8)
 }
 
-pub fn prefixed_to_segments(prefix: u8, cal: i32) -> Segments {
+pub fn prefixed_to_segments(prefix: u8, value: i32) -> Segments {
     let mut segs = [0; _];
-    signed_to_segments(&mut segs, cal, 0);
+    signed_to_segments(&mut segs, value, 0);
     segs[WIDTH - 1] = prefix;
     Segments::from_le_bytes(segs)
 }
