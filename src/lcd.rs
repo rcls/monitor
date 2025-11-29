@@ -34,9 +34,9 @@ pub const DE: u8 = D6 & !SEG_C;
 pub const DF: u8 = DE & !SEG_D;
 pub const DG: u8 = DC | SEG_C;
 pub const Di: u8 = DC;
-pub const DL: u8 = DC & !SEG_A;
-pub const Do: u8 = Dd & !SEG_B;
 pub const Dn: u8 = Do & !SEG_D;
+pub const Do: u8 = Dd & !SEG_B;
+pub const DP: u8 = DEG | SEG_E;
 
 pub const MINUS: u8 = SEG_G;
 /// Right or only colon.
@@ -52,8 +52,6 @@ pub type SegArray = [u8; size_of::<Segments>()];
 
 pub static DIGITS: [u8; 16] = [
     D0, D1, D2, D3, D4, D5, D6, D7, D8, D9, DA, Db, DC, Dd, DE, DF];
-
-macro_rules!dbgln {($($tt:tt)*) => {if false {crate::dbgln!($($tt)*)}};}
 
 /// Initialize the I/O to the LCD.
 pub fn init() {
@@ -157,107 +155,13 @@ fn rx_word(spi: &stm32u031::spi1::RegisterBlock) {
     spi.DR.read();
 }
 
-fn hex_to_segments_in_place(mut v: u32, width: usize, result: &mut SegArray) {
-    for p in result.iter_mut().take(width) {
-        let d = v as usize & 15;
-        v >>= 4;
-        *p = DIGITS[d];
-    }
-}
-
-pub fn hex_to_segments(v: u32, width: usize) -> Segments {
-    let mut result = [0; _];
-    hex_to_segments_in_place(v, width, &mut result);
-    Segments::from_le_bytes(result)
-}
-
-pub fn date_time_to_segments(t: u32, dots: Segments, kz: bool) -> Segments {
-    let mut result = [0; _];
-    hex_to_segments_in_place(t, WIDTH, &mut result);
-    if WIDTH == 6 && result[WIDTH - 1] == DIGITS[0] {
-        result[WIDTH - 1] = 0;
-    }
-    if (kz || WIDTH == 4) && result[3] == DIGITS[0] {
-        result[3] = 0;
-    }
-    if kz && WIDTH == 4 && result[1] == DIGITS[0] {
-        result[1] = 0;
-    }
-    Segments::from_le_bytes(result) | dots
-}
-
-pub fn time_to_segments(t: u32, sub_state: u32) -> Segments {
-    let t = if WIDTH == 6 || sub_state == 3 {t} else {t >> 8};
-    let segs = date_time_to_segments(t, COL1 | COL2, false);
-    if WIDTH == 6 || sub_state != 3 {
-        segs
-    }
-    else {
-        segs & 0xffff
-    }
-}
-
-pub fn date_to_segments(d: u32, sub_state: u32) -> Segments {
-    let mult = if WIDTH == 4 {1} else {0x10001};
-    let dots = mult * 0x10000 + COL1 + COL2;
-    // Mask off day-of-week.
-    let d = (d & !0xe000).swap_bytes();
-    let d = if WIDTH == 4 && sub_state != 1 {d >> 16} else {d >> 8};
-    if WIDTH == 4 && sub_state == 1 {
-        date_time_to_segments(d, dots, false) & 0x1ffff
-    }
-    else {
-        date_time_to_segments(d, dots, true)
-    }
-}
-
-pub fn temp_to_segments(temp: i32) -> Segments {
-    let mut segs = [0; _];
-    let p = decimal_to_segments(&mut segs, temp, 2);
-    let mut segs = Segments::from_le_bytes(segs) | DOT as Segments * 256;
-    if p < WIDTH {
-        segs = segs * 256 + DEG as Segments;
-    }
-    if WIDTH == 6 && p <= 3 {
-        segs *= 256;
-    }
-    segs
-}
-
-pub fn humi_to_segments(humidity: u32) -> Segments {
-    // 99.9, on a 6 digit display add %(°o).
-    let mut segs = [0; _];
-    let d = decimal_to_segments(&mut segs, humidity as i32, 3);
-    let segs = Segments::from_le_bytes(segs) | DOT as Segments * 256;
-    if d > 4 {
-        segs
-    }
-    else if WIDTH == 6 {
-        segs * 65536 + DEG as Segments * 256 + Do as Segments
-    }
-    else {
-        segs * 256
-    }
-}
-
-pub fn pres_to_segments(pressure: u32, point: u32) -> Segments {
-    let mut segs = [0; _];
-    // The pressure value is 64 counts per Pa.
-    let round = match point {0 => 3200, 1 => 320, _ => 32};
-    let pres = (pressure + round) / 64;
-    let bcd = crate::utils::to_bcd(pres) >> 8 - 4 * point;
-    dbgln!("{pres} {:#x} -> {bcd:#x}", crate::utils::to_bcd(pres));
-    bcd_to_segments(&mut segs, bcd, WIDTH, false);
-    Segments::from_le_bytes(segs) | (DOT as Segments) << (8 * point + 8)
-}
-
 /// Best effort if it doesn't fit - return trailing digits!
-pub fn decimal_to_segments(segs: &mut SegArray, v: i32, min: usize) -> usize {
+pub fn signed_to_segments(segs: &mut SegArray, v: i32, min: usize) -> usize {
     let u = crate::utils::to_bcd(v.unsigned_abs());
-    bcd_to_segments(segs, u, min, v < 0)
+    hex_to_segments(segs, u, min, v < 0)
 }
 
-pub fn bcd_to_segments(segs: &mut SegArray, u: u32, min: usize, neg: bool)
+pub fn hex_to_segments(segs: &mut SegArray, u: u32, min: usize, neg: bool)
         -> usize {
     let mut i = segs.iter_mut();
     let mut count = 0;
@@ -267,6 +171,9 @@ pub fn bcd_to_segments(segs: &mut SegArray, u: u32, min: usize, neg: bool)
         *p = DIGITS[u % 16];
         u /= 16;
         count += 1;
+        if count >= WIDTH {
+            return count;
+        }
         if u == 0 && count >= min {
             break;
         }
@@ -276,17 +183,6 @@ pub fn bcd_to_segments(segs: &mut SegArray, u: u32, min: usize, neg: bool)
         count += 1;
     }
     count
-}
-
-pub fn cal_to_segments(prefix: u8, cal: i32) -> Segments {
-    let mut segs = [0; _];
-    decimal_to_segments(&mut segs, cal, 0);
-    Segments::from_le_bytes(segs) | (prefix as Segments) << BITS - 8
-}
-
-pub fn seg4(a: u8, b: u8, c: u8, d: u8) -> Segments {
-    (a as Segments * 65536 + b as Segments * 256 + c as Segments) * 256
-        + d as Segments
 }
 
 impl crate::cpu::Config {
@@ -301,7 +197,7 @@ impl crate::cpu::Config {
 }
 
 #[cfg(test)]
-fn segments_to_str(s: Segments) -> String {
+pub fn segments_to_str(s: Segments) -> String {
     let mut result = Vec::<char>::new();
     for b in &s.to_le_bytes()[0..WIDTH] {
         let b = b & !DOT;
@@ -331,73 +227,6 @@ fn segments_to_str(s: Segments) -> String {
 }
 
 #[test]
-fn temp_segment_checks() {
-    let checks = [
-        (   6, " 0.6°", "  0.6° "),
-        (  89, " 8.9°", "  8.9° "),
-        ( 123, "12.3°", " 12.3° "),
-        (4567, "456.7", " 456.7°"),
-        (  -6, "-0.6°", " -0.6° "),
-        ( -89, "-8.9°", " -8.9° "),
-        (-123, "-12.3", " -12.3°"),
-        (-4567, "456.7", "-456.7°")];
-    for (t, s, w) in checks {
-        assert_eq!(segments_to_str(temp_to_segments(t)),
-                   if WIDTH == 4 {s} else {w});
-    }
-}
-
-#[test]
-fn date_segment_checks() {
-    let checks = [
-        (0x691206, " 6⋮12", " 6⋮12⋮69"),
-        (0x690616, "16⋮ 6", "16⋮ 6⋮69"),
-        (0x010101, " 1⋮ 1", " 1⋮ 1⋮01"),
-        (0x01f101, " 1⋮11", " 1⋮11⋮01"),
-    ];
-    for (d, s, w) in checks {
-        assert_eq!(segments_to_str(date_to_segments(d, 0)),
-                   if WIDTH == 4 {s} else {w});
-    }
-}
-
-#[test]
-fn time_segment_checks() {
-    for h in 0..24u32 {
-        for m in 0..60 {
-            for s in 0.. 60 {
-                let xx = |x| x % 10 + x / 10 * 16;
-                let t = xx(h) * 65536 + xx(m) * 256 + xx(s);
-                let s = if WIDTH == 6 {format!("{h:2}:{m:02}:{s:02}")}
-                    else {format!("{h:2}:{m:02}")};
-                assert_eq!(segments_to_str(time_to_segments(t, 0)), s);
-            }
-        }
-    }
-}
-
-#[test]
-fn date_adjust_date_checks() {
-    if WIDTH == 6 {
-        for i in 0 ..= 3 {
-            assert_eq!(segments_to_str(date_to_segments(0x691204, i)),
-                       " 4⋮12⋮69");
-        }
-        return;
-    }
-    assert_eq!(segments_to_str(date_to_segments(0x691204, 2)),
-               " 4⋮12");
-    assert_eq!(segments_to_str(date_to_segments(0x691204, 3)),
-               " 4⋮12");
-    assert_eq!(segments_to_str(date_to_segments(0x691204, 1)),
-               "  ⋮69");
-    assert_eq!(segments_to_str(date_to_segments(0x691204, 1)),
-               "  ⋮69");
-    assert_eq!(segments_to_str(date_to_segments(0x071204, 1)),
-               "  ⋮07");
-}
-
-#[test]
 fn check_decimal() {
     fn expected(v: i32, min: usize) -> String {
         let min = min.max(1);
@@ -416,20 +245,12 @@ fn check_decimal() {
     for i in -65535..=65535 {
         for min in 0..=2 {
             let mut segs = SegArray::default();
-            let p = decimal_to_segments(&mut segs, i, min);
+            let p = signed_to_segments(&mut segs, i, min);
             assert!(p > 0);
             assert!(p == segs.len() || segs[p] == 0);
             assert!(segs[p - 1] != 0);
             let segs = Segments::from_le_bytes(segs);
             assert_eq!(segments_to_str(segs), expected(i, min));
         }
-    }
-}
-
-#[test]
-fn check_cal() {
-    for i in -99 ..= 999 {
-        assert_eq!(segments_to_str(cal_to_segments(DC, i)),
-                   format!("C{i:w$}", w = WIDTH - 1));
     }
 }

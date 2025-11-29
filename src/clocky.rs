@@ -1,7 +1,8 @@
 use crate::*;
 
-use lcd::{BITS, Segments};
-use tsc::pad;
+mod date_time;
+mod display;
+mod touch;
 
 pub const TOUCH_EVALUATE: bool = false;
 
@@ -19,10 +20,6 @@ pub const I2C_LINES: i2c::I2CLines = i2c::I2CLines::B6_B7;
 /// Power of two divider of the 256Hz RTC clock to use for the main tick.
 const TICKS_PER_SEC: u32 = 8;
 const ALARM_BITS: u8 = 8 - TICKS_PER_SEC.ilog2() as u8;
-
-const TOUCH_TIME_OUT: u32 = 10 * TICKS_PER_SEC;
-const REPEAT_FIRST: u32 = TICKS_PER_SEC;
-const REPEAT_AGAIN: u32 = TICKS_PER_SEC / 2;
 
 /// The overall system state, taking just 9 32-bit words.
 #[repr(C)]
@@ -121,34 +118,6 @@ impl System {
         // SAFETY: We sanitize this at each start-up.
         unsafe {core::mem::transmute(self.states as u8)}
     }
-    fn blink_mask(&self) -> Segments {
-        let state = self.state();
-        let sub_state = self.sub_state();
-
-        if state == State::Cal {
-            return match sub_state {
-                0 | cal::CAL | cal::DRIVE => (1 << BITS - 8) - 1,
-                _ => 255 << BITS - 16
-            }
-        }
-
-        if state == State::Pres && LCD_WIDTH < 6 {
-            let dot = lcd::DOT as Segments;
-            return if sub_state == 0 {0} else {dot * 0x01010100};
-        }
-
-        // The numbering is big endian, time display is big endian, date
-        // display is little endian.  For a 4 digit display, the exception
-        // is always on the right.
-        let pos = if state == State::Date {4 - sub_state} else {sub_state};
-        let dd = lcd::D8 as Segments * 0x101;
-        match pos {        // Date or time.
-            1 => dd << BITS - 16,
-            2 => dd << BITS - 32,
-            3 => dd,
-            _ => 0,
-        }
-    }
 
     fn set_state(&mut self, state: State) {
         self.states = self.states & 0xffff0000 | state as u32;
@@ -239,150 +208,18 @@ fn rtc_setup_tick() {
     rtc::relock();
 }
 
-fn cal_segments(sys: &System) -> Segments {
-    let rcc = unsafe {&*stm32u031::RCC::ptr()};
-    use lcd::{DC, Dd, DE, DF, Di, DG, DL, Dn, Do};
-    match sys.sub_state() {
-        cal::CAL => lcd::cal_to_segments(lcd::DC, rtc::get_cal()),
-        cal::DRIVE => lcd::cal_to_segments(
-            Dd, rcc.BDCR.read().LSEDRV().bits().into()),
-        cal::CRASH => if LCD_WIDTH == 6 {
-                lcd::hex_to_segments(sys.crash, 4)
-                    | lcd::seg4(0, 0, DE, DL) << BITS - 16
-            }
-            else {
-                lcd::hex_to_segments(sys.crash, 3)
-                    | (DL as Segments) << BITS - 8
-            }
-        _ => {
-            let conf = lcd::seg4(DC, Do, Dn, DF);
-            if BITS < 48 {conf} else {conf * 65536 + lcd::seg4(0, 0, Di, DG)}
-        }
-    }
-}
-
-fn get_segments(sys: &System) -> Segments {
-    if TOUCH_EVALUATE {
-        let mut segs = lcd::SegArray::default();
-        lcd::decimal_to_segments(&mut segs, sys.scratch as i32, 0);
-        return Segments::from_le_bytes(segs);
-    }
+fn rtc_adjust(item: u32, forwards: bool) {
+    rtc::init_start();
     let rtc = unsafe {&*stm32u031::RTC::ptr()};
-    let sub_state = sys.sub_state();
-    use State::*;
-    let segments = match sys.state() {
-        Time => lcd::time_to_segments(rtc.TR().read().bits(), sub_state),
-        Date => lcd::date_to_segments(rtc.DR().read().bits(), sub_state),
-        Temp => lcd::temp_to_segments(sys.temp),
-        Pres => lcd::pres_to_segments(sys.pressure(), sys.pressure_point()),
-        Humi => lcd::humi_to_segments(sys.humidity),
-        Cal  => cal_segments(sys),
-    };
-    if sub_state == 0 || rtc.SSR.read().bits() & 0x40 != 0 {
-        segments
+    if item < 3 {
+        let t = date_time::adjust_time(item, rtc.TR.read().bits(), forwards);
+        rtc.TR.write(|w| w.bits(t));
     }
     else {
-        segments & !sys.blink_mask()
+        let d = date_time::adjust_date(item, rtc.DR.read().bits(), forwards);
+        rtc.DR.write(|w| w.bits(d));
     }
-}
-
-fn touch_state(sys: &mut System, pad: u32) -> bool {
-    let previous = sys.touch();
-    let timer;
-    let result;
-    if pad != previous {
-        timer = if pad != pad::NONE {REPEAT_FIRST} else {TOUCH_TIME_OUT};
-        result = pad != 0;
-    }
-    else {
-        let t = sys.touch_timer();
-        timer = if t > 1 {t - 1} else {match pad {
-            pad::NONE => 0,
-            pad::MENU => REPEAT_FIRST,
-            _ => REPEAT_AGAIN,
-        }};
-        result = t == 1;
-    }
-    sys.set_touch(pad, timer);
-    return result;
-}
-
-fn touch_process(sys: &mut System) {
-    let (pad, val) = tsc::retrieve();
-    if TOUCH_EVALUATE {
-        sys.scratch = val;
-        return;
-    }
-
-    if !touch_state(sys, pad) {
-        return;
-    }
-
-    match pad {
-        pad::NONE => sys.set_sub_state(0), // Cancel any blinky stuff.
-        pad::MENU => {                  // Rotate sub-state.
-            let s = sys.state();
-            let ss = sys.sub_state();
-            let max = match s {
-                State::Date | State::Time => 3,
-                State::Cal => cal::MAX,
-                State::Pres => if LCD_WIDTH == 6 {0} else {1},
-                _ => 0};
-            sys.set_sub_state(if ss >= max {0} else {ss + 1});
-        },
-        _ => touch_plus_minus(sys, pad == pad::PLUS),
-    }
-
-    // Update the cal clock output.
-    let rcc = unsafe {&*stm32u031::RCC::ptr()};
-    if sys.state() == State::Cal && sys.sub_state() != 0 {
-        rcc.BDCR.modify(
-            |_, w| w.LSCOSEL().set_bit().LSCOEN().set_bit().LSESYSEN().set_bit());
-    }
-    else if sys.state() != State::Cal {
-        // FIXME - what happens if we take a real system reset with the LSCO
-        // active?
-        rcc.BDCR.modify(|_, w| w.LSCOEN().clear_bit().LSESYSEN().clear_bit());
-    }
-}
-
-fn touch_plus_minus(sys: &mut System, is_plus: bool) {
-    let state = sys.state();
-
-    if sys.sub_state() == 0 {
-        // Rotate the main state.
-        let mut state = state;
-        loop {
-            state = if is_plus {state.next()} else {state.prev()};
-            if state == State::Pres && !sys.have_pressure()
-                || state == State::Humi && !sys.have_humidity() {
-            }
-            else {
-                break;
-            }
-        }
-        sys.set_state(state);
-        return;
-    }
-
-    match state {
-        State::Cal => cal_plus_minus(sys, is_plus),
-        State::Pres => if LCD_WIDTH < 6 {
-            let point = sys.pressure_point();
-            let point = if is_plus {
-                if point + LCD_WIDTH >= 6 {0} else {point + 1}
-            }
-            else {
-                if point == 0 {6 - LCD_WIDTH} else {point - 1}
-            };
-            sys.set_pressure_point(point);
-        }
-        // Date or Time.  The sub-state numbering is big endian 1-based, the
-        // forwards/backward numbering is little endian 0-based.
-        State::Time => rtc::adjust(3 - sys.sub_state(), is_plus),
-        State::Date => rtc::adjust(6 - sys.sub_state(), is_plus),
-        _ => (),
-    }
+    rtc::init_end();
 }
 
 fn cal_plus_minus(sys: &mut System, is_plus: bool) {
@@ -485,11 +322,11 @@ fn tick(sys: &mut System) {
     }
 
     lcd::init();
-    let segments = get_segments(sys);
+    let segments = display::get_segments(sys);
     lcd::update_lcd(segments, ssr & 1 << ALARM_BITS != 0);
 
     if do_touch {
-        touch_process(sys);
+        touch::process(sys);
     }
 
     handler(sys, wait.wait());
@@ -544,25 +381,4 @@ pub fn main() -> ! {
     }
 
     rtc::standby(lcd_update);
-}
-
-#[test]
-fn blink_mask_checks() {
-    let checks = [
-        (State::Cal , 0, 0x00ffffff, 0x00ffffffffffu64),
-        (State::Time, 1, 0xfefe0000, 0xfefe00000000),
-        (State::Time, 2, 0x0000fefe, 0x0000fefe0000),
-        (State::Time, 3, 0x0000fefe, 0x00000000fefe),
-        (State::Date, 1, 0x0000fefe, 0x00000000fefe),
-        (State::Date, 2, 0x0000fefe, 0x0000fefe0000),
-        (State::Date, 3, 0xfefe0000, 0xfefe00000000)
-    ];
-
-    let mut sys = System::default();
-    for (s, ss, m4, m6) in checks {
-        sys.set_state(s);
-        sys.set_sub_state(ss);
-        assert_eq!(sys.blink_mask(),
-                   if LCD_WIDTH == 4 {m4} else {m6} as Segments);
-    }
 }
