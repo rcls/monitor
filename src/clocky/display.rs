@@ -79,9 +79,9 @@ fn conf_segments(sys: &System) -> Segments {
 
 fn touch_debug_segments(sys: &System) -> Segments {
     use lcd::{Dt, Do, Du, Dc, Dh, DOT};
-    if sys.scratch >= 0x80000000 {
+    if sys.touch_debug >= 0x80000000 {
         let mut segs = [0; _];
-        hex_to_segments(&mut segs, sys.scratch, 0, false);
+        hex_to_segments(&mut segs, sys.touch_debug, 0, false);
         return Segments::from_le_bytes(segs) | lcd::COL1 | lcd::COL2;
     }
 

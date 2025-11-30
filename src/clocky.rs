@@ -27,7 +27,7 @@ struct System {
     magic: u32,
     /// State enumeration in low 16 bits, sub-state in high 16 bits.
     states: u32,
-    /// Temperature in tenths of °C in low 16 bits.
+    /// Temperature in tenths of °C.
     temp: i32,
     /// Humidity or ~0 for no sensor.
     humidity: u32,
@@ -37,8 +37,8 @@ struct System {
     touches: u32,
     /// Unused.
     unused: u32,
-    /// State specific scratch register.
-    scratch: u32,
+    /// Stored touch information for debugging / calibration.
+    touch_debug: u32,
     /// Pressure in 1/64 Pa, or ~0 for no sensor.
     pressure: u32,
     /// Stored address before crash & reboot.
@@ -115,8 +115,9 @@ impl System {
         self.pressure = !0;
         self.humidity = !0;
     }
+
     fn state(&self) -> State {
-        // SAFETY: We sanitize this at each start-up.
+        // SAFETY: We sanitize this at each wake-up.
         unsafe {core::mem::transmute(self.states as u8)}
     }
 
@@ -138,10 +139,10 @@ impl System {
         self.pressure = self.pressure & 0x7f000000 | pressure;
     }
     fn set_no_pressure(&mut self) {
-        self.pressure |= 0x80000000;
+        self.pressure = 0x80000000;
     }
     fn pressure_point(&self) -> u32 {
-        ((self.pressure >> 24) & 127).min(6 - LCD_WIDTH)
+        (self.pressure >> 24 & 127).min(6 - LCD_WIDTH)
     }
     fn set_pressure_point(&mut self, point: u32) {
         self.pressure = self.pressure & 0x80ffffff | point << 24
@@ -235,7 +236,7 @@ fn cal_plus_minus(sys: &mut System, is_plus: bool) {
             let d = if is_plus {d.min(2) + 1} else {d.max(2) - 1};
             rcc.BDCR.write(|w| w.bits(bdcr.bits()).LSEDRV().bits(d));
         }
-        conf::TOUCH => sys.scratch |= 0x80000000,
+        conf::TOUCH => sys.touch_debug |= 0x80000000,
         _ => (),
     }
 }
@@ -255,7 +256,7 @@ fn set_state_hook(sys: &mut System, state: State, sub_state: u32) {
 
     if state == State::Conf && sub_state == conf::TOUCH {
         // When we enter CONF/TOUCH, make sure we start idle.
-        sys.scratch &= 0x7fffffff;
+        sys.touch_debug &= 0x7fffffff;
     }
 }
 
@@ -300,7 +301,7 @@ fn ens212_start_done(sys: &mut System, ok: i2c::Result) {
 }
 
 fn ens212_get_done(sys: &mut System, ok: i2c::Result) {
-    sys.humidity = if ok.is_ok() {ens212::get_humidity()} else {10};
+    sys.humidity = if ok.is_ok() {ens212::get_humidity()} else {!0};
 }
 
 fn ens220_start_done(sys: &mut System, ok: i2c::Result) {

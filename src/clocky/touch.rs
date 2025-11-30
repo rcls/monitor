@@ -9,7 +9,7 @@ const REPEAT_AGAIN: u32 = TICKS_PER_SEC / 2;
 
 pub fn process(sys: &mut System) {
     let (pad, debug) = tsc::retrieve();
-    sys.scratch = sys.scratch & 0x80000000 | debug;
+    sys.touch_debug = sys.touch_debug & 0x80000000 | debug;
 
     if !event(sys, pad) {
         return;
@@ -27,7 +27,7 @@ pub fn process(sys: &mut System) {
                 _ => 0};
             // A special override:  Ignore the MENU key in active touch debug.
             if state != State::Conf || ss != conf::TOUCH
-                || sys.scratch < 0x80000000 {
+                || sys.touch_debug < 0x80000000 {
                 sys.set_state(state, if ss >= max {0} else {ss + 1});
             }
         },

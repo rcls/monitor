@@ -12,6 +12,7 @@ pub const LO_THRESHOLD: u32 = 26;
 /// Touch threshold used for hi cap boards.
 pub const HI_THRESHOLD: u32 = 1536;
 
+// Little board gives 28..31 and 19..22
 // Big board gives 27..30 and 19..20, threhold 22 or 23 would be good.
 
 macro_rules!dbgln {($($tt:tt)*) => {if false {crate::dbgln!($($tt)*)}};}
@@ -63,20 +64,19 @@ pub fn init() {
         16000000 => 3,
         _ => crate::utils::unreachable(),
     };
-    //let prescaler = prescaler * 0 + 6;
+
     // TODO - timings are guesses...
     // Standard pulse range "500ns to 2µs".
     // Use 3 clock = 1.5µs on high and low pulse.
     // Spread-sprectrum on but as low as possible.
     // Max counts is set to 2048, values much below that count as a touch.
     tsc.CR.write(
-        |w| w.CTPH().bits(1).CTPL().bits(2)
-            . SSD().bits(0). SSE().set_bit().SSPSC().set_bit()
-            . PGPSC().bits(prescaler).MCV().B_0x3().TSCE().set_bit());
+        |w|w.CTPH().bits(1).CTPL().bits(2)
+            .SSD().bits(0). SSE().set_bit().SSPSC().set_bit()
+            .PGPSC().bits(prescaler).MCV().B_0x3().TSCE().set_bit());
     // Turning off hysteresis for the cap-sense lines seems to improve
     // sensitivity.
-    tsc.IOHCR.write(
-        |w| w.G7_IO2().clear_bit(). G5_IO2().clear_bit());
+    tsc.IOHCR.write(|w| w.G7_IO2().clear_bit(). G5_IO2().clear_bit());
     // Enable end-of-acquire interrupt.
     tsc.IER.write(|w| w.EOAIE().set_bit());
 }
