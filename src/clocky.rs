@@ -95,7 +95,6 @@ impl State {
 
 impl System {
     unsafe fn get() -> &'static mut Self {
-        const {assert!(size_of::<System>() == 9 * 4)};
         let tamp = unsafe {&*stm32u031::TAMP::ptr()};
         let p = tamp.BKPR[0].as_ptr() as *const crate::vcell::UCell<System>;
         let sys = unsafe {(&*p).as_mut()};
@@ -139,7 +138,7 @@ impl System {
         self.pressure = self.pressure & 0x7f000000 | pressure;
     }
     fn set_no_pressure(&mut self) {
-        self.pressure = 0x80000000;
+        self.pressure = !0;
     }
     fn pressure_point(&self) -> u32 {
         (self.pressure >> 24 & 127).min(6 - LCD_WIDTH)
@@ -200,8 +199,7 @@ fn rtc_setup_tick() {
 
     rtc.ALRMAR.write(|w| w.bits(!0));
     rtc.ALRMASSR.write(
-        |w| w.MASKSS().bits(ALARM_BITS)
-            . SS().bits((1 << ALARM_BITS) - 1));
+        |w| w.MASKSS().bits(ALARM_BITS).SS().bits((1 << ALARM_BITS) - 1));
 
     rtc.CR.write(
         |w| w.ALRAE().set_bit().ALRAIE().set_bit().BYPSHAD().set_bit());
@@ -255,7 +253,7 @@ fn set_state_hook(sys: &mut System, state: State, sub_state: u32) {
     }
 
     if state == State::Conf && sub_state == conf::TOUCH {
-        // When we enter CONF/TOUCH, make sure we start idle.
+        // When we enter CONF+TOUCH, make sure we start idle.
         sys.touch_debug &= 0x7fffffff;
     }
 }

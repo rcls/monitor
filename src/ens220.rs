@@ -38,7 +38,7 @@ pub fn init() -> core::result::Result<u32, ()> {
 /// Start a conversion.
 pub fn start() -> i2c::Wait<'static> {
     i2c::init();
-    i2c::write(ENS220, &[6u8, 0x93])
+    i2c::write(ENS220, &[6u8, 0x13])
 }
 
 /// Get a conversion result.
