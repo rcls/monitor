@@ -4,8 +4,6 @@ mod date_time;
 mod display;
 mod touch;
 
-pub const TOUCH_EVALUATE: bool = false;
-
 pub const CONFIG: cpu::Config = {
     let mut cfg = cpu::Config::new(2000000);
     cfg.pullup |= 1 << 0x2d;
@@ -57,23 +55,25 @@ enum State {
     Humi = 2,
     Time = 3,
     Date = 4,
-    Cal  = 5,
+    Conf = 5,
 }
 
-/// Cal substates.
-mod cal {
+/// Config substates.
+mod conf {
     /// Clock calibration.
     pub const CAL  : u32 = 1;
     /// Crystal drive stength.
     pub const DRIVE: u32 = 2;
     /// Crash address.
     pub const CRASH: u32 = 3;
-    pub const MAX  : u32 = 3;
+    /// Touch panel evaluation.
+    pub const TOUCH: u32 = 4;
+    pub const MAX  : u32 = 4;
 }
 
 impl State {
     const MIN: State = State::Temp;
-    const MAX: State = State::Cal;
+    const MAX: State = State::Conf;
 
     fn next(self) -> State {
         if self < State::MAX {
@@ -108,6 +108,7 @@ impl System {
 
     fn init(&mut self) {
         self.magic    = MAGIC;
+        self.states   &= 0xffff;
         self.temp     = self.temp.clamp(-1999, 1999);
         self.touches  = 0;
         self.unused   = 0;
@@ -119,14 +120,12 @@ impl System {
         unsafe {core::mem::transmute(self.states as u8)}
     }
 
-    fn set_state(&mut self, state: State) {
-        self.states = self.states & 0xffff0000 | state as u32;
+    fn set_state(&mut self, state: State, sub_state: u32) {
+        self.states = state as u32 | sub_state << 16;
+        set_state_hook(self, state, sub_state);
     }
 
     fn sub_state(&self) -> u32 {self.states >> 16}
-    fn set_sub_state(&mut self, sub_state: u32) {
-        self.states = self.states & 0xffff | sub_state << 16;
-    }
 
     fn touch(&self) -> u32 {self.touches & 0xffff}
     fn touch_timer(&self) -> u32 {self.touches >> 16}
@@ -225,18 +224,38 @@ fn rtc_adjust(item: u32, forwards: bool) {
 fn cal_plus_minus(sys: &mut System, is_plus: bool) {
     let rcc = unsafe {&*stm32u031::RCC::ptr()};
     match sys.sub_state() {
-        cal::CAL => {
+        conf::CAL => {
             let cal = rtc::get_cal();
             rtc::set_cal(
                 if is_plus {cal.min(98) + 1} else {cal.max(-98) - 1});
         }
-        cal::DRIVE => {
+        conf::DRIVE => {
             let bdcr = rcc.BDCR.read();
             let d = bdcr.LSEDRV().bits();
             let d = if is_plus {d.min(2) + 1} else {d.max(2) - 1};
             rcc.BDCR.write(|w| w.bits(bdcr.bits()).LSEDRV().bits(d));
         }
+        conf::TOUCH => sys.scratch |= 0x80000000,
         _ => (),
+    }
+}
+
+fn set_state_hook(sys: &mut System, state: State, sub_state: u32) {
+    // Update the cal clock output.
+    let rcc = unsafe {&*stm32u031::RCC::ptr()};
+    if state == State::Conf && sub_state != 0 {
+        rcc.BDCR.modify(
+            |_, w| w.LSCOSEL().set_bit().LSCOEN().set_bit().LSESYSEN().set_bit());
+    }
+    else if state != State::Conf {
+        // FIXME - what happens if we take a real system reset with the LSCO
+        // active?
+        rcc.BDCR.modify(|_, w| w.LSCOEN().clear_bit().LSESYSEN().clear_bit());
+    }
+
+    if state == State::Conf && sub_state == conf::TOUCH {
+        // When we enter CONF/TOUCH, make sure we start idle.
+        sys.scratch &= 0x7fffffff;
     }
 }
 

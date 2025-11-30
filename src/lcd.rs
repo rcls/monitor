@@ -29,14 +29,18 @@ pub const DEG: u8 = SEG_A | SEG_B | SEG_F | SEG_G;
 pub const DA: u8 = D8 & !SEG_D;
 pub const Db: u8 = D6 & !SEG_A;
 pub const DC: u8 = D0 & !SEG_B & !SEG_C;
+pub const Dc: u8 = Do & !SEG_C;
 pub const Dd: u8 = D8 & !SEG_A & !SEG_F;
 pub const DE: u8 = D6 & !SEG_C;
 pub const DF: u8 = DE & !SEG_D;
 pub const DG: u8 = DC | SEG_C;
-pub const Di: u8 = DC;
+pub const Dh: u8 = Dn | SEG_F;
+pub const Di: u8 = SEG_C;
 pub const Dn: u8 = Do & !SEG_D;
 pub const Do: u8 = Dd & !SEG_B;
 pub const DP: u8 = DEG | SEG_E;
+pub const Dt: u8 = Db & !SEG_C;
+pub const Du: u8 = Do & !SEG_G;
 
 pub const MINUS: u8 = SEG_G;
 /// Right or only colon.
@@ -242,8 +246,8 @@ fn check_decimal() {
         }
         s
     }
-    for i in -65535..=65535 {
-        for min in 0..=2 {
+    for i in -65535 ..= 65535 {
+        for min in 0 ..= 2 {
             let mut segs = SegArray::default();
             let p = signed_to_segments(&mut segs, i, min);
             assert!(p > 0);

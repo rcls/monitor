@@ -1,19 +1,20 @@
-use super::{LCD_WIDTH, TOUCH_EVALUATE, State, System, cal};
+use super::{LCD_WIDTH, State, System, conf};
 
 use crate::lcd;
-use lcd::{BITS, DEG, DIGITS, Segments, WIDTH, signed_to_segments,
-          hex_to_segments};
+use lcd::{BITS, DIGITS, Segments, WIDTH, signed_to_segments, hex_to_segments};
 
 macro_rules!dbgln {($($tt:tt)*) => {if false {crate::dbgln!($($tt)*)}};}
 
 impl System {
-    pub fn blink_mask(&self) -> Segments {
+    fn blink_mask(&self) -> Segments {
         let state = self.state();
         let sub_state = self.sub_state();
 
-        if state == State::Cal {
+        if state == State::Conf {
             return match sub_state {
-                0 | cal::CAL | cal::DRIVE => (1 << BITS - 8) - 1,
+                0 | conf::CAL | conf::DRIVE => (1 << BITS - 8) - 1,
+                conf::TOUCH => seg6(1, 1, 1, 1, 1, 0) * lcd::DOT as Segments
+                    | lcd::COL1 | lcd::COL2,
                 _ => (lcd::D8 as Segments) << BITS - 8
             }
         }
@@ -37,49 +38,55 @@ impl System {
     }
 }
 
-fn cal_segments(sys: &System) -> Segments {
-    let rcc = unsafe {&*stm32u031::RCC::ptr()};
-    use crate::lcd::{DC, Dd, DF, Di, DG, Dn, Do, DP, DOT};
-    match sys.sub_state() {
-        cal::CAL => prefixed_to_segments(DC, crate::rtc::get_cal()),
-        cal::DRIVE => prefixed_to_segments(
-            Dd, rcc.BDCR.read().LSEDRV().bits().into()),
-        cal::CRASH => {
-            let mut segs = [0; _];
-            hex_to_segments(&mut segs, sys.crash, 0, false);
-            segs[WIDTH - 1] = DP | DOT;
-            Segments::from_le_bytes(segs)
-        },
-        _ => {
-            let conf = seg4(DC, Do, Dn, DF);
-            if BITS < 48 {conf} else {conf * 65536 + seg4(0, 0, Di, DG)}
-        }
-    }
-}
-
 pub fn get_segments(sys: &System) -> Segments {
-    if TOUCH_EVALUATE {
-        let mut segs = lcd::SegArray::default();
-        lcd::signed_to_segments(&mut segs, sys.scratch as i32, 0);
-        return Segments::from_le_bytes(segs);
-    }
     let rtc = unsafe {&*stm32u031::RTC::ptr()};
-    let sub_state = sys.sub_state();
     use State::*;
     let segments = match sys.state() {
-        Time => time_to_segments(rtc.TR().read().bits(), sub_state),
-        Date => date_to_segments(rtc.DR().read().bits(), sub_state),
+        Time => time_to_segments(rtc.TR().read().bits(), sys.sub_state()),
+        Date => date_to_segments(rtc.DR().read().bits(), sys.sub_state()),
         Temp => temp_to_segments(sys.temp),
         Pres => pres_to_segments(sys.pressure(), sys.pressure_point()),
         Humi => humi_to_segments(sys.humidity),
-        Cal  => cal_segments(sys),
+        Conf => conf_segments(sys),
     };
-    if sub_state == 0 || rtc.SSR.read().bits() & 0x40 != 0 {
+    if sys.sub_state() == 0 || rtc.SSR.read().bits() & 0x40 != 0 {
         segments
     }
     else {
         segments & !sys.blink_mask()
     }
+}
+
+fn conf_segments(sys: &System) -> Segments {
+    let rcc = unsafe {&*stm32u031::RCC::ptr()};
+    use crate::lcd::{DC, Dd, DF, Di, DG, Dn, Do, DP, DOT};
+    match sys.sub_state() {
+        conf::CAL => prefixed_to_segments(DC, crate::rtc::get_cal()),
+        conf::DRIVE => prefixed_to_segments(
+            Dd, rcc.BDCR.read().LSEDRV().bits().into()),
+        conf::CRASH => {
+            let mut segs = [0; _];
+            hex_to_segments(&mut segs, sys.crash, 0, false);
+            segs[WIDTH - 1] = DP | DOT;
+            Segments::from_le_bytes(segs)
+        },
+        conf::TOUCH => touch_debug_segments(sys),
+        _ => {
+            if WIDTH < 6 {seg4(DC, Do, Dn, DF)} else {seg6(DC, Do, Dn, DF, Di, DG)}
+        }
+    }
+}
+
+fn touch_debug_segments(sys: &System) -> Segments {
+    use lcd::{Dt, Do, Du, Dc, Dh, DOT};
+    if sys.scratch >= 0x80000000 {
+        let mut segs = [0; _];
+        hex_to_segments(&mut segs, sys.scratch, 0, false);
+        return Segments::from_le_bytes(segs) | lcd::COL1 | lcd::COL2;
+    }
+
+    seg6(0, DOT, DOT, DOT, DOT, 0)
+        | if WIDTH < 6 {seg4(Dt, Du, Dc, Dh)} else {seg6(0, Dt, Do, Du, Dc, Dh)}
 }
 
 fn date_time_to_segments(t: u32, dots: Segments, kz: bool) -> Segments {
@@ -122,7 +129,7 @@ fn date_to_segments(d: u32, sub_state: u32) -> Segments {
     }
 }
 
-pub fn temp_to_segments(temp: i32) -> Segments {
+fn temp_to_segments(temp: i32) -> Segments {
     let mut segs = [0; _];
     let p = signed_to_segments(&mut segs, temp, 2);
     let mut segs = Segments::from_le_bytes(segs) | lcd::DOT as Segments * 256;
@@ -135,7 +142,7 @@ pub fn temp_to_segments(temp: i32) -> Segments {
     segs
 }
 
-pub fn humi_to_segments(humidity: u32) -> Segments {
+fn humi_to_segments(humidity: u32) -> Segments {
     // 99.9, on a 6 digit display add %(°o).
     let mut segs = [0; _];
     let d = signed_to_segments(&mut segs, humidity as i32, 3);
@@ -144,14 +151,14 @@ pub fn humi_to_segments(humidity: u32) -> Segments {
         segs
     }
     else if WIDTH == 6 {
-        segs * 65536 + DEG as Segments * 256 + lcd::Do as Segments
+        segs * 65536 + seg4(0, 0, lcd::DEG, lcd::Do)
     }
     else {
         segs * 256
     }
 }
 
-pub fn pres_to_segments(pressure: u32, point: u32) -> Segments {
+fn pres_to_segments(pressure: u32, point: u32) -> Segments {
     let mut segs = [0; _];
     // The pressure value is 64 counts per Pa.
     let round = match point {0 => 3200, 1 => 320, _ => 32};
@@ -162,22 +169,26 @@ pub fn pres_to_segments(pressure: u32, point: u32) -> Segments {
     Segments::from_le_bytes(segs) | (lcd::DOT as Segments) << (8 * point + 8)
 }
 
-pub fn prefixed_to_segments(prefix: u8, value: i32) -> Segments {
+fn prefixed_to_segments(prefix: u8, value: i32) -> Segments {
     let mut segs = [0; _];
     signed_to_segments(&mut segs, value, 0);
     segs[WIDTH - 1] = prefix;
     Segments::from_le_bytes(segs)
 }
 
-pub fn seg4(a: u8, b: u8, c: u8, d: u8) -> Segments {
+const fn seg4(a: u8, b: u8, c: u8, d: u8) -> Segments {
     (a as Segments * 65536 + b as Segments * 256 + c as Segments) * 256
         + d as Segments
+}
+
+const fn seg6(a: u8, b: u8, c: u8, d: u8, e: u8, f: u8) -> Segments {
+    seg4(c, d, e, f) | if WIDTH == 6 {seg4(0, 0, a, b) << 32} else {0}
 }
 
 #[test]
 fn blink_mask_checks() {
     let checks = [
-        (State::Cal , 0, 0x00ffffff, 0x00ffffffffffu64),
+        (State::Conf, 0, 0x00ffffff, 0x00ffffffffffu64),
         (State::Time, 1, 0xfefe0000, 0xfefe00000000),
         (State::Time, 2, 0x0000fefe, 0x0000fefe0000),
         (State::Time, 3, 0x0000fefe, 0x00000000fefe),
@@ -188,8 +199,7 @@ fn blink_mask_checks() {
 
     let mut sys = System::default();
     for (s, ss, m4, m6) in checks {
-        sys.set_state(s);
-        sys.set_sub_state(ss);
+        sys.states = s as u32 | ss << 16;
         assert_eq!(sys.blink_mask(),
                    if LCD_WIDTH == 4 {m4} else {m6} as lcd::Segments);
     }

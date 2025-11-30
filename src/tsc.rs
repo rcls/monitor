@@ -150,7 +150,10 @@ pub fn retrieve() -> (u32, u32) {
 
     let threshold = if max_val > LO_HI_SEP {HI_THRESHOLD} else {LO_THRESHOLD};
     let line = if min_val < threshold {min_line + 1} else {0};
-    (line, min_val)
+    let debug6 = values[0] & 0xff | values[1] << 8 & 0xff00
+        | values[2] << 16 & 0xff0000;
+    let debug4 = min_val & 0xff | max_val << 8 & 0xff00;
+    (line, if super::LCD_WIDTH == 6 {debug6} else {debug4})
 }
 
 impl crate::cpu::Config {

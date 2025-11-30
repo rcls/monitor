@@ -1,4 +1,4 @@
-use super::{LCD_WIDTH, State, System, TICKS_PER_SEC, TOUCH_EVALUATE, cal};
+use super::{LCD_WIDTH, State, System, TICKS_PER_SEC, conf};
 
 use crate::tsc;
 use tsc::pad;
@@ -8,47 +8,37 @@ const REPEAT_FIRST: u32 = TICKS_PER_SEC;
 const REPEAT_AGAIN: u32 = TICKS_PER_SEC / 2;
 
 pub fn process(sys: &mut System) {
-    let (pad, val) = tsc::retrieve();
-    if TOUCH_EVALUATE {
-        sys.scratch = val;
+    let (pad, debug) = tsc::retrieve();
+    sys.scratch = sys.scratch & 0x80000000 | debug;
+
+    if !event(sys, pad) {
         return;
     }
 
-    if !state(sys, pad) {
-        return;
-    }
-
+    let state = sys.state();
     match pad {
-        pad::NONE => sys.set_sub_state(0), // Cancel any blinky stuff.
+        pad::NONE => sys.set_state(state, 0), // Cancel any blinky stuff.
         pad::MENU => {                  // Rotate sub-state.
-            let s = sys.state();
             let ss = sys.sub_state();
-            let max = match s {
+            let max = match state {
                 State::Date | State::Time => 3,
-                State::Cal => cal::MAX,
+                State::Conf => conf::MAX,
                 State::Pres => if LCD_WIDTH == 6 {0} else {1},
                 _ => 0};
-            sys.set_sub_state(if ss >= max {0} else {ss + 1});
+            // A special override:  Ignore the MENU key in active touch debug.
+            if state != State::Conf || ss != conf::TOUCH
+                || sys.scratch < 0x80000000 {
+                sys.set_state(state, if ss >= max {0} else {ss + 1});
+            }
         },
         _ => plus_minus(sys, pad == pad::PLUS),
-    }
-
-    // Update the cal clock output.
-    let rcc = unsafe {&*stm32u031::RCC::ptr()};
-    if sys.state() == State::Cal && sys.sub_state() != 0 {
-        rcc.BDCR.modify(
-            |_, w| w.LSCOSEL().set_bit().LSCOEN().set_bit().LSESYSEN().set_bit());
-    }
-    else if sys.state() != State::Cal {
-        // FIXME - what happens if we take a real system reset with the LSCO
-        // active?
-        rcc.BDCR.modify(|_, w| w.LSCOEN().clear_bit().LSESYSEN().clear_bit());
     }
 }
 
 /// Decide what to do with the current touch pad state.  Update timers, and
-/// return true if this is an event we should process (down, up, auto-repeat).
-fn state(sys: &mut System, pad: u32) -> bool {
+/// return true if this is an event we should process (touch, auto-repeat,
+/// timeout).
+fn event(sys: &mut System, pad: u32) -> bool {
     let previous = sys.touch();
     let timer;
     let result;
@@ -84,12 +74,12 @@ fn plus_minus(sys: &mut System, is_plus: bool) {
                 break;
             }
         }
-        sys.set_state(state);
+        sys.set_state(state, 0);
         return;
     }
 
     match state {
-        State::Cal => super::cal_plus_minus(sys, is_plus),
+        State::Conf => super::cal_plus_minus(sys, is_plus),
         State::Pres => if LCD_WIDTH < 6 {
             let point = sys.pressure_point();
             let point = if is_plus {
