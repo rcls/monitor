@@ -46,6 +46,7 @@ struct System {
 }
 const _: () = assert!(size_of::<System>() == 36);
 
+/// Main display state.
 #[allow(dead_code)]
 #[repr(u8)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd)]
@@ -61,7 +62,7 @@ enum State {
 /// Config substates.
 mod conf {
     /// Clock calibration.
-    pub const CAL  : u32 = 1;
+    pub const CALIB: u32 = 1;
     /// Crystal drive stength.
     pub const DRIVE: u32 = 2;
     /// Crash address.
@@ -223,7 +224,7 @@ fn rtc_adjust(item: u32, forwards: bool) {
 fn cal_plus_minus(sys: &mut System, is_plus: bool) {
     let rcc = unsafe {&*stm32u031::RCC::ptr()};
     match sys.sub_state() {
-        conf::CAL => {
+        conf::CALIB => {
             let cal = rtc::get_cal();
             rtc::set_cal(
                 if is_plus {cal.min(98) + 1} else {cal.max(-98) - 1});

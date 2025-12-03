@@ -4,11 +4,10 @@ use crate::vcell::{UCell, VCell};
 
 use core::fmt::Write;
 
-pub use stm32u031::LPUART1 as UART;
-
 pub struct DebugMarker;
 
 pub use stm32u031::Interrupt::USART3_LPUART1 as UART_ISR;
+pub use stm32u031::LPUART1 as UART;
 
 /// State for debug logging.  We mark this as no-init and initialize the cells
 /// ourselves, to avoid putting the buffer into BSS.
@@ -21,7 +20,7 @@ pub struct Debug {
     buf: [UCell<u8>; 256],
 }
 
-pub fn debug_isr() {
+fn debug_isr() {
     if !crate::CONFIG.no_debug {
         DEBUG.isr();
     }
@@ -39,14 +38,14 @@ impl Debug {
             return;
         }
         check_vtors();
-        lazy_init();
+        init();
         let mut w = self.w.read();
         for &b in s {
             while self.r.read().wrapping_sub(w) == 1 {
                 self.enable(w);
                 self.push();
             }
-            // The ISR won't access the array element in question.
+            // SAFETY: The ISR won't access the array element in question.
             unsafe {*self.buf[w as usize].as_mut() = b};
             w = w.wrapping_add(1);
         }
@@ -58,7 +57,7 @@ impl Debug {
         // twice in case there is a race condition where we read pending on an
         // enabled interrupt.
         let nvic = unsafe {&*cortex_m::peripheral::NVIC::PTR};
-        let bit: u32 = 1 << stm32u031::Interrupt::USART3_LPUART1 as u32;
+        let bit: u32 = 1 << UART_ISR as u32;
         if nvic.icpr[0].read() & bit == 0 {
             return;
         }
@@ -185,15 +184,6 @@ macro_rules! dbgln {
         }};
 }
 
-pub fn lazy_init() {
-    // Check for lazy enablement...
-    let rcc = unsafe {&*stm32u031::RCC::ptr()};
-    if crate::CONFIG.is_lazy_debug()
-        && !rcc.APBENR1.read().LPUART1EN().bit() {
-        init();
-    }
-}
-
 pub fn init() {
     check_vtors();
     let gpioa = unsafe {&*stm32u031::GPIOA::ptr()};
@@ -202,7 +192,11 @@ pub fn init() {
 
     if crate::CONFIG.is_lazy_debug() {
         // Lazy initialization.
-        rcc.APBENR1.modify(|_, w| w.LPUART1EN().set_bit());
+        let apbenr1 = rcc.APBENR1.read();
+        if apbenr1.LPUART1EN().bit() {
+            return;
+        }
+        rcc.APBENR1.write(|w| w.bits(apbenr1.bits()).LPUART1EN().set_bit());
     }
     DEBUG.w.write(0);
     DEBUG.r.write(0);
@@ -225,11 +219,6 @@ pub fn init() {
     uart.PRESC.write(|w| w.bits(PRESC));
     uart.CR1.write(
         |w| w.FIFOEN().set_bit().TE().set_bit().UE().set_bit());
-
-    if false {
-        dbg!("");
-        dbgln!("");
-    }
 }
 
 #[cfg(target_os = "none")]

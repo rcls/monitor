@@ -162,10 +162,17 @@ fn rx_word(spi: &stm32u031::spi1::RegisterBlock) {
 /// Best effort if it doesn't fit - return trailing digits!
 pub fn signed_to_segments(segs: &mut SegArray, v: i32, min: usize) -> usize {
     let u = crate::utils::to_bcd(v.unsigned_abs());
-    hex_to_segments(segs, u, min, v < 0)
+    format_hex(segs, u, min, v < 0)
 }
 
-pub fn hex_to_segments(segs: &mut SegArray, u: u32, min: usize, neg: bool)
+#[inline(never)]
+pub fn hex_to_segments(value: u32) -> SegArray {
+    let mut segs = [0; _];
+    format_hex(&mut segs, value, WIDTH, false);
+    segs
+}
+
+pub fn format_hex(segs: &mut SegArray, u: u32, min: usize, neg: bool)
         -> usize {
     let mut i = segs.iter_mut();
     let mut count = 0;

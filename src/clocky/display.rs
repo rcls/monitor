@@ -12,7 +12,7 @@ impl System {
 
         if state == State::Conf {
             return match sub_state {
-                0 | conf::CAL | conf::DRIVE => (1 << BITS - 8) - 1,
+                0 | conf::CALIB | conf::DRIVE => (1 << BITS - 8) - 1,
                 conf::TOUCH => seg6(1, 1, 1, 1, 1, 0) * lcd::DOT as Segments
                     | lcd::COL1 | lcd::COL2,
                 _ => (lcd::D8 as Segments) << BITS - 8
@@ -61,12 +61,11 @@ fn conf_segments(sys: &System) -> Segments {
     let rcc = unsafe {&*stm32u031::RCC::ptr()};
     use crate::lcd::{DC, Dd, DF, Di, DG, Dn, Do, DP, DOT};
     match sys.sub_state() {
-        conf::CAL => prefixed_to_segments(DC, crate::rtc::get_cal()),
+        conf::CALIB => prefixed_to_segments(DC, crate::rtc::get_cal()),
         conf::DRIVE => prefixed_to_segments(
             Dd, rcc.BDCR.read().LSEDRV().bits().into()),
         conf::CRASH => {
-            let mut segs = [0; _];
-            hex_to_segments(&mut segs, sys.crash, 0, false);
+            let mut segs = hex_to_segments(sys.crash);
             segs[WIDTH - 1] = DP | DOT;
             Segments::from_le_bytes(segs)
         },
@@ -80,8 +79,7 @@ fn conf_segments(sys: &System) -> Segments {
 fn touch_debug_segments(sys: &System) -> Segments {
     use lcd::{Dt, Do, Du, Dc, Dh, DOT};
     if sys.touch_debug >= 0x80000000 {
-        let mut segs = [0; _];
-        hex_to_segments(&mut segs, sys.touch_debug, 0, false);
+        let segs = hex_to_segments(sys.touch_debug);
         return Segments::from_le_bytes(segs) | lcd::COL1 | lcd::COL2;
     }
 
@@ -90,8 +88,7 @@ fn touch_debug_segments(sys: &System) -> Segments {
 }
 
 fn date_time_to_segments(t: u32, dots: Segments, kz: bool) -> Segments {
-    let mut result = [0; _];
-    hex_to_segments(&mut result, t, WIDTH, false);
+    let mut result = hex_to_segments(t);
     if WIDTH == 6 && result[WIDTH - 1] == DIGITS[0] {
         result[WIDTH - 1] = 0;
     }
@@ -159,13 +156,12 @@ fn humi_to_segments(humidity: u32) -> Segments {
 }
 
 fn pres_to_segments(pressure: u32, point: u32) -> Segments {
-    let mut segs = [0; _];
     // The pressure value is 64 counts per Pa.
     let round = match point {0 => 3200, 1 => 320, _ => 32};
     let pres = (pressure + round) / 64;
     let bcd = crate::utils::to_bcd(pres) >> 8 - 4 * point;
     dbgln!("{pres} {:#x} -> {bcd:#x}", crate::utils::to_bcd(pres));
-    hex_to_segments(&mut segs, bcd, WIDTH, false);
+    let segs = hex_to_segments(bcd);
     Segments::from_le_bytes(segs) | (lcd::DOT as Segments) << (8 * point + 8)
 }
 
