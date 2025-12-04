@@ -25,4 +25,4 @@ mod vcell;
 
 const LCD_WIDTH: u32 = 6;
 
-use clocky::*;
+use clocky::{CONFIG, I2C_LINES, main};

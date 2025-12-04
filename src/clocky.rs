@@ -9,7 +9,7 @@ pub const CONFIG: cpu::Config = {
     cfg.pullup |= 1 << 0x2d;
     cfg.standby_pu |= 1 << 0x2d; // PC13.
     cfg.fll = false;
-    *cfg.lazy_debug().lazy_i2c().lcd().rtc().lazy_tsc()};
+    *cfg.no_debug().lazy_i2c().lcd().rtc().lazy_tsc()};
 
 const MAGIC: u32 = 0xd6ea33e;
 
@@ -282,7 +282,7 @@ fn acquire(sys: &mut System, tr: u32, ssr: u32)
         return (ens212::get(), ens212_get_done);
     }
 
-    if if state == State::Pres {ssr == 0} else {item == 0x100 && ssr == 2} {
+    if if state == State::Pres {ssr == 0} else {item == 0x300 && ssr == 2} {
         return (ens220::start(), ens220_start_done);
     }
 

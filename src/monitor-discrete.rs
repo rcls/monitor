@@ -2,9 +2,7 @@
 #![cfg_attr(target_os = "none", no_main)]
 #![allow(internal_features)]
 #![allow(unpredictable_function_pointer_comparisons)]
-#![feature(const_default)]
-#![feature(const_trait_impl)]
-#![feature(derive_const)]
+#![feature(const_default, const_trait_impl, derive_const)]
 #![feature(format_args_nl)]
 #![feature(link_llvm_intrinsics)]
 
@@ -22,7 +20,7 @@ mod utils;
 #[path = "../stm-common/vcell.rs"]
 mod vcell;
 
-use monitor::*;
+use monitor::{CONFIG, I2C_LINES, PConvert, VConvert, main};
 
 const ADC_CHANNELS: [u32; 4] = [8, 10, 14, 18];
 

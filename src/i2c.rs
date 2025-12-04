@@ -1,8 +1,7 @@
 
 use crate::dma::{Channel, DMA_Channel};
-use crate::vcell::UCell;
 
-pub use i2c_core::{Result, Wait, read_reg, write, write_reg};
+pub use i2c_core::{Result, Wait, read_reg, write};
 
 #[path = "../stm-common/i2c_core.rs"]
 mod i2c_core;
@@ -32,9 +31,7 @@ fn tx_channel() -> &'static Channel {crate::dma::dma().CH(TX_CHANNEL)}
 
 macro_rules!dbgln {($($tt:tt)*) => {if false {crate::dbgln!($($tt)*)}};}
 
-use i2c_core::*;
-
-pub static CONTEXT: UCell<I2cContext> = UCell::default();
+use i2c_core::CONTEXT;
 
 pub fn init() {
     let i2c = unsafe {&*I2C::ptr()};
@@ -105,9 +102,9 @@ pub fn init() {
     tx_channel().writes_to(i2c.TXDR.as_ptr() as *mut   u8, TX_MUXIN);
 
     if false {
-        write_reg(0, 0, &0i16).defer();
-        read(0, &mut 0i16).defer();
-        write_read(0, &0u32, &mut 0i16).defer();
+        i2c_core::write_reg(0, 0, &0i16).defer();
+        i2c_core::read(0, &mut 0i16).defer();
+        i2c_core::write_read(0, &0u32, &mut 0i16).defer();
     }
 }
 

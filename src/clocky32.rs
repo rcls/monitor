@@ -2,9 +2,7 @@
 #![cfg_attr(target_os = "none", no_main)]
 #![allow(internal_features)]
 #![allow(unpredictable_function_pointer_comparisons)]
-#![feature(const_default)]
-#![feature(const_trait_impl)]
-#![feature(derive_const)]
+#![feature(const_default, const_trait_impl, derive_const)]
 #![feature(format_args_nl)]
 #![feature(link_llvm_intrinsics)]
 
@@ -25,4 +23,5 @@ mod vcell;
 
 const LCD_WIDTH: u32 = 4;
 
-use clocky::*;
+use clocky::{CONFIG, I2C_LINES, main};
+
