@@ -19,6 +19,7 @@ mod i2c;
 mod monitor;
 mod oled;
 mod utils;
+#[path = "../stm-common/vcell.rs"]
 mod vcell;
 
 use monitor::*;

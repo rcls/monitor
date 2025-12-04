@@ -10,12 +10,10 @@ macro_rules!dbgln {($($tt:tt)*) => {if false {crate::dbgln!($($tt)*)}};}
 #[allow(non_camel_case_types)]
 pub trait DMA_Channel {
     /// Write to peripheral.  The channel should be initialised by writes_to().
-    fn write(&self, data: usize, len: usize, size: u8) {
-        self.setup(data, len, size, true)}
+    fn write(&self, data: usize, len: usize, size: u8);
 
     /// Read from peripheral.  The channel should be initialised by read_from().
-    fn read(&self, data: usize, len: usize, size: u8) {
-        self.setup(data, len, size, false)}
+    fn read(&self, data: usize, len: usize, size: u8);
 
     /// Configure to write to a peripheral from memory.
     fn writes_to(&self, dst: *mut   u8, request: u8);
@@ -24,11 +22,15 @@ pub trait DMA_Channel {
 
     /// Stop and cancel an in-process transfer.
     fn abort(&self);
-
-    fn setup(&self, data: usize, len: usize, size: u8, write: bool);
 }
 
 impl DMA_Channel for Channel {
+    fn write(&self, data: usize, len: usize, size: u8) {
+        setup(self, data, len, size, true)}
+
+    fn read(&self, data: usize, len: usize, size: u8) {
+        setup(self, data, len, size, false)}
+
     fn writes_to(&self, dst: *mut u8, request: u8) {
         self.read_from(dst, request);
     }
@@ -47,17 +49,15 @@ impl DMA_Channel for Channel {
     fn abort(&self) {
         self.CR.write(|w| w);
     }
+}
 
-    // size is 0 = 1byte, 1=2byte.
-    fn setup(&self, data: usize, len: usize, size: u8, write: bool) {
-        self.MAR .write(|w| w.bits(data as u32));
-        self.NDTR.write(|w| w.bits(len as u32));
-        barrier();
-        self.CR.write(
-            |w| w.EN().set_bit().TCIE().set_bit().TEIE().set_bit()
-                .MINC().set_bit().DIR().bit(write)
-                .PSIZE().bits(size).MSIZE().bits(size));
-    }
+fn setup(ch: &Channel, data: usize, len: usize, size: u8, write: bool) {
+    ch.MAR .write(|w| w.bits(data as u32));
+    ch.NDTR.write(|w| w.bits(len as u32));
+    barrier();
+    ch.CR.write(
+        |w|w.EN().set_bit().TCIE().set_bit().TEIE().set_bit().MINC().set_bit()
+            .DIR().bit(write).PSIZE().bits(size).MSIZE().bits(size));
 }
 
 /// Trait Flat is used to check that we pass sane types to read/write.

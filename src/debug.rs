@@ -1,10 +1,9 @@
+#[path = "../stm-common/debug_core.rs"]
+pub mod debug_core;
+use debug_core::{Debug, debug_isr};
 
-use crate::cpu::{WFE, barrier};
-use crate::vcell::{UCell, VCell};
-
-use core::fmt::Write;
-
-pub struct DebugMarker;
+#[allow(unused)]
+pub use debug_core::{flush, write_str};
 
 pub use stm32u031::Interrupt::USART3_LPUART1 as UART_ISR;
 pub use stm32u031::LPUART1 as UART;
@@ -12,192 +11,38 @@ pub use stm32u031::LPUART1 as UART;
 /// State for debug logging.  We mark this as no-init and initialize the cells
 /// ourselves, to avoid putting the buffer into BSS.
 #[unsafe(link_section = ".noinit")]
-pub static DEBUG: Debug = Debug::new();
+pub static DEBUG: Debug = Debug::default();
 
-pub struct Debug {
-    w: VCell<u8>,
-    r: VCell<u8>,
-    buf: [UCell<u8>; 256],
-}
+pub const NODEBUG: bool = crate::CONFIG.no_debug;
 
-fn debug_isr() {
-    if !crate::CONFIG.no_debug {
-        DEBUG.isr();
-    }
-}
-
-impl Debug {
-    const fn new() -> Debug {
-        Debug {
-            w: VCell::new(0), r: VCell::new(0),
-            buf: [const {UCell::new(0)}; 256]
-        }
-    }
-    fn write_bytes(&self, s: &[u8]) {
-        if crate::CONFIG.no_debug {
-            return;
-        }
-        check_vtors();
+fn lazy_init() {
+    if crate::CONFIG.is_lazy_debug() {
         init();
-        let mut w = self.w.read();
-        for &b in s {
-            while self.r.read().wrapping_sub(w) == 1 {
-                self.enable(w);
-                self.push();
-            }
-            // SAFETY: The ISR won't access the array element in question.
-            unsafe {*self.buf[w as usize].as_mut() = b};
-            w = w.wrapping_add(1);
-        }
-        self.enable(w);
-    }
-    fn push(&self) {
-        WFE();
-        // If the interrupt is pending, call the ISR ourselves.  Read the bit
-        // twice in case there is a race condition where we read pending on an
-        // enabled interrupt.
-        let nvic = unsafe {&*cortex_m::peripheral::NVIC::PTR};
-        let bit: u32 = 1 << UART_ISR as u32;
-        if nvic.icpr[0].read() & bit == 0 {
-            return;
-        }
-        // It might take a couple of goes for the pending state to clear, so
-        // loop.
-        while nvic.icpr[0].read() & bit != 0 {
-            unsafe {nvic.icpr[0].write(bit)};
-            debug_isr();
-        }
-    }
-    fn enable(&self, w: u8) {
-        barrier();
-        self.w.write(w);
-
-        let uart = unsafe {&*UART::ptr()};
-        // Use the FIFO empty interrupt.  Normally we should be fast enough
-        // to refill before the last byte finishes.
-        uart.CR1.write(
-            |w| w.FIFOEN().set_bit().TE().set_bit().UE().set_bit()
-                . TXFEIE().set_bit());
-    }
-    fn isr(&self) {
-        let uart = unsafe {&*UART::ptr()};
-        let sr = uart.ISR.read();
-        if sr.TC().bit() {
-            uart.CR1.modify(|_,w| w.TCIE().clear_bit());
-        }
-        if !sr.TXFE().bit() {
-            return;
-        }
-
-        const FIFO_SIZE: usize = 8;
-        let mut r = self.r.read() as usize;
-        let w = self.w.read() as usize;
-        let mut done = 0;
-        while r != w && done < FIFO_SIZE {
-            uart.TDR.write(|w| w.bits(*self.buf[r].as_ref() as u32));
-            r = (r + 1) & 0xff;
-            done += 1;
-        }
-        self.r.write(r as u8);
-        if r == w {
-            uart.CR1.modify(|_,w| w.TXFEIE().clear_bit());
-        }
     }
 }
 
-pub fn flush() {
-    check_vtors();
+fn is_init() -> bool {
     let rcc = unsafe {&*stm32u031::RCC::ptr()};
-    if crate::CONFIG.no_debug ||
-        crate::CONFIG.is_lazy_debug() && !rcc.APBENR1.read().LPUART1EN().bit() {
-        return;                        // Not initialized, nothing to do.
-    }
-
-    let uart = unsafe {&*UART::ptr()};
-    // Enable the TC interrupt.
-    uart.CR1().modify(|_,w| w.TCIE().set_bit());
-    // Wait for the TC bit.
-    loop {
-        let isr = uart.ISR().read();
-        if DEBUG.r.read() == DEBUG.w.read()
-            && isr.TC().bit() && isr.TXFE().bit() {
-            break;
-        }
-        DEBUG.push();
-    }
-}
-
-/// The code gen for formats is so awful that we do this!
-pub fn banner(s: &str, mut v: u32, t: &str) {
-    if crate::CONFIG.no_debug {
-        return;
-    }
-    write_str(s);
-    let mut hex = [0; 8];
-    for p in hex.iter_mut().rev() {
-        let d = v as u8 & 15;
-        v >>= 4;
-        *p = d + b'0';
-        if *p > b'9' {
-            *p += b'a' - 10 - b'0';
-        };
-    }
-    DEBUG.write_bytes(&hex);
-    write_str(t);
-}
-
-pub fn write_str(s: &str) {
-    DEBUG.write_bytes(s.as_bytes());
-}
-
-impl Write for DebugMarker {
-    fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        write_str(s);
-        Ok(())
-    }
-    fn write_char(&mut self, c: char) -> core::fmt::Result {
-        let cc = [c as u8];
-        DEBUG.write_bytes(&cc);
-        Ok(())
-    }
-}
-
-#[macro_export]
-macro_rules! dbg {
-    ($($tt:tt)*) => {
-        if !$crate::CONFIG.no_debug {
-            let _ = core::fmt::Write::write_fmt(
-                &mut $crate::debug::DebugMarker, format_args!($($tt)*));
-        }
-    }
-}
-
-#[macro_export]
-macro_rules! dbgln {
-    () => {if !$crate::CONFIG.no_debug {
-        let _ = core::fmt::Write::write_str(
-            &mut $crate::debug::DebugMarker, "\n");
-        }};
-    ($($tt:tt)*) => {if !$crate::CONFIG.no_debug {
-        let _ = core::fmt::Write::write_fmt(
-            &mut $crate::debug::DebugMarker, format_args_nl!($($tt)*));
-        }};
+    !NODEBUG && rcc.APBENR1.read().LPUART1EN().bit()
 }
 
 pub fn init() {
-    check_vtors();
     let gpioa = unsafe {&*stm32u031::GPIOA::ptr()};
     let rcc   = unsafe {&*stm32u031::RCC::ptr()};
     let uart  = unsafe {&*UART::ptr()};
 
-    if crate::CONFIG.is_lazy_debug() {
-        // Lazy initialization.
-        let apbenr1 = rcc.APBENR1.read();
-        if apbenr1.LPUART1EN().bit() {
-            return;
-        }
-        rcc.APBENR1.write(|w| w.bits(apbenr1.bits()).LPUART1EN().set_bit());
+    if NODEBUG {
+        return;
     }
+
+    check_vtors();
+    // Lazy initialization.
+    let apbenr1 = rcc.APBENR1.read();
+    if crate::CONFIG.is_lazy_debug() && apbenr1.LPUART1EN().bit() {
+        return;
+    }
+    rcc.APBENR1.write(|w| w.bits(apbenr1.bits()).LPUART1EN().set_bit());
+
     DEBUG.w.write(0);
     DEBUG.r.write(0);
 
@@ -224,9 +69,28 @@ pub fn init() {
 #[cfg(target_os = "none")]
 #[panic_handler]
 fn ph(info: &core::panic::PanicInfo) -> ! {
-    dbgln!("{info}");
-    flush();
+    crate::dbgln!("{info}");
+    debug_core::flush();
     crate::cpu::reboot();
+}
+
+/// The code gen for formats is so awful that we do this!
+pub fn banner(s: &str, mut v: u32, t: &str) {
+    if crate::CONFIG.no_debug {
+        return;
+    }
+    debug_core::write_str(s);
+    let mut hex = [0; 8];
+    for p in hex.iter_mut().rev() {
+        let d = v as u8 & 15;
+        v >>= 4;
+        *p = d + b'0';
+        if *p > b'9' {
+            *p += b'a' - 10 - b'0';
+        };
+    }
+    DEBUG.write_bytes(&hex);
+    debug_core::write_str(t);
 }
 
 /// Returns prescaler (prescaler index, BRR value).

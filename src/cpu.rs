@@ -310,7 +310,7 @@ fn bugger() {
     }
     else {
         crate::debug::banner("Crash @ 0x", pc, "\n");
-        crate::debug::flush();
+        crate::debug::debug_core::flush();
     }
     reboot();
 }

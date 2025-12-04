@@ -20,6 +20,7 @@ mod rtc;
 mod tmp117;
 mod tsc;
 mod utils;
+#[path = "../stm-common/vcell.rs"]
 mod vcell;
 
 const LCD_WIDTH: u32 = 6;
