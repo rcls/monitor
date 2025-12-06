@@ -4,7 +4,7 @@ use crate::i2c;
 /// TMP117 I²C address.
 pub const TMP117: u8 = 0x92;
 
-macro_rules!dbgln {($($tt:tt)*) => {if false {crate::dbgln!($($tt)*)}};}
+macro_rules!dbgln {($($tt:tt)*) => {if false {stm_common::dbgln!($($tt)*)}};}
 
 /// Initialize the TMP117.  Trigger a conversion if trigger.
 pub fn init() {

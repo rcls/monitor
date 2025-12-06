@@ -1,4 +1,4 @@
-use stm_common::vcell::{UCell, VCell};
+use stm_common::{utils::WFE, vcell::{UCell, VCell}};
 
 ///! Pads are +, -, menu.  Note that the index is one less than the enumeration.
 
@@ -15,7 +15,7 @@ pub const HI_THRESHOLD: u32 = 1536;
 // Little board gives 28..31 and 19..22
 // Big board gives 27..30 and 19..20, threhold 22 or 23 would be good.
 
-macro_rules!dbgln {($($tt:tt)*) => {if false {crate::dbgln!($($tt)*)}};}
+macro_rules!dbgln {($($tt:tt)*) => {if false {stm_common::dbgln!($($tt)*)}};}
 
 struct State {
     values: UCell<[u32; 3]>,
@@ -62,7 +62,7 @@ pub fn init() {
     let prescaler = match crate::CONFIG.clk {
         2000000 => 0,
         16000000 => 3,
-        _ => crate::utils::unreachable(),
+        _ => stm_common::utils::unreachable(),
     };
 
     // TODO - timings are guesses...
@@ -130,7 +130,7 @@ fn isr() {
 /// Return touched pad, 1=+, 2=-, 3=menu, 0=None.
 pub fn retrieve() -> (u32, u32) {
     while !STATE.complete.read() {
-        crate::cpu::WFE();
+        WFE();
     }
     // Find the lowest line...
     let mut min_line = 0;

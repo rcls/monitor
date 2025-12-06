@@ -1,4 +1,6 @@
-use crate::{link_assert, CONFIG};
+use stm_common::{link_assert, utils::WFE};
+
+use crate::CONFIG;
 
 #[derive(Clone, Copy)]
 #[derive_const(Default)]
@@ -310,21 +312,9 @@ fn bugger() {
     }
     else {
         crate::debug::banner("Crash @ 0x", pc, "\n");
-        crate::debug::debug_core::flush();
+        crate::debug::flush();
     }
     reboot();
-}
-
-#[inline(always)]
-#[allow(non_snake_case)]
-pub fn WFE() {
-    if cfg!(target_arch = "arm") {
-        unsafe {
-            core::arch::asm!("wfe", options(nomem, preserves_flags, nostack))};
-    }
-    else {
-        panic!("wfe!");
-    }
 }
 
 pub fn reboot() -> ! {

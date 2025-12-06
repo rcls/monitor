@@ -29,7 +29,7 @@ const TX_MUXIN: u8 = 10;
 fn rx_channel() -> &'static Channel {crate::dma::dma().CH(RX_CHANNEL)}
 fn tx_channel() -> &'static Channel {crate::dma::dma().CH(TX_CHANNEL)}
 
-macro_rules!dbgln {($($tt:tt)*) => {if false {crate::dbgln!($($tt)*)}};}
+macro_rules!dbgln {($($tt:tt)*) => {if false {stm_common::dbgln!($($tt)*)}};}
 
 use i2c_core::CONTEXT;
 
@@ -75,7 +75,7 @@ pub fn init() {
                 . SDADEL().bits(0).SCLDEL().bits(1));
     }
     else {
-        crate::utils::unreachable();
+        stm_common::utils::unreachable();
     }
 
     // Configure the lines for use.

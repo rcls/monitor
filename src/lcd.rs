@@ -1,6 +1,6 @@
 #![allow(non_upper_case_globals)]
 
-use crate::cpu::WFE;
+use stm_common::utils::WFE;
 
 pub const WIDTH: usize = crate::LCD_WIDTH as usize;
 pub const BITS: usize = WIDTH as usize * 8;

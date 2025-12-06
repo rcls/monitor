@@ -1,32 +1,55 @@
-#[path = "../stm-common/debug_core.rs"]
-pub mod debug_core;
-use debug_core::{Debug, debug_isr};
 
-#[allow(unused)]
-pub use debug_core::{flush, write_str};
+use stm_common::{debug_core, link_assert};
+use debug_core::Debug;
 
-pub use stm32u031::Interrupt::USART3_LPUART1 as INTERRUPT;
-pub use stm32u031::LPUART1 as UART;
+use stm32u031::Interrupt::USART3_LPUART1 as INTERRUPT;
+use stm32u031::LPUART1 as UART;
+
+#[derive(Default)]
+pub struct DebugMeta;
+
+impl debug_core::Meta for DebugMeta {
+    const ENABLE: bool = !crate::CONFIG.no_debug;
+    const INTERRUPT: u32 = INTERRUPT as u32;
+
+    fn uart() -> &'static debug_core::UART {unsafe {&*stm32u031::LPUART1::PTR}}
+    fn debug() -> &'static Debug<Self> {&DEBUG}
+
+    fn lazy_init() {
+        if crate::CONFIG.is_lazy_debug() {
+            init();
+        }
+    }
+
+    fn is_init() -> bool {
+        let rcc = unsafe {&*stm32u031::RCC::ptr()};
+        ENABLE && rcc.APBENR1.read().LPUART1EN().bit()
+    }
+}
 
 /// State for debug logging.  We mark this as no-init and initialize the cells
 /// ourselves, to avoid putting the buffer into BSS.
 #[unsafe(link_section = ".noinit")]
-pub static DEBUG: Debug = Debug::default();
+pub static DEBUG: Debug<DebugMeta> = Debug::default();
 
 pub const ENABLE: bool = !crate::CONFIG.no_debug;
 
+#[derive(Default)]
 pub struct DebugMarker;
-pub fn debug_marker() -> DebugMarker {DebugMarker}
-
-fn lazy_init() {
-    if crate::CONFIG.is_lazy_debug() {
-        init();
-    }
+pub fn debug_marker() -> debug_core::Marker<DebugMarker, DebugMeta> {
+    debug_core::Marker::default()
 }
 
-fn is_init() -> bool {
-    let rcc = unsafe {&*stm32u031::RCC::ptr()};
-    ENABLE && rcc.APBENR1.read().LPUART1EN().bit()
+pub fn flush() {
+    debug_core::flush::<DebugMeta>();
+}
+
+pub fn write_str(s: &str) {
+    debug_core::write_str::<DebugMeta>(s);
+}
+
+pub fn debug_isr() {
+    DEBUG.isr();
 }
 
 pub fn init() {
@@ -72,8 +95,8 @@ pub fn init() {
 #[cfg(target_os = "none")]
 #[panic_handler]
 fn ph(info: &core::panic::PanicInfo) -> ! {
-    crate::dbgln!("{info}");
-    debug_core::flush();
+    stm_common::dbgln!("{info}");
+    flush();
     crate::cpu::reboot();
 }
 
@@ -82,7 +105,7 @@ pub fn banner(s: &str, mut v: u32, t: &str) {
     if crate::CONFIG.no_debug {
         return;
     }
-    debug_core::write_str(s);
+    write_str(s);
     let mut hex = [0; 8];
     for p in hex.iter_mut().rev() {
         let d = v as u8 & 15;
@@ -93,7 +116,7 @@ pub fn banner(s: &str, mut v: u32, t: &str) {
         };
     }
     DEBUG.write_bytes(&hex);
-    debug_core::write_str(t);
+    write_str(t);
 }
 
 /// Returns prescaler (prescaler index, BRR value).
@@ -137,7 +160,6 @@ impl crate::cpu::Config {
 #[inline(always)]
 #[cfg_attr(test, test)]
 fn check_vtors() {
-    use crate::link_assert;
     if !crate::CONFIG.no_debug {
         link_assert!(crate::cpu::VECTORS.isr[INTERRUPT as usize] == debug_isr);
     }

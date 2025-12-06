@@ -1,4 +1,6 @@
 
+use stm_common::link_assert;
+
 use crate::i2c;
 
 /// Accelerometer I2C address.
@@ -15,7 +17,7 @@ pub fn accel_init() -> crate::i2c::Result {
     let gpioa = unsafe {&*stm32u031::GPIOA::ptr()};
     let exti  = unsafe {&*stm32u031::EXTI ::ptr()};
 
-    crate::link_assert!(
+    link_assert!(
         crate::cpu::VECTORS.isr[stm32u031::Interrupt::EXTI4_15 as usize]
         == accel_isr);
 
@@ -52,8 +54,8 @@ pub fn accel_init() -> crate::i2c::Result {
     #[cfg(not(test))]
     unsafe {
         let nvic = &*cortex_m::peripheral::NVIC::PTR;
-        crate::link_assert!(core::ptr::from_ref(&nvic.ipr[1]) as usize
-                            == 0xE000E400 + 4);
+        link_assert!(core::ptr::from_ref(&nvic.ipr[1]) as usize
+                     == 0xE000E400 + 4);
         nvic.ipr[1].write(0xc0 << 24);
     }
 

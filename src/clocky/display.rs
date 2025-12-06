@@ -3,7 +3,7 @@ use super::{LCD_WIDTH, State, System, conf};
 use crate::lcd;
 use lcd::{BITS, DIGITS, Segments, WIDTH, signed_to_segments, hex_to_segments};
 
-macro_rules!dbgln {($($tt:tt)*) => {if false {crate::dbgln!($($tt)*)}};}
+macro_rules!dbgln {($($tt:tt)*) => {if false {stm_common::dbgln!($($tt)*)}};}
 
 impl System {
     fn blink_mask(&self) -> Segments {

@@ -1,6 +1,5 @@
 
-use stm_common::dma::DMA_Channel;
-use stm_common::vcell::VCell;
+use stm_common::{dma::DMA_Channel, utils::WFE, vcell::VCell};
 
 // DMA MUX lines.
 // Use DMA1 Ch1
@@ -55,7 +54,7 @@ pub fn init2() {
 
     // Wait for ADC calibration complete.
     while OUTSTANDING.read() != 0 {
-        crate::cpu::WFE();
+        WFE();
     }
 
     // Enable the ADC and wait for ready.  This should be fast.

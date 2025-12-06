@@ -3,7 +3,7 @@ use crate::i2c;
 
 const ENS212: u8 = 0x8a;
 
-macro_rules!dbgln {($($tt:tt)*) => {if false {crate::dbgln!($($tt)*)}};}
+macro_rules!dbgln {($($tt:tt)*) => {if false {stm_common::dbgln!($($tt)*)}};}
 
 pub fn init() -> core::result::Result<u32, ()> {
     // Set low power.
