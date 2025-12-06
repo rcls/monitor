@@ -6,6 +6,13 @@ mod date_time;
 mod display;
 mod touch;
 
+pub const DEBUG_ENABLE: bool = !crate::CONFIG.no_debug;
+pub fn debug_fmt(fmt: core::fmt::Arguments) {
+    if DEBUG_ENABLE {
+        stm_common::debug::debug_fmt::<debug::DebugMeta>(fmt);
+    }
+}
+
 pub const CONFIG: cpu::Config = {
     let mut cfg = cpu::Config::new(2000000);
     cfg.pullup |= 1 << 0x2d;

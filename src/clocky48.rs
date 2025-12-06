@@ -23,4 +23,4 @@ mod utils;
 
 const LCD_WIDTH: u32 = 6;
 
-use clocky::{CONFIG, I2C_LINES, main};
+use clocky::{CONFIG, DEBUG_ENABLE, I2C_LINES, main, debug_fmt};

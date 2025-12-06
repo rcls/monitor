@@ -1,6 +1,6 @@
 
-use stm_common::{debug_core, link_assert};
-use debug_core::Debug;
+use stm_common::{debug, link_assert};
+use debug::Debug;
 
 use stm32u031::Interrupt::USART3_LPUART1 as INTERRUPT;
 use stm32u031::LPUART1 as UART;
@@ -8,11 +8,11 @@ use stm32u031::LPUART1 as UART;
 #[derive(Default)]
 pub struct DebugMeta;
 
-impl debug_core::Meta for DebugMeta {
+impl debug::Meta for DebugMeta {
     const ENABLE: bool = !crate::CONFIG.no_debug;
     const INTERRUPT: u32 = INTERRUPT as u32;
 
-    fn uart() -> &'static debug_core::UART {unsafe {&*stm32u031::LPUART1::PTR}}
+    fn uart() -> &'static debug::UART {unsafe {&*stm32u031::LPUART1::PTR}}
     fn debug() -> &'static Debug<Self> {&DEBUG}
 
     fn lazy_init() {
@@ -34,18 +34,12 @@ pub static DEBUG: Debug<DebugMeta> = Debug::default();
 
 pub const ENABLE: bool = !crate::CONFIG.no_debug;
 
-#[derive(Default)]
-pub struct DebugMarker;
-pub fn debug_marker() -> debug_core::Marker<DebugMarker, DebugMeta> {
-    debug_core::Marker::default()
-}
-
 pub fn flush() {
-    debug_core::flush::<DebugMeta>();
+    debug::flush::<DebugMeta>();
 }
 
 pub fn write_str(s: &str) {
-    debug_core::write_str::<DebugMeta>(s);
+    debug::write_str::<DebugMeta>(s);
 }
 
 pub fn debug_isr() {
@@ -96,8 +90,8 @@ pub fn init() {
 #[panic_handler]
 fn ph(info: &core::panic::PanicInfo) -> ! {
     stm_common::dbgln!("{info}");
-    flush();
-    crate::cpu::reboot();
+    stm_common::debug::flush::<DebugMeta>();
+    stm_common::utils::reboot();
 }
 
 /// The code gen for formats is so awful that we do this!

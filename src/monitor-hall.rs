@@ -18,7 +18,7 @@ mod monitor;
 mod oled;
 mod utils;
 
-use monitor::{CONFIG, I2C_LINES, main};
+use monitor::{CONFIG, DEBUG_ENABLE, I2C_LINES, debug_fmt, main};
 
 const ADC_CHANNELS: [u32; 3] = [9, 17, 18];
 

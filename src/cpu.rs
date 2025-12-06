@@ -1,4 +1,4 @@
-use stm_common::{link_assert, utils::WFE};
+use stm_common::{interrupt::VectorTable, link_assert, utils::WFE};
 
 use crate::CONFIG;
 
@@ -6,7 +6,7 @@ use crate::CONFIG;
 #[derive_const(Default)]
 pub struct Config {
     pub clk: u32,
-    pub vectors: VectorTable,
+    pub vectors: stm_common::interrupt::VectorTable<VectorMeta>,
     pub ahb_clocks: u32,
     pub apb1_clocks: u32,
     pub apb2_clocks: u32,
@@ -38,7 +38,7 @@ pub struct Config {
 
 #[used]
 #[unsafe(link_section = ".vectors")]
-pub static VECTORS: VectorTable = CONFIG.vectors;
+pub static VECTORS: VectorTable<VectorMeta> = CONFIG.vectors;
 
 unsafe extern "C" {
     static mut __bss_start: u8;
@@ -262,37 +262,18 @@ impl Config {
 }
 
 #[derive(Clone, Copy)]
-#[repr(C)]
-pub struct VectorTable {
-    pub stack     : *const u8,
-    pub reset     : fn() -> !,
-    pub nmi       : fn(),
-    pub hard_fault: fn(),
-    pub reserved1 : [u32; 7],
-    pub svcall    : fn(),
-    pub reserved2 : [u32; 2],
-    pub pendsv    : fn(),
-    pub systick   : fn(),
-    pub isr       : [fn(); 32],
-}
+pub struct VectorMeta;
 
-/// !@#$!@$#
-unsafe impl Sync for VectorTable {}
-
-impl const Default for VectorTable {
-    fn default() -> Self {
-        VectorTable{
-            stack     : &raw const end_of_ram,
-            reset     : crate::main,
-            nmi       : bugger,
-            hard_fault: bugger,
-            reserved1 : [0; 7],
-            svcall    : bugger,
-            reserved2 : [0; 2],
-            pendsv    : bugger,
-            systick   : bugger,
-            isr       : [bugger; 32]}
+impl stm_common::interrupt::Meta for VectorMeta {
+    fn main() -> ! {
+        crate::main();
     }
+
+    fn bugger() {
+        bugger();
+    }
+
+    const INITIAL_SP: *const u8 = &raw const end_of_ram;
 }
 
 unsafe extern "C" {
@@ -314,13 +295,7 @@ fn bugger() {
         crate::debug::banner("Crash @ 0x", pc, "\n");
         crate::debug::flush();
     }
-    reboot();
-}
-
-pub fn reboot() -> ! {
-    loop {
-        unsafe {(*cortex_m::peripheral::SCB::PTR).aircr.write(0x05fa0004)};
-    }
+    stm_common::utils::reboot();
 }
 
 #[inline(always)]

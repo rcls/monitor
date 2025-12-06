@@ -8,6 +8,13 @@ pub const TMP117: u8 = 0x92;
 
 pub const I2C_LINES: i2c::I2CLines = i2c::I2CLines::A9_A10;
 
+pub const DEBUG_ENABLE: bool = !crate::CONFIG.no_debug;
+pub fn debug_fmt(fmt: core::fmt::Arguments) {
+    if DEBUG_ENABLE {
+        stm_common::debug::debug_fmt::<debug::DebugMeta>(fmt);
+    }
+}
+
 pub const CONFIG: cpu::Config = {
     let mut c = cpu::Config::new(16000000);
     c.fll = false;
