@@ -1,3 +1,5 @@
+use stm_common::vcell::UCell;
+
 use crate::*;
 
 mod date_time;
@@ -97,7 +99,7 @@ impl State {
 impl System {
     unsafe fn get() -> &'static mut Self {
         let tamp = unsafe {&*stm32u031::TAMP::ptr()};
-        let p = tamp.BKPR[0].as_ptr() as *const crate::vcell::UCell<System>;
+        let p = tamp.BKPR[0].as_ptr() as *const UCell<System>;
         let sys = unsafe {(&*p).as_mut()};
         // Validate fields.
         if sys.states & 0xffff > State::MAX as u32 {

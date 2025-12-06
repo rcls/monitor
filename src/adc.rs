@@ -1,6 +1,6 @@
 
-use crate::dma::DMA_Channel;
-use crate::vcell::VCell;
+use stm_common::dma::DMA_Channel;
+use stm_common::vcell::VCell;
 
 // DMA MUX lines.
 // Use DMA1 Ch1

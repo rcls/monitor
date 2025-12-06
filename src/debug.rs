@@ -5,7 +5,7 @@ use debug_core::{Debug, debug_isr};
 #[allow(unused)]
 pub use debug_core::{flush, write_str};
 
-pub use stm32u031::Interrupt::USART3_LPUART1 as UART_ISR;
+pub use stm32u031::Interrupt::USART3_LPUART1 as INTERRUPT;
 pub use stm32u031::LPUART1 as UART;
 
 /// State for debug logging.  We mark this as no-init and initialize the cells
@@ -13,7 +13,10 @@ pub use stm32u031::LPUART1 as UART;
 #[unsafe(link_section = ".noinit")]
 pub static DEBUG: Debug = Debug::default();
 
-pub const NODEBUG: bool = crate::CONFIG.no_debug;
+pub const ENABLE: bool = !crate::CONFIG.no_debug;
+
+pub struct DebugMarker;
+pub fn debug_marker() -> DebugMarker {DebugMarker}
 
 fn lazy_init() {
     if crate::CONFIG.is_lazy_debug() {
@@ -23,7 +26,7 @@ fn lazy_init() {
 
 fn is_init() -> bool {
     let rcc = unsafe {&*stm32u031::RCC::ptr()};
-    !NODEBUG && rcc.APBENR1.read().LPUART1EN().bit()
+    ENABLE && rcc.APBENR1.read().LPUART1EN().bit()
 }
 
 pub fn init() {
@@ -31,7 +34,7 @@ pub fn init() {
     let rcc   = unsafe {&*stm32u031::RCC::ptr()};
     let uart  = unsafe {&*UART::ptr()};
 
-    if NODEBUG {
+    if !ENABLE {
         return;
     }
 
@@ -120,7 +123,7 @@ impl crate::cpu::Config {
     }
     pub const fn lazy_debug(&mut self) -> &mut Self {
         // self.pullup |= 1 << 3; // Pull-up on RX pin.
-        self.isr(UART_ISR, debug_isr)
+        self.isr(INTERRUPT, debug_isr)
     }
     pub const fn no_debug(&mut self) -> &mut Self {
         self.no_debug = true;
@@ -136,6 +139,6 @@ impl crate::cpu::Config {
 fn check_vtors() {
     use crate::link_assert;
     if !crate::CONFIG.no_debug {
-        link_assert!(crate::cpu::VECTORS.isr[UART_ISR as usize] == debug_isr);
+        link_assert!(crate::cpu::VECTORS.isr[INTERRUPT as usize] == debug_isr);
     }
 }

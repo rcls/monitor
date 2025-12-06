@@ -17,8 +17,6 @@ mod i2c;
 mod monitor;
 mod oled;
 mod utils;
-#[path = "../stm-common/vcell.rs"]
-mod vcell;
 
 use monitor::{CONFIG, I2C_LINES, PConvert, VConvert, main};
 

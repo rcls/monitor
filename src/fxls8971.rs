@@ -4,7 +4,7 @@ use crate::i2c;
 /// Accelerometer I2C address.
 const FXLS8971: u8 = 0x30;
 
-static STATE: crate::vcell::UCell<State> = Default::default();
+static STATE: stm_common::vcell::UCell<State> = Default::default();
 
 #[derive_const(Default)]
 struct State {

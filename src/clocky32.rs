@@ -18,10 +18,7 @@ mod rtc;
 mod tmp117;
 mod tsc;
 mod utils;
-#[path = "../stm-common/vcell.rs"]
-mod vcell;
 
 const LCD_WIDTH: u32 = 4;
 
 use clocky::{CONFIG, I2C_LINES, main};
-

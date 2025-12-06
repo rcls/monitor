@@ -1,7 +1,9 @@
-const ENS220: u8 = 0x40;
+
+use stm_common::vcell::UCell;
 
 use crate::i2c;
-use crate::vcell::UCell;
+
+const ENS220: u8 = 0x40;
 
 static PRESSURE: UCell<[u8; 3]> = UCell::new([0; _]);
 

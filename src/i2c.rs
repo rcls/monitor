@@ -1,5 +1,5 @@
 
-use crate::dma::{Channel, DMA_Channel};
+use stm_common::dma::{Channel, DMA_Channel};
 
 pub use i2c_core::{Result, Wait, read_reg, write};
 

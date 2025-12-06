@@ -1,4 +1,4 @@
-use crate::vcell::{UCell, VCell};
+use stm_common::vcell::{UCell, VCell};
 
 ///! Pads are +, -, menu.  Note that the index is one less than the enumeration.
 

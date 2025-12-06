@@ -7,7 +7,7 @@ pub const SH1106: u8 = 0x78;
 const LINE_LENGTH: usize = 12;
 pub type Line = [u8; LINE_LENGTH];
 
-static FLIP: crate::vcell::UCell<bool> = Default::default();
+static FLIP: stm_common::vcell::UCell<bool> = Default::default();
 
 pub fn reset() -> Result {
     i2c::write(

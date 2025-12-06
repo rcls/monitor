@@ -6,7 +6,8 @@ version = '0.1.0'
 edition = '2024'
 
 [dependencies]
-stm32u031 = { path = './stm32u031' }
+stm32u031 = {git = 'https://github.com/rcls/pac-stm32u031.git'}
+stm_common = {path = './stm-common', features = ['cpu_stm32u031']}
 arrayvec = {version = '*', default-features=false}
 konst = {version = '*', features = ['iter']}
 

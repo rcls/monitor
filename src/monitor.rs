@@ -1,7 +1,7 @@
 
 use crate::*;
 use cpu::WFE;
-use vcell::UCell;
+use stm_common::vcell::UCell;
 
 /// TMP117 I2C address.
 pub const TMP117: u8 = 0x92;

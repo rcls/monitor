@@ -26,7 +26,7 @@ pub fn start() -> i2c::Wait<'static> {
     i2c::write(ENS212, &[0x22u8, 3])
 }
 
-static HUMIDITY: crate::vcell::UCell<u16> = Default::default();
+static HUMIDITY: stm_common::vcell::UCell<u16> = Default::default();
 
 pub fn get() -> i2c::Wait<'static> {
     dbgln!("ENS212 get");
