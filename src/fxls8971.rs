@@ -13,7 +13,7 @@ struct State {
     accum: i32,
 }
 
-pub fn accel_init() -> crate::i2c::Result {
+pub fn accel_init() -> i2c::Result {
     let gpioa = unsafe {&*stm32u031::GPIOA::ptr()};
     let exti  = unsafe {&*stm32u031::EXTI ::ptr()};
 

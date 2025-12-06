@@ -1,10 +1,24 @@
 
-use stm_common::dma::{Channel, DMA_Channel};
+use stm_common::{dma::Channel, vcell::UCell};
+use stm_common::i2c;
 
-pub use i2c_core::{Result, Wait, read_reg, write};
+pub use i2c::Result;
 
-#[path = "../stm-common/i2c_core.rs"]
-mod i2c_core;
+#[derive_const(Default)]
+pub struct I2CMeta;
+
+impl i2c::Meta for I2CMeta {
+    fn i2c() -> &'static stm32u031::i2c1::RegisterBlock {unsafe {&*I2C::ptr()}}
+    fn rx_channel() -> &'static Channel {crate::dma::dma().CH(RX_CHANNEL)}
+    fn tx_channel() -> &'static Channel {crate::dma::dma().CH(TX_CHANNEL)}
+
+    // Use DMA1 Ch2
+    const RX_MUXIN: u8 = 9;
+    // Use DMA1 Ch3
+    const TX_MUXIN: u8 = 10;
+}
+
+pub static CONTEXT: UCell<i2c::I2cContext<I2CMeta>> = UCell::default();
 
 pub type I2C = stm32u031::I2C1;
 
@@ -15,23 +29,15 @@ pub enum I2CLines {
     A9_A10,
 }
 
+stm_common::implement_i2c_api!(CONTEXT);
+
 /// I2C receive channel.  Note that there is 0-based v. 1-based confusion.
 const RX_CHANNEL: usize = 1;
 
 /// I2C transmit channel.  Note that there is 0-based v. 1-based confusion.
 const TX_CHANNEL: usize = 2;
 
-// Use DMA1 Ch2
-const RX_MUXIN: u8 = 9;
-// Use DMA1 Ch3
-const TX_MUXIN: u8 = 10;
-
-fn rx_channel() -> &'static Channel {crate::dma::dma().CH(RX_CHANNEL)}
-fn tx_channel() -> &'static Channel {crate::dma::dma().CH(TX_CHANNEL)}
-
 macro_rules!dbgln {($($tt:tt)*) => {if false {stm_common::dbgln!($($tt)*)}};}
-
-use i2c_core::CONTEXT;
 
 pub fn init() {
     let i2c = unsafe {&*I2C::ptr()};
@@ -92,20 +98,14 @@ pub fn init() {
         }
     }
 
-    // Enable everything.
-    i2c.CR1.write(
-        |w| w.TXDMAEN().set_bit().RXDMAEN().set_bit().PE().set_bit()
-            . NACKIE().set_bit().ERRIE().set_bit().TCIE().set_bit()
-            . STOPIE().set_bit());
-
-    rx_channel().read_from(i2c.RXDR.as_ptr() as *const u8, RX_MUXIN);
-    tx_channel().writes_to(i2c.TXDR.as_ptr() as *mut   u8, TX_MUXIN);
-
     if false {
-        i2c_core::write_reg(0, 0, &0i16).defer();
-        i2c_core::read(0, &mut 0i16).defer();
-        i2c_core::write_read(0, &0u32, &mut 0i16).defer();
+        write_reg(0, 0, &0i16).defer();
+        read(0, &mut 0i16).defer();
+        write_read(0, &0u32, &mut 0i16).defer();
     }
+
+    // Enable everything.
+    i2c::I2cContext::<I2CMeta>::initialize();
 }
 
 pub fn dma23_isr() {
@@ -117,15 +117,14 @@ pub fn dma23_isr() {
     if status.GIF2().bit() { // one-based v. zero based...
         dbgln!("I2C DMA RX ISR");
         dma.CH(1).CR.write(|w| w.EN().clear_bit());
-        unsafe {*CONTEXT.as_mut().outstanding.as_mut() &= !i2c_core::F_DMA_RX};
+        unsafe {*CONTEXT.as_mut().outstanding.as_mut() &= !i2c::F_DMA_RX};
     }
     if status.GIF3().bit() {
         dbgln!("I2C DMA TX ISR");
         dma.CH(2).CR.write(|w| w.EN().clear_bit());
-        unsafe {*CONTEXT.as_mut().outstanding.as_mut() &= !i2c_core::F_DMA_TX};
+        unsafe {*CONTEXT.as_mut().outstanding.as_mut() &= !i2c::F_DMA_TX};
     }
 }
-
 
 impl crate::cpu::Config {
     pub const fn lazy_i2c(&mut self) -> &mut Self {
@@ -136,7 +135,7 @@ impl crate::cpu::Config {
         };
         self.pullup |= pullup;
         self.standby_pu |= pullup;
-        self.isr(I2C1, i2c_core::i2c_isr).isr(DMA1_CHANNEL2_3, dma23_isr)
+        self.isr(I2C1, i2c_isr).isr(DMA1_CHANNEL2_3, dma23_isr)
     }
     #[allow(dead_code)]
     pub const fn i2c(&mut self) -> &mut Self {
@@ -150,5 +149,5 @@ fn check_vtors() {
     use crate::cpu::VECTORS;
 
     assert!(VECTORS.isr[DMA1_CHANNEL2_3 as usize] == dma23_isr);
-    assert!(VECTORS.isr[I2C1 as usize] == i2c_core::i2c_isr);
+    assert!(VECTORS.isr[I2C1 as usize] == i2c_isr);
 }

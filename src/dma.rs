@@ -1,4 +1,3 @@
-pub use stm_common::dma::{DMA_Channel, Flat};
 
 pub type Dma = stm32u031::dma1::RegisterBlock;
 
