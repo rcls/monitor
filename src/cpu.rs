@@ -6,7 +6,7 @@ use crate::CONFIG;
 #[derive_const(Default)]
 pub struct Config {
     pub clk: u32,
-    pub vectors: stm_common::interrupt::VectorTable<VectorMeta>,
+    pub vectors: stm_common::interrupt::VectorTable,
     pub ahb_clocks: u32,
     pub apb1_clocks: u32,
     pub apb2_clocks: u32,
@@ -38,7 +38,7 @@ pub struct Config {
 
 #[used]
 #[unsafe(link_section = ".vectors")]
-pub static VECTORS: VectorTable<VectorMeta> = CONFIG.vectors;
+pub static VECTORS: VectorTable = CONFIG.vectors;
 
 unsafe extern "C" {
     static mut __bss_start: u8;
@@ -201,7 +201,8 @@ pub fn init2() {
 impl Config {
     pub const fn new(clk: u32) -> Config {
         Config {
-            clk, vectors: VectorTable::default(),
+            clk, vectors: VectorTable::new(
+                &raw const end_of_ram, crate::main, bugger),
             // Always enable PWR clock.
             ahb_clocks: 0x100,
             apb1_clocks: 1 << 28,
@@ -261,21 +262,6 @@ impl Config {
 
 }
 
-#[derive(Clone, Copy)]
-pub struct VectorMeta;
-
-impl stm_common::interrupt::Meta for VectorMeta {
-    fn main() -> ! {
-        crate::main();
-    }
-
-    fn bugger() {
-        bugger();
-    }
-
-    const INITIAL_SP: *const u8 = &raw const end_of_ram;
-}
-
 unsafe extern "C" {
     #[link_name = "llvm.frameaddress"]
     fn frameaddress(level: i32) -> *const u8;
@@ -296,23 +282,6 @@ fn bugger() {
         crate::debug::flush();
     }
     stm_common::utils::reboot();
-}
-
-pub mod interrupt {
-    // We don't use disabling interrupts to transfer ownership, so no need for
-    // the enable to be unsafe.
-    #[cfg(target_arch = "arm")]
-    #[allow(unused)]
-    pub fn enable_all() {unsafe{cortex_m::interrupt::enable()}}
-    #[cfg(target_arch = "arm")]
-    #[allow(unused)]
-    pub fn disable_all() {cortex_m::interrupt::disable()}
-    #[cfg(not(target_arch = "arm"))]
-    #[allow(unused)]
-    pub fn enable_all() { }
-    #[cfg(not(target_arch = "arm"))]
-    #[allow(unused)]
-    pub fn disable_all() { }
 }
 
 #[test]
