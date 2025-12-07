@@ -146,8 +146,7 @@ macro_rules! CHARS_MAP {
 pub const fn char_len(s: &str) -> usize {
     let mut iter = konst::string::chars(s);
     let mut len = 0;
-    while let Some((_, i)) = iter.next() {
-        iter = i;
+    while let Some(_) = iter.next() {
         len += 1;
     }
     len
@@ -159,8 +158,7 @@ pub const fn char_map(cc: char) -> u8 {
     if cc == ' ' {
         return 0;
     }
-    while let Some((c, i)) = iter.next() {
-        iter = i;
+    while let Some(c) = iter.next() {
         if c == cc {
             return if index != 0 {index} else {128}
         }
@@ -173,8 +171,7 @@ pub const fn chars_map<const N: usize>(s: &str) -> [u8; N] {
     let mut result = [0; N];
     let mut iter = konst::string::chars(s);
     let mut index = 0;
-    while let Some((c, i)) = iter.next() {
-        iter = i;
+    while let Some(c) = iter.next() {
         result[index] = char_map(c);
         index += 1;
     }
