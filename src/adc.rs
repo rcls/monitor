@@ -43,7 +43,7 @@ pub fn init1() {
 
     // Wait for LDO ready... ≈20µs.
     for _ in 0..200 {
-        crate::cpu::nothing();
+        stm_common::utils::nothing();
     }
     // Start the calibration.
     adc.CR.write(|w| w.ADCAL().set_bit().ADVREGEN().set_bit());
@@ -131,8 +131,6 @@ fn check_vtors() {
     use stm32u031::Interrupt::*;
     use crate::cpu::VECTORS;
 
-    assert!(std::ptr::fn_addr_eq(VECTORS.isr[ADC_COMP as usize],
-                                 adc_isr as fn()));
-    assert!(std::ptr::fn_addr_eq(VECTORS.isr[DMA1_CHANNEL1 as usize],
-                                 dma1_isr as fn()));
+    assert!(VECTORS.isr[ADC_COMP as usize] == adc_isr);
+    assert!(VECTORS.isr[DMA1_CHANNEL1 as usize] == dma1_isr);
 }

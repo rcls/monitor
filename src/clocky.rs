@@ -1,4 +1,4 @@
-use stm_common::vcell::UCell;
+use stm_common::{i2c::Result, vcell::UCell};
 
 use crate::*;
 
@@ -7,6 +7,7 @@ mod display;
 mod touch;
 
 pub const DEBUG_ENABLE: bool = !crate::CONFIG.no_debug;
+
 pub fn debug_fmt(fmt: core::fmt::Arguments) {
     if DEBUG_ENABLE {
         stm_common::debug::debug_fmt::<debug::DebugMeta>(fmt);
@@ -16,7 +17,7 @@ pub fn debug_fmt(fmt: core::fmt::Arguments) {
 pub const CONFIG: cpu::Config = {
     let mut cfg = cpu::Config::new(2000000);
     cfg.pullup |= 1 << 0x2d;
-    cfg.standby_pu |= 1 << 0x2d; // PC13.
+    cfg.standby_pu |= 1 << 0x2d; // PC13, the TMP117 alert.
     cfg.fll = false;
     *cfg.no_debug().lazy_i2c().lcd().rtc().lazy_tsc()};
 
@@ -24,7 +25,7 @@ const MAGIC: u32 = 0xd6ea33e;
 
 pub const I2C_LINES: i2c::I2CLines = i2c::I2CLines::B6_B7;
 
-/// Power of two divider of the 256Hz RTC clock to use for the main tick.
+/// Power of two factor of the 256Hz RTC clock to use for the main tick.
 const TICKS_PER_SEC: u32 = 8;
 const ALARM_BITS: u8 = 8 - TICKS_PER_SEC.ilog2() as u8;
 
@@ -181,7 +182,7 @@ fn cold_start(sys: &mut System) {
 
     // Wait a few ms.
     for _ in 0 .. CONFIG.clk / 500 {
-        cpu::nothing();
+        stm_common::utils::nothing();
     }
 
     tmp117::init();
@@ -269,7 +270,7 @@ fn set_state_hook(sys: &mut System, state: State, sub_state: u32) {
 }
 
 fn acquire(sys: &mut System, tr: u32, ssr: u32)
-        -> (i2c::Wait<'static>, fn(&mut System, i2c::Result)) {
+        -> (i2c::Wait<'static>, fn(&mut System, Result)) {
     // At each second, acquire the current displayed item, if any.
     // Otherwise, just past the top of the minute, trigger a conversion of
     // something, round-robin.
@@ -302,23 +303,23 @@ fn acquire(sys: &mut System, tr: u32, ssr: u32)
     (i2c::Wait::default(), dummy_handler)
 }
 
-fn ens212_start_done(sys: &mut System, ok: i2c::Result) {
+fn ens212_start_done(sys: &mut System, ok: Result) {
     if ok.is_err() {
         sys.humidity = !0;
     }
 }
 
-fn ens212_get_done(sys: &mut System, ok: i2c::Result) {
+fn ens212_get_done(sys: &mut System, ok: Result) {
     sys.humidity = if ok.is_ok() {ens212::get_humidity()} else {!0};
 }
 
-fn ens220_start_done(sys: &mut System, ok: i2c::Result) {
+fn ens220_start_done(sys: &mut System, ok: Result) {
     if ok.is_err() {
         sys.set_no_pressure();
     }
 }
 
-fn ens220_get_done(sys: &mut System, ok: i2c::Result) {
+fn ens220_get_done(sys: &mut System, ok: Result) {
     if ok.is_ok() {
         sys.set_pressure(ens220::get_pressure());
     }
@@ -327,7 +328,7 @@ fn ens220_get_done(sys: &mut System, ok: i2c::Result) {
     }
 }
 
-fn dummy_handler(_: &mut System, ok: i2c::Result) {
+fn dummy_handler(_: &mut System, ok: Result) {
     if let Err(_err) = ok {
         // dbgln!("I2C failed {_err:?}");
     }

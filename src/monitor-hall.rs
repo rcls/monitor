@@ -9,7 +9,6 @@
 mod adc;
 mod cpu;
 mod decimal;
-mod dma;
 mod debug;
 mod font;
 mod fxls8971; // Not actually on board.

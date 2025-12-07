@@ -14,7 +14,7 @@ pub fn init() -> core::result::Result<u32, ()> {
     i2c::write(ENS212, &[0x22u8, 3]).wait()?;
     // Wait 32ms ≈ 1/30 seconds.
     for _ in 0 .. crate::CONFIG.clk / 60 {
-        crate::cpu::nothing();
+        stm_common::utils::nothing();
     }
     get().wait()?;
     Ok(get_humidity())

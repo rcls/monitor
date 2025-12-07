@@ -1,7 +1,7 @@
 
 use crate::*;
 
-use stm_common::{dbgln, link_assert, utils::WFE, vcell::UCell};
+use stm_common::{dbgln, i2c::Result, link_assert, utils::WFE, vcell::UCell};
 
 /// TMP117 I2C address.
 pub const TMP117: u8 = 0x92;
@@ -65,7 +65,7 @@ impl Monitor {
         // This should happen on divide = 1.
         if adc::OUTSTANDING.read() == 0 {
             adc::OUTSTANDING.write(1);
-            cpu::barrier();
+            stm_common::utils::barrier();
             let _ = self.analog_update();
         }
 
@@ -80,7 +80,7 @@ impl Monitor {
         }
     }
 
-    fn analog_update(&mut self) -> i2c::Result {
+    fn analog_update(&mut self) -> Result {
         let wait = i2c::read_reg(TMP117, 0, &mut self.temp);
 
         let isense_counts = adc::DMA_BUF[ISENSE_INDEX].read() as i32;
@@ -124,7 +124,7 @@ impl Monitor {
     }
 
     fn update_screen(&mut self, power: u32, vsense: u32, v3v3: u32,
-                     temp_counts: i32) -> i2c::Result {
+                     temp_counts: i32) -> Result {
         let mut line = [0; 10];
         decimal::format_u32(&mut line[..7], power, 2);
         line[7] = oled::char_map(' ');
@@ -155,7 +155,7 @@ impl Monitor {
         oled::update_text(&mut self.frame[3], &line[..7], 5, 6)
     }
 
-    fn refresh(&mut self) -> i2c::Result {
+    fn refresh(&mut self) -> Result {
         if self.cycle_refresh < 4 {
             oled::draw_chars(&self.frame[self.cycle_refresh as usize],
                              0, self.cycle_refresh * 2)?;
@@ -168,7 +168,7 @@ impl Monitor {
         Ok(())
     }
 
-    fn update_arrows(&mut self) -> i2c::Result {
+    fn update_arrows(&mut self) -> Result {
         let cycle = self.cycle_arrow + 1 & 7;
         self.cycle_arrow = cycle;
 

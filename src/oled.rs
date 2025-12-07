@@ -1,6 +1,6 @@
 use crate::i2c;
 
-use i2c::Result;
+use stm_common::i2c::Result;
 
 pub const SH1106: u8 = 0x78;
 

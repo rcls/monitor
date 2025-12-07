@@ -1,5 +1,5 @@
 
-use stm_common::link_assert;
+use stm_common::{i2c::Result, link_assert};
 
 use crate::i2c;
 
@@ -13,7 +13,7 @@ struct State {
     accum: i32,
 }
 
-pub fn accel_init() -> i2c::Result {
+pub fn accel_init() -> Result {
     let gpioa = unsafe {&*stm32u031::GPIOA::ptr()};
     let exti  = unsafe {&*stm32u031::EXTI ::ptr()};
 

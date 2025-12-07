@@ -9,7 +9,6 @@
 mod clocky;
 mod cpu;
 mod debug;
-mod dma;
 mod ens212;
 mod ens220;
 mod i2c;

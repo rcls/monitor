@@ -1,16 +1,23 @@
 
-use stm_common::{dma::Channel, vcell::UCell};
-use stm_common::i2c;
+use stm_common::{dma::Channel, i2c, vcell::UCell};
 
-pub use i2c::Result;
+use i2c::Meta;
 
 #[derive_const(Default)]
-pub struct I2CMeta;
+struct I2CMeta;
 
-impl i2c::Meta for I2CMeta {
-    fn i2c(&self) -> &'static stm32u031::i2c1::RegisterBlock {unsafe {&*I2C::ptr()}}
-    fn rx_channel(&self) -> &'static Channel {crate::dma::dma().CH(RX_CHANNEL)}
-    fn tx_channel(&self) -> &'static Channel {crate::dma::dma().CH(TX_CHANNEL)}
+impl Meta for I2CMeta {
+    fn i2c(&self) -> &'static stm32u031::i2c1::RegisterBlock {
+        unsafe {&*stm32u031::I2C1::PTR}
+    }
+    /// I2C receive channel.  Note that there is 0-based v. 1-based confusion.
+    fn rx_channel(&self) -> &'static Channel {
+        unsafe {&*stm32u031::DMA1::PTR}.CH(1)
+    }
+    /// I2C transmit channel.  Note that there is 0-based v. 1-based confusion.
+    fn tx_channel(&self) -> &'static Channel {
+        unsafe {&*stm32u031::DMA1::PTR}.CH(2)
+    }
 
     // Use DMA1 Ch2
     fn rx_muxin(&self) -> u8 {9}
@@ -18,9 +25,7 @@ impl i2c::Meta for I2CMeta {
     fn tx_muxin(&self) -> u8 {10}
 }
 
-pub static CONTEXT: UCell<i2c::I2cContext<I2CMeta>> = UCell::default();
-
-pub type I2C = stm32u031::I2C1;
+static CONTEXT: UCell<i2c::I2cContext<I2CMeta>> = UCell::default();
 
 #[allow(dead_code)]
 #[allow(non_camel_case_types)]
@@ -31,16 +36,10 @@ pub enum I2CLines {
 
 stm_common::implement_i2c_api!(CONTEXT);
 
-/// I2C receive channel.  Note that there is 0-based v. 1-based confusion.
-const RX_CHANNEL: usize = 1;
-
-/// I2C transmit channel.  Note that there is 0-based v. 1-based confusion.
-const TX_CHANNEL: usize = 2;
-
 macro_rules!dbgln {($($tt:tt)*) => {if false {stm_common::dbgln!($($tt)*)}};}
 
 pub fn init() {
-    let i2c = unsafe {&*I2C::ptr()};
+    let i2c = I2CMeta.i2c();
     let gpioa = unsafe {&*stm32u031::GPIOA::ptr()};
     let gpiob = unsafe {&*stm32u031::GPIOB::ptr()};
 
@@ -110,19 +109,20 @@ pub fn init() {
 
 pub fn dma23_isr() {
     let dma = unsafe {&*stm32u031::DMA1::ptr()};
+    let context = unsafe {CONTEXT.as_mut()};
     // I2C TX or RX.
     // FIXME - do we need to wait for TC when appropriate?
     let status = dma.ISR.read();
     dma.IFCR.write(|w| w.CGIF2().set_bit().CGIF3().set_bit());
     if status.GIF2().bit() { // one-based v. zero based...
         dbgln!("I2C DMA RX ISR");
-        dma.CH(1).CR.write(|w| w.EN().clear_bit());
-        unsafe {*CONTEXT.as_mut().outstanding.as_mut() &= !i2c::F_DMA_RX};
+        I2CMeta.rx_channel().CR.write(|w| w.EN().clear_bit());
+        *context.outstanding.as_mut() &= !i2c::F_DMA_RX;
     }
     if status.GIF3().bit() {
         dbgln!("I2C DMA TX ISR");
-        dma.CH(2).CR.write(|w| w.EN().clear_bit());
-        unsafe {*CONTEXT.as_mut().outstanding.as_mut() &= !i2c::F_DMA_TX};
+        I2CMeta.tx_channel().CR.write(|w| w.EN().clear_bit());
+        *context.outstanding.as_mut() &= !i2c::F_DMA_TX;
     }
 }
 

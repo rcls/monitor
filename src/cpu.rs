@@ -143,7 +143,7 @@ pub fn init1() {
 
     // Clear the BSS.
     if !cfg!(test) {
-        barrier();
+        stm_common::utils::barrier();
         // The rustc memset is hideous.
         let mut p = (&raw mut __bss_start) as *mut u32;
         loop {
@@ -153,7 +153,7 @@ pub fn init1() {
                 break;
             }
         }
-        barrier();
+        stm_common::utils::barrier();
     }
 
     // We use sev-on-pend to avoid trivial interrupt handlers.
@@ -296,17 +296,6 @@ fn bugger() {
         crate::debug::flush();
     }
     stm_common::utils::reboot();
-}
-
-#[inline(always)]
-pub fn barrier() {
-    core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
-}
-
-#[inline(always)]
-#[allow(unused)]
-pub fn nothing() {
-    unsafe {core::arch::asm!("", options(nomem))}
 }
 
 pub mod interrupt {
