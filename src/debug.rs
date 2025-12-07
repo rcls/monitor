@@ -5,26 +5,28 @@ use debug::Debug;
 use stm32u031::Interrupt::USART3_LPUART1 as INTERRUPT;
 use stm32u031::LPUART1 as UART;
 
-#[derive(Default)]
+#[derive_const(Default)]
 pub struct DebugMeta;
 
 impl debug::Meta for DebugMeta {
     const ENABLE: bool = !crate::CONFIG.no_debug;
-    const INTERRUPT: u32 = INTERRUPT as u32;
 
-    fn uart() -> &'static debug::UART {unsafe {&*stm32u031::LPUART1::PTR}}
     fn debug() -> &'static Debug<Self> {&DEBUG}
 
-    fn lazy_init() {
+    fn uart(&self) -> &'static debug::UART {unsafe {&*stm32u031::LPUART1::PTR}}
+
+    fn lazy_init(&self) {
         if crate::CONFIG.is_lazy_debug() {
             init();
         }
     }
 
-    fn is_init() -> bool {
+    fn is_init(&self) -> bool {
         let rcc = unsafe {&*stm32u031::RCC::ptr()};
         ENABLE && rcc.APBENR1.read().LPUART1EN().bit()
     }
+
+    fn interrupt(&self) -> u32 {INTERRUPT as u32}
 }
 
 /// State for debug logging.  We mark this as no-init and initialize the cells
