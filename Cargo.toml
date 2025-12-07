@@ -7,7 +7,7 @@ edition = '2024'
 
 [dependencies]
 stm32u031 = {git = 'https://github.com/rcls/pac-stm32u031.git'}
-stm_common = {path = './stm-common', features = ['cpu_stm32u031', 'debug_lpuart']}
+stm_common = {git = 'https://github.com/rcls/stm-common.git', features = ['cpu_stm32u031', 'debug_lpuart']}
 
 arrayvec = {version = '*', default-features=false}
 konst = {version = '*', features = ['iter']}
