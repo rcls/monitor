@@ -8,14 +8,14 @@ pub use i2c::Result;
 pub struct I2CMeta;
 
 impl i2c::Meta for I2CMeta {
-    fn i2c() -> &'static stm32u031::i2c1::RegisterBlock {unsafe {&*I2C::ptr()}}
-    fn rx_channel() -> &'static Channel {crate::dma::dma().CH(RX_CHANNEL)}
-    fn tx_channel() -> &'static Channel {crate::dma::dma().CH(TX_CHANNEL)}
+    fn i2c(&self) -> &'static stm32u031::i2c1::RegisterBlock {unsafe {&*I2C::ptr()}}
+    fn rx_channel(&self) -> &'static Channel {crate::dma::dma().CH(RX_CHANNEL)}
+    fn tx_channel(&self) -> &'static Channel {crate::dma::dma().CH(TX_CHANNEL)}
 
     // Use DMA1 Ch2
-    const RX_MUXIN: u8 = 9;
+    fn rx_muxin(&self) -> u8 {9}
     // Use DMA1 Ch3
-    const TX_MUXIN: u8 = 10;
+    fn tx_muxin(&self) -> u8 {10}
 }
 
 pub static CONTEXT: UCell<i2c::I2cContext<I2CMeta>> = UCell::default();
@@ -105,7 +105,7 @@ pub fn init() {
     }
 
     // Enable everything.
-    i2c::I2cContext::<I2CMeta>::initialize();
+    CONTEXT.initialize();
 }
 
 pub fn dma23_isr() {

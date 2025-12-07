@@ -207,7 +207,13 @@ pub fn main() -> ! {
     rcc.IOPENR.write(|w| w.GPIOAEN().set_bit());
 
     cpu::init1();
+
     debug::init();
+
+    if DEBUG_ENABLE {
+        unsafe {stm_common::set_debug_handler(Some(debug_fmt))};
+    }
+
     adc::init1();
     i2c::init();
 

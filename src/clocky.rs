@@ -380,6 +380,10 @@ pub fn main() -> ! {
     cpu::init1();
     cpu::init2();
 
+    if DEBUG_ENABLE {
+        unsafe {stm_common::set_debug_handler(Some(debug_fmt))};
+    }
+
     // Set the TMP117 alert pin as input.
     gpioc.MODER.modify(|_, w| w.MODE13().B_0x0());
 
