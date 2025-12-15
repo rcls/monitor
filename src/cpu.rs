@@ -172,9 +172,7 @@ pub fn init1() {
     }
 
     // Enable interrupts.
-    unsafe {
-        nvic.iser[0].write(CONFIG.interrupts);
-    }
+    unsafe {nvic.iser[0].write(CONFIG.interrupts)};
 }
 
 pub fn init2() {
@@ -269,6 +267,7 @@ unsafe extern "C" {
 
 fn bugger() {
     let fp = unsafe {frameaddress(0)};
+
     // The exception PC is at +0x18, but then LLVM pushes an additional 8
     // bytes to form the frame.
     let pcp = fp.wrapping_add(0x20);

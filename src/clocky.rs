@@ -382,6 +382,9 @@ pub fn main() -> ! {
     cpu::init2();
 
     if DEBUG_ENABLE {
+        if !CONFIG.is_lazy_debug() {
+            debug::init();
+        }
         unsafe {stm_common::set_debug_handler(Some(debug_fmt))};
     }
 

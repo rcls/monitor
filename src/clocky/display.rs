@@ -159,10 +159,10 @@ fn pres_to_segments(pressure: u32, point: u32) -> Segments {
     // The pressure value is 64 counts per Pa.
     let round = match point {0 => 3200, 1 => 320, _ => 32};
     let pres = (pressure + round) / 64;
-    let bcd = crate::utils::to_bcd(pres) >> 8 - 4 * point;
+    let bcd = crate::utils::to_bcd(pres) >> 4 * point;
     dbgln!("{pres} {:#x} -> {bcd:#x}", crate::utils::to_bcd(pres));
     let segs = hex_to_segments(bcd);
-    Segments::from_le_bytes(segs) | (lcd::DOT as Segments) << (8 * point + 8)
+    Segments::from_le_bytes(segs) | (lcd::DOT as Segments) << (24 - 8 * point)
 }
 
 fn prefixed_to_segments(prefix: u8, value: i32) -> Segments {
