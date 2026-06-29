@@ -373,7 +373,7 @@ pub fn main() -> ! {
         |w| w.GPIOAEN().set_bit().GPIOBEN().set_bit().GPIOCEN().set_bit());
 
     if rcc.BDCR.read().LSCOEN().bit() {
-        // Set PA1 as output high.
+        // Set PA1 (the LED) as output high.
         gpioa.BSRR.write(|w| w.BS1().set_bit());
         gpioa.MODER.modify(|_, w| w.MODE1().B_0x1());
     }
